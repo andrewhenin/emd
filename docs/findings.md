@@ -1,0 +1,10 @@
+# Findings
+
+Observations that aren't rules, decisions or issues yet. How to log: [logging.md](logging.md).
+
+- 2026-10-23: Sharing finished proofs across parallel agents cut token use 17% and let some agents succeed where they failed alone. EMD equivalent: a shared per-repo cache of working build commands, flaky-simulator fixes and reliable UI selectors. Different domain, so don't expect the same number. [source](https://www.anthropic.com/research/formal-verification) → next: issue after v1
+- 2026-10-23: An agent's `xcodebuild` and Xcode.app sharing one DerivedData overwrite each other's build state (22.7s incremental build became 863s). Fix reported: build through Xcode's MCP bridge (`xcrun mcpbridge`). [source](https://dev.to/isekai_kara_no_dev/-use-xcode-mcp-instead-of-xcodebuild-to-save-disk-space-and-time-in-agentic-ios-development-2m4j) → next: per-worktree environment issue
+- 2026-10-23: DerivedData folders often exceed 10–20 GB per app, so per-worktree copies fill disks fast. [source](https://dev.to/isekai_kara_no_dev/-use-xcode-mcp-instead-of-xcodebuild-to-save-disk-space-and-time-in-agentic-ios-development-2m4j) → next: per-worktree environment and `gc` issues
+- 2026-10-23: Two worktrees installing the same app on the same simulator overwrite each other's app and data (reported, unconfirmed). Give each worktree its own simulator. [source](https://developer.apple.com/forums/thread/833677) → next: per-worktree environment issue
+- 2026-10-23: React Native/Expo worktrees each need their own Metro port; react-native-worktree solves this with a port per worktree plus a device lock. [source](https://socket.dev/npm/package/react-native-worktree) → next: per-worktree environment issue
+- 2026-10-23: Setup design: detect the stack from project files (`ios/` or `.xcodeproj`, `build.gradle`, `expo` in package.json or `app.json`), show one plan to confirm, download heavy pieces (simulator runtimes, emulator images) on first use, and ask questions only outside a project, with several apps, or to override; `--platform` flag for CI. (planning decision) → next: setup issue
