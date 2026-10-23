@@ -1,0 +1,40 @@
+{
+  "name": "emd-agents",
+  "version": "0.0.0",
+  "description": "Build, run, check and prove mobile changes from any coding agent.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": {
+    "emd": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "lint": "biome check .",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && vitest run",
+    "test:fast": "npm run build && vitest run",
+    "check:sizes": "node --experimental-strip-types scripts/check-doc-sizes.ts",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{ts,js,json}": "biome check --no-errors-on-unmatched --files-ignore-unknown=true"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.0.0",
+    "@commitlint/cli": "^19.0.0",
+    "@commitlint/config-conventional": "^19.0.0",
+    "@types/node": "^22.0.0",
+    "husky": "^9.0.0",
+    "lint-staged": "^15.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^3.0.0"
+  }
+}
