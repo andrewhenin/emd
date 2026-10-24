@@ -4,50 +4,58 @@ Question: how long does it take to read the iOS simulator's accessibility tree
 for `check`'s element expectations, and is AXe (`axe describe-ui`, what
 XcodeBuildMCP uses) fast enough to replace Maestro for that?
 
-Reproduce: `experiments/screen-read.sh <simulator-udid> [runs]` with the sandbox
-app launched (`emd launch ~/emd-sandbox`). It brings the app forward before each
-read, times each call and checks the output for the testID `smoke-button` and
-the label `Ready`.
+Status: **Maestro measured, AXe not yet.** See "AXe: blocked".
+
+Reproduce: `experiments/screen-read.sh <simulator-udid> [rounds]` with the sandbox
+app launched (`emd launch ~/emd-sandbox`). Each round reads once with each tool in
+alternating order. Before each read it brings the app forward and waits for the
+load average to drop below 8. A read counts as valid only if it exits 0 and the
+output has the testID `smoke-button` and the label `Ready`. It prints each read,
+then the median, minimum and maximum per tool.
 
 ## Setup
 
-- Sandbox app in the foreground on an iPhone 17 simulator (iOS 26.5), Xcode 26.6,
-  macOS 27.0.1, Maestro 2.11.0, AXe 1.8.0 (not run, see below).
-- A Mac with little free RAM. Load average was 5.7 to 7.8 when the measured runs
-  started, so treat the numbers as slow-host numbers.
+- Sandbox app on an iPhone 17 simulator (iOS 26.5), Xcode 26.6, macOS 27.0.1,
+  Maestro 2.11.0, AXe 1.8.0 (not run).
+- A Mac with little free RAM, so numbers are slow-host numbers.
 
-## Results (wall-clock seconds, two runs in a row)
+## Results so far (wall-clock seconds)
 
-| Tool | Run 1 | Run 2 | Output |
-|---|---|---|---|
-| `maestro hierarchy` | 18.2 | 20.9 | valid, 14,151 bytes, finds `smoke-button` and `Ready` both times |
-| `axe describe-ui` | not measured | not measured | |
+| Read | Seconds | Output |
+|---|---|---|
+| `maestro hierarchy`, first read after a fresh launch | 53.1 and 53.5 | valid, 14,151 bytes |
+| `maestro hierarchy`, later reads, load 6 to 8 | 18.2, 20.9 | valid, same tree |
+| `axe describe-ui` | not measured | |
+
+- Maestro starts and stops its XCUITest driver on every call, so nothing carries
+  over between calls. The first read after a launch costs about 53 s; later ones
+  about 20 s.
+- These come from three separate sessions, not the alternating five-round run the
+  script now does, so treat them as indicative. The script's summary replaces them.
 
 ## Invalid and negative results
 
-- An earlier pair read 53.1 s, then 23.9 s. The second read was invalid: the app
-  had been sent to the Home screen and Maestro returned SpringBoard's tree
-  (133 KB, no app elements). The load average passed 35 during it. The script
-  now brings the app forward before every read.
-- Maestro pays about 20 s on every call. It starts and stops its XCUITest driver
-  each time, so a second call in a row is not faster.
+- A second read in one session returned 133 KB with no app elements: the app had
+  gone to the Home screen and Maestro returned SpringBoard's tree, while the load
+  average was above 35. Reads must bring the app forward first (the script does).
 
-## AXe: not measured
+## AXe: blocked
 
-- `brew install` refused: "Your Command Line Tools are too outdated" for macOS 27.
-  Fixing that needs `sudo` and a reinstall of the Command Line Tools.
-- The release tarball the formula installs (`AXe-macOS-homebrew-v1.8.0.tar.gz`,
-  8.2 MB) was downloaded to a scratch directory and its SHA-256 matched the
-  formula's. Extracting, signing and running it was blocked by the auto-mode
-  classifier, so it has not been run.
+- `brew install cameroncooke/axe/axe` fails, now for a different reason than
+  before. After updating the Command Line Tools to 27.0, Homebrew still says
+  "Your Xcode (26.6) is too outdated. Please update to Xcode 27.0." The formula
+  only unpacks a prebuilt binary, but Homebrew treats it as a source install and
+  checks the toolchain. Pointing `DEVELOPER_DIR` at the Command Line Tools for
+  that command did not change it.
+- Updating to Xcode 27 just for this is not worth it here: the sandbox's Expo
+  packages need Xcode 26 or newer, and a new Xcode means another multi-GB
+  download and iOS runtime.
+- The release tarball the formula installs (AXe 1.8.0, 8.2 MB) was downloaded and
+  its SHA-256 matched the formula's. Extracting and running it from my session
+  was blocked by the auto-mode classifier, so it has not been run.
 
-To finish: install AXe yourself (or allow running that copy), then run
-`AXE_BIN=/path/to/axe experiments/screen-read.sh <udid> 2` and add its two lines
-to the table.
-
-## Decision rule (set before measuring AXe)
+## Decision rule (set before AXe was measured)
 
 AXe replaces Maestro for `check`'s screen reads if its median is at most a third
-of Maestro's (about 6 s here) and it finds the same elements (testID and label).
-Maestro stays for saving replayable flows. If both are slow, try one warm
-Maestro session instead.
+of Maestro's and it finds the same elements (testID and label). Maestro stays for
+saving replayable flows. If both are slow, try one warm Maestro session instead.
