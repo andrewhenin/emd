@@ -8,11 +8,14 @@ export type {
   StackId,
 } from "./adapter.js";
 export { detect } from "./detect.js";
+export { jobStatus, runJob, startJob } from "./jobs.js";
 export { launch } from "./launch.js";
 export { loadedAdapters } from "./registry.js";
 export {
   type DetectResult,
   detectResultSchema,
+  type JobView,
+  jobViewSchema,
   type LaunchResult,
   launchResultSchema,
 } from "./result.js";

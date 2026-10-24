@@ -4,8 +4,9 @@ import { z } from "zod";
 import {
   detect,
   detectResultSchema,
-  launch,
-  launchResultSchema,
+  jobStatus,
+  jobViewSchema,
+  startJob,
   version,
 } from "../core/index.js";
 
@@ -40,7 +41,7 @@ function buildServer(): McpServer {
     "launch",
     {
       description:
-        "Build the app, install it on an iOS simulator and launch it, leaving its dev server running. Can take minutes. Returns a verdict, the device, app ID and log directory; on failure, the first relevant error lines, not the log.",
+        "Start building the app, installing it on an iOS simulator and launching it, leaving its dev server running. Returns a job within seconds; the work takes up to minutes. Call job_status with the jobId every 5 to 10 seconds until status is succeeded or failed.",
       inputSchema: z.object({
         dir: z
           .string()
@@ -60,13 +61,38 @@ function buildServer(): McpServer {
           .optional()
           .describe("How long the build may take. Default 900."),
       }),
-      outputSchema: launchResultSchema,
+      outputSchema: jobViewSchema,
     },
     async (input) => {
-      const result = await launch(input);
+      const job = startJob("launch", input);
       return {
-        content: [{ type: "text", text: JSON.stringify(result) }],
-        structuredContent: result,
+        content: [{ type: "text", text: JSON.stringify(job) }],
+        structuredContent: job,
+      };
+    },
+  );
+
+  server.registerTool(
+    "job_status",
+    {
+      description:
+        "Where a job is: queued, running (with the current step and seconds), succeeded or failed. When finished, includes the result: for launch, the device, app ID and log directory, or on failure the reason and the first relevant error lines, not the log.",
+      inputSchema: z.object({
+        jobId: z.string().describe("The jobId a tool such as launch returned."),
+      }),
+      outputSchema: jobViewSchema,
+    },
+    async ({ jobId }) => {
+      const job = jobStatus(jobId);
+      if (!job) {
+        return {
+          isError: true,
+          content: [{ type: "text", text: `No job with id "${jobId}".` }],
+        };
+      }
+      return {
+        content: [{ type: "text", text: JSON.stringify(job) }],
+        structuredContent: job,
       };
     },
   );
