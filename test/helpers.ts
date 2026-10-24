@@ -12,7 +12,11 @@ export function makeDir(files: Record<string, string> = {}): string {
   return dir;
 }
 
-export const expoProject = () =>
+// An Expo project; `files` add to or override the default package.json.
+export const expoProject = (files: Record<string, string> = {}) =>
   makeDir({
     "package.json": JSON.stringify({ dependencies: { expo: "~58.0.0" } }),
+    ...files,
   });
+
+export const appJson = (expo: object) => JSON.stringify({ expo });
