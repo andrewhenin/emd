@@ -1,3 +1,5 @@
+<!-- PR title: Conventional Commit (feat:, fix:, docs:, chore:, ...). Squash merge uses it; CI checks it. -->
+
 Closes #
 
 ## What changed

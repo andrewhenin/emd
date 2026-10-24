@@ -13,6 +13,7 @@ Notes, findings and decisions: follow [docs/logging.md](docs/logging.md) exactly
 - `npm test` build, then run Vitest (tests call the built CLI)
 - `npm run test:fast` same set the pre-push hook runs
 - `npm run check:sizes` doc size limits (also runs in CI)
+- `npm run check:pr-title` reads a PR title on stdin and checks it is a Conventional Commit (CI runs it on every PR)
 
 ## Folder map
 
@@ -33,11 +34,12 @@ Notes, findings and decisions: follow [docs/logging.md](docs/logging.md) exactly
 - Report only checks that actually ran. Say which ones did not.
 - Never mark a PR ready for review. Never claim a human reviewed anything.
 - Never tick the author-readiness checkbox in the PR template. Only the human owner does.
+- Never push to `main` and never force-push. Always work on a branch and open a draft PR.
 - Fix problems where they originate. Remove replaced code in the same change.
 - Prefer tests through the real CLI and MCP tools over mocks.
 - Put behavior in `src/core/`. CLI and MCP import core only through `core/index.ts`, never each other. Adapters never import each other and load only through `core/registry.ts`.
 - `setup` installs only what the detected stack needs. Never install unrelated software.
-- Use Conventional Commit messages (`feat:`, `fix:`, `docs:`, `chore:`). Release Please reads them.
+- Use Conventional Commit messages and PR titles (`feat:`, `fix:`, `docs:`, `chore:`). Squash merges use the PR title and Release Please reads it; CI checks the title.
 - Never touch signing, provisioning or release settings of a user's project.
 - Don't weaken checks: don't delete a log tag, loosen an assertion, or skip a test or Maestro step. If it is unavoidable, list it in the PR.
 - `gc` removes only resources EMD marked as its own.
