@@ -54,3 +54,18 @@ export const jobViewSchema = z.object({
 });
 
 export type JobView = z.infer<typeof jobViewSchema>;
+
+export const logsResultSchema = z.object({
+  verdict: z.enum(["ok", "failed"]),
+  // Why it failed, in one line.
+  reason: z.string().optional(),
+  // Start of the window the lines come from (ISO).
+  since: z.string().optional(),
+  // How many tagged lines matched; `lines` holds only the most recent ones.
+  total: z.number().optional(),
+  lines: z
+    .array(z.object({ time: z.string(), tag: z.string(), message: z.string() }))
+    .optional(),
+});
+
+export type LogsResult = z.infer<typeof logsResultSchema>;

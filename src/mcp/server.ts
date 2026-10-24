@@ -6,6 +6,8 @@ import {
   detectResultSchema,
   jobStatus,
   jobViewSchema,
+  logs,
+  logsResultSchema,
   startJob,
   version,
 } from "../core/index.js";
@@ -93,6 +95,52 @@ function buildServer(): McpServer {
       return {
         content: [{ type: "text", text: JSON.stringify(job) }],
         structuredContent: job,
+      };
+    },
+  );
+
+  server.registerTool(
+    "logs",
+    {
+      description:
+        "Tagged log lines an app wrote during a run: lines containing [EMD:<tag>], as written by console.log in the app, with time, tag and message. A run is a launch job, so pass the jobId from launch; only that app's lines since the job started are returned, never an earlier run's or another app's. Returns the most recent lines and the total count.",
+      inputSchema: z.object({
+        jobId: z
+          .string()
+          .optional()
+          .describe("The launch job whose run to read. Preferred."),
+        device: z
+          .string()
+          .optional()
+          .describe(
+            "Simulator UDID, with appId and since, instead of a jobId.",
+          ),
+        appId: z.string().optional().describe("App ID, with device and since."),
+        since: z
+          .string()
+          .optional()
+          .describe(
+            "ISO time to read from. Defaults to the job's start; use it to read only what is new.",
+          ),
+        tag: z
+          .string()
+          .optional()
+          .describe("Only lines tagged [EMD:<tag>], e.g. smoke."),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(500)
+          .optional()
+          .describe("How many of the most recent lines to return. Default 50."),
+      }),
+      outputSchema: logsResultSchema,
+    },
+    async (input) => {
+      const result = await logs(input);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result) }],
+        structuredContent: result,
       };
     },
   );

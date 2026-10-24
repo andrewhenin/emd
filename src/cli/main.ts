@@ -1,8 +1,15 @@
 import { parseArgs } from "node:util";
-import { detect, jobStatus, launch, runJob, version } from "../core/index.js";
+import {
+  detect,
+  jobStatus,
+  launch,
+  logs,
+  runJob,
+  version,
+} from "../core/index.js";
 
 const usage =
-  "Commands: detect [dir], launch [dir] [--device X] [--timeout N], job status <id>, mcp";
+  "Commands: detect [dir], launch [dir] [--device X] [--timeout N], job status <id>, logs <jobId> [--tag T] [--limit N], mcp";
 
 export async function run(argv: string[]): Promise<number> {
   const [command, ...args] = argv;
@@ -55,6 +62,29 @@ export async function run(argv: string[]): Promise<number> {
       }
       console.error(`emd: usage: job status <id>. ${usage}`);
       return 2;
+    }
+    case "logs": {
+      const { values, positionals } = parseArgs({
+        args,
+        allowPositionals: true,
+        options: {
+          tag: { type: "string" },
+          limit: { type: "string" },
+          since: { type: "string" },
+          device: { type: "string" },
+          app: { type: "string" },
+        },
+      });
+      const result = await logs({
+        jobId: positionals[0],
+        tag: values.tag,
+        since: values.since,
+        device: values.device,
+        appId: values.app,
+        limit: values.limit === undefined ? undefined : Number(values.limit),
+      });
+      console.log(JSON.stringify(result));
+      return result.verdict === "ok" ? 0 : 1;
     }
     default:
       console.error(`emd: unknown command "${command}". ${usage}`);
