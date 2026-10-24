@@ -25,10 +25,19 @@ export type StackDetection = {
   };
 };
 
+// How to get an app onto one device: a long-lived dev server, and a build that
+// installs and launches without starting its own server (that one would die
+// with the build process).
+export type LaunchPlan = { server: string; build: string };
+
 export interface StackAdapter {
   id: StackId;
   detect(
     projectDir: string,
     project: ProjectInfo,
   ): Promise<StackDetection | undefined>;
+  launchPlan(
+    project: ProjectInfo,
+    request: { platform: Platform; deviceId: string },
+  ): LaunchPlan | undefined;
 }

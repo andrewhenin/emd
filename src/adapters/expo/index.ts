@@ -51,6 +51,14 @@ const adapter: StackAdapter = {
       commands: { run, server: `${expo} start` },
     };
   },
+  launchPlan(project, { platform, deviceId }) {
+    if (platform !== "ios") return undefined;
+    const expo = `${project.exec} expo`;
+    return {
+      server: `${expo} start`,
+      build: `${expo} run:ios --device ${deviceId} --no-bundler`,
+    };
+  },
 };
 
 export default adapter;
