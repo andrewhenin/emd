@@ -7,7 +7,8 @@ Notes, findings and decisions: follow [docs/logging.md](docs/logging.md) exactly
 ## Commands
 
 - `npm ci` install
-- `npm run lint` Biome lint and format check (`npx biome check --write .` to fix)
+- `npm run lint` Biome lint and format check, then the import boundaries (`npx biome check --write .` to fix formatting)
+- `npm run check:imports` import boundaries only (decision 0001; also part of lint)
 - `npm run typecheck` TypeScript, no emit
 - `npm test` build, then run Vitest (tests call the built CLI)
 - `npm run test:fast` same set the pre-push hook runs
@@ -15,7 +16,10 @@ Notes, findings and decisions: follow [docs/logging.md](docs/logging.md) exactly
 
 ## Folder map
 
-- `src/` TypeScript source. `src/cli.ts` is the `emd` entry point.
+- `src/core/` all behavior. Public entry: `src/core/index.ts`. `registry.ts` is the only file that loads adapters.
+- `src/cli.ts`, `src/cli/` the `emd` CLI. Formats core results only.
+- `src/mcp.ts`, `src/mcp/` the `emd-mcp` MCP server. Formats core results only.
+- `src/adapters/<stack>/` one folder per stack, loaded lazily by core.
 - `test/` Vitest tests.
 - `scripts/` repo tooling (not shipped).
 - `docs/vision.md` what EMD is. `docs/logging.md` how we log. `docs/findings.md` observations.
@@ -31,6 +35,7 @@ Notes, findings and decisions: follow [docs/logging.md](docs/logging.md) exactly
 - Never tick the author-readiness checkbox in the PR template. Only the human owner does.
 - Fix problems where they originate. Remove replaced code in the same change.
 - Prefer tests through the real CLI and MCP tools over mocks.
+- Put behavior in `src/core/`. CLI and MCP import core only through `core/index.ts`, never each other. Adapters never import each other and load only through `core/registry.ts`.
 - `setup` installs only what the detected stack needs. Never install unrelated software.
 - Use Conventional Commit messages (`feat:`, `fix:`, `docs:`, `chore:`). Release Please reads them.
 - Never touch signing, provisioning or release settings of a user's project.

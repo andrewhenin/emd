@@ -1,8 +1,4 @@
 #!/usr/bin/env node
-import { readFileSync } from "node:fs";
+import { run } from "./cli/main.js";
 
-const pkg = JSON.parse(
-  readFileSync(new URL("../package.json", import.meta.url), "utf8"),
-) as { version: string };
-
-console.log(`emd ${pkg.version}`);
+process.exitCode = await run(process.argv.slice(2));
