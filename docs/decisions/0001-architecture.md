@@ -1,6 +1,6 @@
 # 0001: Architecture
 
-Status: Proposed (2026-10-23)
+Status: Accepted (2026-10-24)
 
 ## Context
 
@@ -31,10 +31,10 @@ Tool results stay small. Builds and device runs are queued across parallel agent
 
 ## Decision
 
-Not chosen yet.
+A. Core owns behavior; MCP and CLI only format. Adapters load lazily and
+import boundaries are lint-enforced. Revisit (split to B) when an outside
+party wants to ship an adapter or an adapter needs a heavy dependency.
 
 ## Consequences
 
-Either way: core owns all behavior, MCP and CLI only format, and long-running
-work goes through the core queue. A can be split into B later if outside
-adapters become a real need.
+Long-running work goes through the core queue.
