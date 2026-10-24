@@ -10,6 +10,7 @@ export type {
 export { detect } from "./detect.js";
 export { jobStatus, runJob, startJob } from "./jobs.js";
 export { launch } from "./launch.js";
+export { logs } from "./logs.js";
 export { loadedAdapters } from "./registry.js";
 export {
   type DetectResult,
@@ -17,6 +18,8 @@ export {
   type JobView,
   jobViewSchema,
   type LaunchResult,
+  type LogsResult,
   launchResultSchema,
+  logsResultSchema,
 } from "./result.js";
 export { version } from "./version.js";

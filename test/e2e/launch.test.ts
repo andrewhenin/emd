@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/client";
@@ -27,6 +27,12 @@ type View = {
   };
 };
 
+type Logs = {
+  verdict: string;
+  total?: number;
+  lines?: { time: string; tag: string; message: string }[];
+};
+
 describe.skipIf(!sandbox || process.platform !== "darwin")(
   "launch on a real iOS simulator",
   () => {
@@ -45,8 +51,10 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
     };
 
     let startedAfter = 0;
+    let began = 0;
     let first: View;
     let final: View;
+    let again: View | undefined;
     const steps = new Set<string>();
 
     beforeAll(async () => {
@@ -56,16 +64,18 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
           args: ["dist/bin.js", "mcp"],
         }),
       );
-      const began = Date.now();
+      began = Date.now();
       first = await call("launch", { dir: sandbox });
       startedAfter = Date.now() - began;
       final = await finish(first, steps);
     }, minutes(21));
 
     afterAll(async () => {
-      try {
-        if (final.result) process.kill(-final.result.metro.pid, "SIGTERM");
-      } catch {}
+      for (const job of [final, again]) {
+        try {
+          if (job?.result) process.kill(-job.result.metro.pid, "SIGTERM");
+        } catch {}
+      }
       await client.close();
     });
 
@@ -128,6 +138,75 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
         expect(second.result?.reason).toContain("already serves a dev server");
       },
       minutes(2),
+    );
+
+    // Tagged logs. The sandbox's tap flow restarts the app (Maestro's
+    // launchApp), so the app's pid changes: a run is read by app and time.
+    const tapFlow = () =>
+      spawnSync(
+        "maestro",
+        [
+          "--device",
+          final.result?.device.id ?? "",
+          "test",
+          ".maestro/smoke.yaml",
+        ],
+        {
+          cwd: sandbox,
+          encoding: "utf8",
+          env: {
+            ...process.env,
+            PATH: `${process.env.HOME}/.maestro/bin:${process.env.PATH}`,
+            JAVA_HOME: process.env.JAVA_HOME ?? "/opt/homebrew/opt/openjdk@17",
+            MAESTRO_DRIVER_STARTUP_TIMEOUT: "300000",
+          },
+        },
+      );
+    const readLogs = async (jobId: string, extra: object = {}) =>
+      (await client.callTool({ name: "logs", arguments: { jobId, ...extra } }))
+        .structuredContent as Logs;
+
+    test(
+      "logs returns the tag the app wrote after a tap, from this run only",
+      async () => {
+        const tap = tapFlow();
+        expect(tap.status, `${tap.stdout}\n${tap.stderr}\n${tap.error}`).toBe(
+          0,
+        );
+        const result = await readLogs(first.jobId);
+        expect(result.verdict).toBe("ok");
+        expect(result.lines).toContainEqual({
+          time: expect.stringMatching(/^\d{4}-\d\d-\d\dT[\d:.]+Z$/),
+          tag: "smoke",
+          message: "tapped",
+        });
+        // The `log` command logs its own arguments, which contain the marker.
+        for (const line of result.lines ?? []) {
+          expect(line.message).not.toContain("log run noninteractively");
+          expect(Date.parse(line.time)).toBeGreaterThanOrEqual(began);
+        }
+        const smoke = await readLogs(first.jobId, { tag: "smoke" });
+        expect(smoke.total).toBeGreaterThanOrEqual(1);
+        const other = await readLogs(first.jobId, { tag: "nothing" });
+        expect(other).toMatchObject({ verdict: "ok", total: 0, lines: [] });
+        expect(JSON.stringify(result).length).toBeLessThan(4000);
+      },
+      minutes(5),
+    );
+
+    test(
+      "a later run does not see an earlier run's lines",
+      async () => {
+        if (final.result) process.kill(-final.result.metro.pid, "SIGTERM");
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+        again = await finish(await call("launch", { dir: sandbox }), new Set());
+        expect(again.status).toBe("succeeded");
+        const later = await readLogs(again.jobId, { tag: "smoke" });
+        expect(later).toMatchObject({ verdict: "ok", total: 0, lines: [] });
+        const earlier = await readLogs(first.jobId, { tag: "smoke" });
+        expect(earlier.total).toBeGreaterThanOrEqual(1);
+      },
+      minutes(10),
     );
   },
 );
