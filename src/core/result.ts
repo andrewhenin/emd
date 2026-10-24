@@ -20,3 +20,22 @@ export const detectResultSchema = z.object({
 });
 
 export type DetectResult = z.infer<typeof detectResultSchema>;
+
+export const launchResultSchema = z.object({
+  verdict: z.enum(["launched", "failed", "unsupported"]),
+  root: z.string(),
+  // Why it failed or is unsupported, in one line.
+  reason: z.string().optional(),
+  // First relevant error lines from the build or server log.
+  errors: z.array(z.string()).optional(),
+  device: z.object({ id: z.string(), name: z.string() }).optional(),
+  appId: z.string().optional(),
+  appPid: z.number().optional(),
+  // The dev server left running for the app.
+  metro: z.object({ pid: z.number(), port: z.number() }).optional(),
+  // Full build and server logs live here; read them only when needed.
+  logDir: z.string().optional(),
+  seconds: z.number().optional(),
+});
+
+export type LaunchResult = z.infer<typeof launchResultSchema>;

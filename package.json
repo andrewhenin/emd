@@ -21,6 +21,7 @@
     "typecheck": "tsc --noEmit",
     "test": "npm run build && vitest run",
     "test:fast": "npm run build && vitest run",
+    "test:e2e": "npm run build && EMD_E2E_SANDBOX=${EMD_E2E_SANDBOX:-$HOME/emd-sandbox} vitest run test/e2e",
     "check:sizes": "node --experimental-strip-types scripts/check-doc-sizes.ts",
     "check:imports": "node --experimental-strip-types scripts/check-imports.ts",
     "check:pr-title": "commitlint",
