@@ -34,7 +34,7 @@ test("a clean layout passes", () => {
       'export const load = () => import("../adapters/a/index.js");',
     "adapters/a/index.ts": 'import type { x } from "../../core/index.js";',
     "cli/main.ts": 'import { x } from "../core/index.js";',
-    "cli.ts": 'import { run } from "./cli/main.js";',
+    "bin.ts": 'import { run } from "./cli/main.js"; import("./mcp/server.js");',
     "mcp/server.ts": 'import { x } from "../core/index.js";',
   });
   expect(result.status).toBe(0);
@@ -107,6 +107,31 @@ test.each([
       "adapters/a/index.ts": "",
     },
     "only core/registry.ts",
+  ],
+  [
+    "cli imports the entry",
+    { "cli/main.ts": 'import "../bin.js";', "bin.ts": "" },
+    "nothing may import the entry",
+  ],
+  [
+    "mcp imports the entry",
+    { "mcp/server.ts": 'import "../bin.js";', "bin.ts": "" },
+    "nothing may import the entry",
+  ],
+  [
+    "core imports the entry",
+    { "core/a.ts": 'import "../bin.js";', "bin.ts": "" },
+    "nothing may import the entry",
+  ],
+  [
+    "entry bypasses core's public entry",
+    { "bin.ts": 'import "./core/detect.js";', "core/detect.ts": "" },
+    "public entry",
+  ],
+  [
+    "entry statically imports an adapter",
+    { "bin.ts": 'import "./adapters/a/index.js";', "adapters/a/index.ts": "" },
+    "loaded lazily",
   ],
 ])("rejects: %s", (_name, files, message) => {
   const result = check(files);

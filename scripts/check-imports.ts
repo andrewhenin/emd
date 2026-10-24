@@ -3,11 +3,12 @@ import { dirname, join, relative, resolve, sep } from "node:path";
 import ts from "typescript";
 
 // Import boundaries from decision 0001. Usage: check-imports.ts [root]
+// src/bin.ts is the composition root: it may import cli and mcp, nothing imports it.
 const root = process.argv[2] ?? process.cwd();
 const src = join(root, "src");
 const failures: string[] = [];
 
-type Layer = "core" | "cli" | "mcp" | `adapter:${string}`;
+type Layer = "core" | "cli" | "mcp" | "entry" | `adapter:${string}`;
 type Import = { spec: string; dynamic: boolean };
 
 const listFiles = (dir: string): string[] =>
@@ -55,8 +56,9 @@ const relToSrc = (path: string): string =>
 const layerOf = (rel: string): Layer | undefined => {
   const [first, second] = rel.split("/");
   if (first === "core") return "core";
-  if (first === "cli" || first === "cli.ts") return "cli";
-  if (first === "mcp" || first === "mcp.ts") return "mcp";
+  if (first === "bin.ts" || first === "bin") return "entry";
+  if (first === "cli") return "cli";
+  if (first === "mcp") return "mcp";
   if (first === "adapters" && second) return `adapter:${second}`;
   return undefined;
 };
@@ -83,13 +85,22 @@ for (const file of listFiles(src)) {
       }
       continue;
     }
-    if (from === "core" && (to === "cli" || to === "mcp")) {
+    if (to === "entry") {
+      fail("nothing may import the entry src/bin.ts");
+    } else if (from === "core" && (to === "cli" || to === "mcp")) {
       fail(`core must not import ${to}`);
     } else if (from && from !== "core" && to === "core") {
       if (targetRel !== "core/index") {
         fail("reach core only through its public entry core/index");
       }
-    } else if (from && from !== "core" && to && to !== "core" && from !== to) {
+    } else if (
+      from &&
+      from !== "core" &&
+      from !== "entry" &&
+      to &&
+      to !== "core" &&
+      from !== to
+    ) {
       fail(`${from.split(":")[0]} must not import ${to.split(":")[0]}`);
     }
   }

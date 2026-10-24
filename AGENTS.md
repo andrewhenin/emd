@@ -18,8 +18,9 @@ Notes, findings and decisions: follow [docs/logging.md](docs/logging.md) exactly
 ## Folder map
 
 - `src/core/` all behavior. Public entry: `src/core/index.ts`. `registry.ts` is the only file that loads adapters.
-- `src/cli.ts`, `src/cli/` the `emd` CLI. Formats core results only.
-- `src/mcp.ts`, `src/mcp/` the `emd-mcp` MCP server. Formats core results only.
+- `src/bin.ts` the `emd` entry point. Dispatches `emd mcp` to the MCP server (loaded on demand) and everything else to the CLI. Nothing imports it.
+- `src/cli/` the CLI commands. Formats core results only.
+- `src/mcp/` the MCP server behind `emd mcp` (MCP SDK v2, `serveStdio`). Formats core results only.
 - `src/adapters/<stack>/` one folder per stack, loaded lazily by core.
 - `test/` Vitest tests.
 - `scripts/` repo tooling (not shipped).

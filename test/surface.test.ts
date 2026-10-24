@@ -1,15 +1,15 @@
 import { execFileSync } from "node:child_process";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { Client } from "@modelcontextprotocol/client";
+import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { expoProject, makeDir } from "./helpers.ts";
 
-// Real CLI and real MCP server, built into dist/ by `npm test`. No mocks.
+// Real CLI and real MCP server (`emd mcp`), built into dist/ by `npm test`. No mocks.
 const client = new Client({ name: "emd-test", version: "0.0.0" });
 
 beforeAll(async () => {
   await client.connect(
-    new StdioClientTransport({ command: "node", args: ["dist/mcp.js"] }),
+    new StdioClientTransport({ command: "node", args: ["dist/bin.js", "mcp"] }),
   );
 });
 
@@ -19,7 +19,7 @@ afterAll(async () => {
 
 const cli = (dir: string) =>
   JSON.parse(
-    execFileSync("node", ["dist/cli.js", "detect", dir], { encoding: "utf8" }),
+    execFileSync("node", ["dist/bin.js", "detect", dir], { encoding: "utf8" }),
   );
 
 const mcp = (dir: string) =>
@@ -51,6 +51,6 @@ test("results stay small: a verdict, the root and the stack, nothing else", asyn
 
 test("unknown CLI command exits non-zero", () => {
   expect(() =>
-    execFileSync("node", ["dist/cli.js", "bogus"], { stdio: "pipe" }),
+    execFileSync("node", ["dist/bin.js", "bogus"], { stdio: "pipe" }),
   ).toThrow();
 });
