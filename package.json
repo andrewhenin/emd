@@ -1,6 +1,6 @@
 {
   "name": "emd-agents",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Build, run, check and prove mobile changes from any coding agent.",
   "license": "Apache-2.0",
   "type": "module",
