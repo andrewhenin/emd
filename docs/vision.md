@@ -37,6 +37,7 @@ Several agents can run this loop at the same time, each on its own PR or feature
 - **Own what you create.** EMD marks every worktree, simulator, port and build folder it creates. `gc` removes only marked resources, and a resource whose cleanup failed stays owned until a retry succeeds. Unknown is never treated as absent.
 - **Safe by default.** Preview changes, back up configs, and never touch signing, provisioning or release settings.
 - **Any agent.** Works with any MCP-capable agent, not one vendor.
+- **Works on every supported setup.** Best available backend per device action, with fallback; support the latest two major Xcode versions.
 
 ## v1 scope
 

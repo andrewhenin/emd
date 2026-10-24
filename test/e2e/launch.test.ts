@@ -221,6 +221,8 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
         attempt?: number;
         logs?: { tag: string; message?: string; found: boolean }[];
         elements?: { found: boolean }[];
+        backend?: string;
+        fellBack?: { backend: string; reason: string }[];
         secondOpinion?: {
           screenshot?: string;
           agent?: string;
@@ -252,6 +254,14 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
         expect(existsSync(before.result?.secondOpinion?.screenshot ?? "")).toBe(
           true,
         );
+        // The result names the backend that read the screen (decision 0004);
+        // if it is not AXe, it says why AXe was passed over.
+        expect(["axe", "maestro"]).toContain(before.result?.backend);
+        if (before.result?.backend === "maestro") {
+          expect(before.result.fellBack?.[0]?.backend).toBe("axe");
+        } else {
+          expect(before.result?.fellBack).toBeUndefined();
+        }
 
         const tap = tapFlow();
         expect(tap.status, `${tap.stdout}\n${tap.stderr}\n${tap.error}`).toBe(
@@ -265,6 +275,7 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
         expect(after.status).toBe("succeeded");
         expect(after.result).toMatchObject({ verdict: "passed" });
         expect(after.result?.attempt).toBeUndefined();
+        expect(after.result?.backend).toBe(before.result?.backend);
       },
       minutes(8),
     );

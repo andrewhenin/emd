@@ -2,7 +2,8 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { beforeEach, expect, test } from "vitest";
 import { type CheckOptions, check, type Deps } from "../src/core/check.ts";
-import type { UiNode } from "../src/core/hierarchy.ts";
+import type { ScreenRead } from "../src/core/device/backend.ts";
+import type { UiNode } from "../src/core/device/screen.ts";
 import { createJob, runJob } from "../src/core/jobs.ts";
 import type { LogsResult } from "../src/core/result.ts";
 import { makeDir } from "./helpers.ts";
@@ -35,10 +36,10 @@ async function launched(root = "/work/app"): Promise<string> {
 }
 
 type Screen = { logs?: Record<string, string[]>; nodes?: UiNode[] };
-type Calls = { logs: number; hierarchy: number; screenshot: number };
+type Calls = { logs: number; screen: number; screenshot: number };
 
 function readers(screen: Screen = {}, overrides: Partial<Deps> = {}) {
-  const calls: Calls = { logs: 0, hierarchy: 0, screenshot: 0 };
+  const calls: Calls = { logs: 0, screen: 0, screenshot: 0 };
   const deps: Deps = {
     logs: async ({ tag }): Promise<LogsResult> => {
       calls.logs++;
@@ -53,9 +54,9 @@ function readers(screen: Screen = {}, overrides: Partial<Deps> = {}) {
         total: messages.length,
       };
     },
-    hierarchy: async () => {
-      calls.hierarchy++;
-      return screen.nodes ?? [];
+    screen: async (): Promise<ScreenRead> => {
+      calls.screen++;
+      return { nodes: screen.nodes ?? [], backend: "axe" };
     },
     screenshot: async (_device, path) => {
       calls.screenshot++;
@@ -99,6 +100,49 @@ test("passes when every log event and element is found", async () => {
   const shot = result.secondOpinion?.screenshot ?? "";
   expect(shot).toMatch(/check-\d+\.png$/);
   expect(existsSync(shot)).toBe(true);
+});
+
+test("a result names the backend that read the screen, and any it passed over", async () => {
+  const jobId = await launched();
+  const first = await run(
+    { jobId, name: "a", elements: [{ id: "smoke-button" }] },
+    readers(tapped).deps,
+  );
+  expect(first.backend).toBe("axe");
+  expect(first.fellBack).toBeUndefined();
+
+  const fallback = readers(tapped, {
+    screen: async () => ({
+      nodes: tapped.nodes ?? [],
+      backend: "maestro",
+      fellBack: [{ backend: "axe", reason: "axe is not installed" }],
+    }),
+  });
+  const second = await run(
+    { jobId, name: "b", elements: [{ id: "smoke-button" }] },
+    fallback.deps,
+  );
+  expect(second).toMatchObject({
+    verdict: "passed",
+    backend: "maestro",
+    fellBack: [{ backend: "axe", reason: "axe is not installed" }],
+  });
+
+  // A failing check names its backend too.
+  const failing = await run(
+    { jobId, name: "c", elements: [{ text: "Nope" }] },
+    fallback.deps,
+  );
+  expect(failing).toMatchObject({ verdict: "failed", backend: "maestro" });
+});
+
+test("a check on logs alone reads no screen and names no backend", async () => {
+  const jobId = await launched();
+  const { deps, calls } = readers(tapped);
+  const result = await run({ jobId, logs: [{ tag: "smoke" }] }, deps);
+  expect(result.verdict).toBe("passed");
+  expect(result.backend).toBeUndefined();
+  expect(calls.screen).toBe(0);
 });
 
 test("fails, and says which expectation, when a log event is missing", async () => {
@@ -159,11 +203,11 @@ test("stops at the retry limit and then refuses to run", async () => {
     attempt: 2,
     elements: [{ found: false }],
   });
-  const ran = calls.hierarchy;
+  const ran = calls.screen;
   const third = await run(options, deps);
   expect(third).toMatchObject({ verdict: "stopped", attempt: 2 });
   expect(third.reason).toContain("Stop retrying");
-  expect(calls.hierarchy).toBe(ran);
+  expect(calls.screen).toBe(ran);
 });
 
 test("a pass starts the count over", async () => {
@@ -223,14 +267,15 @@ test("a check that cannot run is an error and does not count", async () => {
   const broken = readers(
     {},
     {
-      hierarchy: async () => {
-        throw new Error("Maestro is not installed\nmore");
+      screen: async () => {
+        throw new Error("no backend could read the screen\nmore");
       },
     },
   );
   expect(await run(options, broken.deps)).toEqual({
     verdict: "error",
-    reason: "Could not read the screen: Error: Maestro is not installed",
+    reason:
+      "Could not read the screen: Error: no backend could read the screen",
   });
   const noLogs = readers(
     {},
@@ -329,5 +374,5 @@ test.each([
   const result = await check(options as CheckOptions, () => {}, deps);
   expect(result.verdict).toBe("error");
   expect(result.reason).toMatch(reason);
-  expect(calls).toEqual({ logs: 0, hierarchy: 0, screenshot: 0 });
+  expect(calls).toEqual({ logs: 0, screen: 0, screenshot: 0 });
 });

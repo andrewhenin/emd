@@ -22,6 +22,7 @@ Notes, findings and decisions: follow [docs/logging.md](docs/logging.md) exactly
 - `src/bin.ts` the `emd` entry point. Dispatches `emd mcp` to the MCP server (loaded on demand) and everything else to the CLI. Nothing imports it.
 - `src/cli/` the CLI commands. Formats core results only.
 - `src/mcp/` the MCP server behind `emd mcp` (MCP SDK v2, `serveStdio`). Formats core results only.
+- `src/core/device/` device actions behind one backend interface (AXe, Maestro). Core picks the best available backend per machine, falls back, and results name the backend used (decision 0004). Callers never name a tool.
 - `src/adapters/<stack>/` one folder per stack, loaded lazily by core.
 - `test/` Vitest tests.
 - `scripts/` repo tooling (not shipped).
