@@ -208,5 +208,104 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
       },
       minutes(10),
     );
+
+    // Checks, on the second run: the app was just launched and nobody has
+    // tapped. Each check reads the real log and the real screen (Maestro's
+    // accessibility tree), so each takes about half a minute.
+    type CheckView = {
+      status: string;
+      seconds: number;
+      result?: {
+        verdict: string;
+        reason?: string;
+        attempt?: number;
+        logs?: { tag: string; message?: string; found: boolean }[];
+        elements?: { found: boolean }[];
+        secondOpinion?: {
+          screenshot?: string;
+          agent?: string;
+          agrees?: boolean;
+        };
+      };
+    };
+    const runCheck = async (args: Record<string, unknown>) =>
+      (await finish(
+        await call("check", { jobId: again?.jobId, ...args }),
+        new Set(),
+      )) as unknown as CheckView;
+
+    test(
+      "a check fails before the tap and passes after it, from the real log and screen",
+      async () => {
+        const tappedLog = [{ tag: "smoke", message: "tapped" }];
+        const before = await runCheck({
+          name: "tap",
+          logs: tappedLog,
+          elements: [{ id: "smoke-button" }, { text: "Ready" }],
+        });
+        expect(before.status).toBe("failed");
+        expect(before.result).toMatchObject({ verdict: "failed", attempt: 1 });
+        expect(before.result?.logs).toEqual([
+          { tag: "smoke", message: "tapped", found: false },
+        ]);
+        expect(before.result?.elements?.every((e) => e.found)).toBe(true);
+        expect(existsSync(before.result?.secondOpinion?.screenshot ?? "")).toBe(
+          true,
+        );
+
+        const tap = tapFlow();
+        expect(tap.status, `${tap.stdout}\n${tap.stderr}\n${tap.error}`).toBe(
+          0,
+        );
+        const after = await runCheck({
+          name: "tap",
+          logs: tappedLog,
+          elements: [{ id: "smoke-button" }, { text: "Tapped" }],
+        });
+        expect(after.status).toBe("succeeded");
+        expect(after.result).toMatchObject({ verdict: "passed" });
+        expect(after.result?.attempt).toBeUndefined();
+      },
+      minutes(8),
+    );
+
+    test(
+      "fix-and-retry stops at the retry limit; the agent's reading never changes the verdict",
+      async () => {
+        const wrong = {
+          name: "limit",
+          retryLimit: 2,
+          elements: [{ text: "Nope" }],
+        };
+        const one = await runCheck({ ...wrong, agentReading: "pass" });
+        expect(one.result).toMatchObject({
+          verdict: "failed",
+          attempt: 1,
+          secondOpinion: { agent: "pass", agrees: false },
+        });
+        const two = await runCheck(wrong);
+        expect(two.result).toMatchObject({ verdict: "stopped", attempt: 2 });
+        const three = await runCheck(wrong);
+        expect(three.result).toMatchObject({ verdict: "stopped", attempt: 2 });
+        // It did not read the screen again.
+        expect(three.seconds).toBeLessThan(20);
+        expect(three.result?.secondOpinion).toBeUndefined();
+      },
+      minutes(8),
+    );
+
+    test(
+      "reset starts the count over",
+      async () => {
+        const fixed = await runCheck({
+          name: "limit",
+          retryLimit: 2,
+          reset: true,
+          elements: [{ id: "smoke-button" }],
+        });
+        expect(fixed.result).toMatchObject({ verdict: "passed" });
+      },
+      minutes(4),
+    );
   },
 );

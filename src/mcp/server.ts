@@ -78,7 +78,7 @@ function buildServer(): McpServer {
     "job_status",
     {
       description:
-        "Where a job is: queued, running (with the current step and seconds), succeeded or failed. When finished, includes the result: for launch, the device, app ID and log directory, or on failure the reason and the first relevant error lines, not the log.",
+        "Where a job is: queued, running (with the current step and seconds), succeeded or failed. When finished, includes the result. For launch: the device, app ID and log directory, or on failure the reason and the first relevant error lines, not the log. For check: the verdict, which expectations were found, and a screenshot path.",
       inputSchema: z.object({
         jobId: z.string().describe("The jobId a tool such as launch returned."),
       }),
@@ -141,6 +141,81 @@ function buildServer(): McpServer {
       return {
         content: [{ type: "text", text: JSON.stringify(result) }],
         structuredContent: result,
+      };
+    },
+  );
+
+  server.registerTool(
+    "check",
+    {
+      description:
+        "Check a run against what you expect, from signals a machine can read, not your own judgment: tagged log events the app wrote ([EMD:<tag>] lines) and elements on the simulator's screen (by testID or by text). Starts a job and returns it within seconds; poll job_status until it finishes, which can take a minute. The result's verdict is passed, failed (fix the cause and check again), stopped (the retry limit is reached: stop and report what is missing) or error (the check could not run; not counted). Your reading of the returned screenshot may be passed as agentReading; it is recorded as a second opinion and never changes the verdict.",
+      inputSchema: z.object({
+        jobId: z
+          .string()
+          .optional()
+          .describe("The launch job whose run to check. Preferred."),
+        device: z
+          .string()
+          .optional()
+          .describe("Simulator UDID, instead of a jobId."),
+        appId: z.string().optional().describe("App ID, with device and since."),
+        since: z
+          .string()
+          .optional()
+          .describe("ISO time the run started. Defaults to the job's start."),
+        logs: z
+          .array(
+            z.object({
+              tag: z.string().describe("The tag in [EMD:<tag>], e.g. smoke."),
+              message: z
+                .string()
+                .optional()
+                .describe("Text the line's message must contain."),
+            }),
+          )
+          .max(20)
+          .optional()
+          .describe("Tagged log events that must have fired during the run."),
+        elements: z
+          .array(
+            z.object({
+              id: z.string().optional().describe("The element's testID."),
+              text: z
+                .string()
+                .optional()
+                .describe("Its visible text or accessibility label, exactly."),
+            }),
+          )
+          .max(20)
+          .optional()
+          .describe(
+            "Elements that must be on screen now. Give id, text or both.",
+          ),
+        retryLimit: z
+          .number()
+          .int()
+          .min(1)
+          .max(10)
+          .optional()
+          .describe("Failed checks allowed before verdict stopped. Default 3."),
+        name: z
+          .string()
+          .optional()
+          .describe("Names this check so separate checks count separately."),
+        reset: z.boolean().optional().describe("Start the failure count over."),
+        agentReading: z
+          .enum(["pass", "fail"])
+          .optional()
+          .describe("Your reading of the screenshot. Second opinion only."),
+      }),
+      outputSchema: jobViewSchema,
+    },
+    async (input) => {
+      const job = startJob("check", input);
+      return {
+        content: [{ type: "text", text: JSON.stringify(job) }],
+        structuredContent: job,
       };
     },
   );

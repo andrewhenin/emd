@@ -10,7 +10,7 @@ import {
   runJob,
   startJob,
 } from "../src/core/jobs.ts";
-import type { LaunchResult } from "../src/core/result.ts";
+import type { CheckResult, LaunchResult } from "../src/core/result.ts";
 import { makeDir } from "./helpers.ts";
 
 // Jobs are real files in a temp state dir. Handlers here are small real
@@ -34,7 +34,17 @@ const edit = (id: string, patch: object) =>
 const handlers = (
   run: (id: string, report: (step: string) => void) => Promise<LaunchResult>,
   id: () => string,
-): Handlers => ({ launch: (_input, report) => run(id(), report) });
+): Handlers => ({
+  launch: (_input, report) => run(id(), report),
+  check: async () => ({ verdict: "error", reason: "not used here" }),
+});
+
+const checkHandlers = (
+  run: (report: (step: string) => void) => Promise<CheckResult>,
+): Handlers => ({
+  launch: async () => ({ verdict: "failed", root: "/x" }),
+  check: (_input, report) => run(report),
+});
 
 test("a created job is queued until a worker runs it", () => {
   const job = createJob("launch", { dir: "/x" });
@@ -128,6 +138,64 @@ test("a running job whose worker died is settled as failed", () => {
   expect(jobStatus(job.id)).toMatchObject({
     status: "failed",
     result: { reason: "The worker process died." },
+  });
+});
+
+test("a check job succeeds only when the check passed", async () => {
+  const passed = createJob("check", { jobId: "deadbeef" });
+  await runJob(
+    passed.id,
+    checkHandlers(async (report) => {
+      report("reading the screen");
+      return { verdict: "passed" };
+    }),
+  );
+  expect(jobStatus(passed.id)).toMatchObject({
+    kind: "check",
+    status: "succeeded",
+    result: { verdict: "passed" },
+  });
+
+  for (const verdict of ["failed", "stopped", "error"] as const) {
+    const job = createJob("check", { jobId: "deadbeef" });
+    await runJob(
+      job.id,
+      checkHandlers(async () => ({ verdict })),
+    );
+    expect(jobStatus(job.id)).toMatchObject({
+      kind: "check",
+      status: "failed",
+      result: { verdict },
+    });
+  }
+});
+
+test("a check handler that throws fails the job with an error verdict", async () => {
+  const job = createJob("check", { jobId: "deadbeef" });
+  await runJob(
+    job.id,
+    checkHandlers(async () => {
+      throw new Error("no simulator");
+    }),
+  );
+  expect(jobStatus(job.id)).toMatchObject({
+    status: "failed",
+    result: { verdict: "error", reason: "Error: no simulator" },
+  });
+});
+
+test("a check job whose worker died is settled with an error verdict", () => {
+  const job = createJob("check", { jobId: "deadbeef" });
+  const dead = spawnSync("node", ["-e", "0"]).pid;
+  edit(job.id, {
+    status: "running",
+    pid: dead,
+    startedAt: new Date().toISOString(),
+  });
+  expect(jobStatus(job.id)).toMatchObject({
+    kind: "check",
+    status: "failed",
+    result: { verdict: "error", reason: "The worker process died." },
   });
 });
 

@@ -1,5 +1,6 @@
 import { parseArgs } from "node:util";
 import {
+  check,
   detect,
   jobStatus,
   launch,
@@ -9,7 +10,26 @@ import {
 } from "../core/index.js";
 
 const usage =
-  "Commands: detect [dir], launch [dir] [--device X] [--timeout N], job status <id>, logs <jobId> [--tag T] [--limit N], mcp";
+  "Commands: detect [dir], launch [dir] [--device X] [--timeout N], job status <id>, logs <jobId> [--tag T] [--limit N], check <jobId> [--log TAG[=TEXT]] [--element id=X|text=Y] [--retry-limit N] [--name N] [--agent pass|fail] [--reset], mcp";
+
+// --log smoke   or   --log smoke=tapped
+const logSpec = (raw: string) => {
+  const at = raw.indexOf("=");
+  return at < 0
+    ? { tag: raw }
+    : { tag: raw.slice(0, at), message: raw.slice(at + 1) };
+};
+
+// --element id=smoke-button   or   text=Tapped   or   '{"id":"x","text":"y"}'
+const elementSpec = (raw: string): { id?: string; text?: string } => {
+  if (raw.startsWith("{")) return JSON.parse(raw);
+  const at = raw.indexOf("=");
+  const key = raw.slice(0, at);
+  if (at < 0 || (key !== "id" && key !== "text")) {
+    throw new Error(`--element wants id=X, text=Y or JSON, not "${raw}"`);
+  }
+  return { [key]: raw.slice(at + 1) };
+};
 
 export async function run(argv: string[]): Promise<number> {
   const [command, ...args] = argv;
@@ -85,6 +105,49 @@ export async function run(argv: string[]): Promise<number> {
       });
       console.log(JSON.stringify(result));
       return result.verdict === "ok" ? 0 : 1;
+    }
+    case "check": {
+      const { values, positionals } = parseArgs({
+        args,
+        allowPositionals: true,
+        options: {
+          log: { type: "string", multiple: true },
+          element: { type: "string", multiple: true },
+          "retry-limit": { type: "string" },
+          name: { type: "string" },
+          agent: { type: "string" },
+          reset: { type: "boolean" },
+          since: { type: "string" },
+          device: { type: "string" },
+          app: { type: "string" },
+        },
+      });
+      if (values.agent && values.agent !== "pass" && values.agent !== "fail") {
+        console.error(`emd: --agent is pass or fail. ${usage}`);
+        return 2;
+      }
+      let elements: { id?: string; text?: string }[];
+      try {
+        elements = (values.element ?? []).map(elementSpec);
+      } catch (error) {
+        console.error(`emd: ${(error as Error).message}`);
+        return 2;
+      }
+      const retryLimit = values["retry-limit"];
+      const result = await check({
+        jobId: positionals[0],
+        device: values.device,
+        appId: values.app,
+        since: values.since,
+        logs: (values.log ?? []).map(logSpec),
+        elements,
+        retryLimit: retryLimit === undefined ? undefined : Number(retryLimit),
+        name: values.name,
+        reset: values.reset,
+        agentReading: values.agent as "pass" | "fail" | undefined,
+      });
+      console.log(JSON.stringify(result));
+      return result.verdict === "passed" ? 0 : 1;
     }
     default:
       console.error(`emd: unknown command "${command}". ${usage}`);
