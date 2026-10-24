@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/andrewhenin/emd/compare/emd-agents-v0.1.0...emd-agents-v0.2.0) (2026-10-24)
+
+
+### Features
+
+* detect Expo platforms, app IDs and run commands ([#29](https://github.com/andrewhenin/emd/issues/29)) ([b4a516e](https://github.com/andrewhenin/emd/commit/b4a516e040a6071cdea17244092b0a7c2592eb5b))
+
 ## 0.1.0 (2026-10-24)
 
 
