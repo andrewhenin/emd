@@ -24,6 +24,7 @@
     "test:fast": "npm run build && vitest run",
     "check:sizes": "node --experimental-strip-types scripts/check-doc-sizes.ts",
     "check:imports": "node --experimental-strip-types scripts/check-imports.ts",
+    "check:pr-title": "commitlint",
     "prepare": "husky"
   },
   "lint-staged": {
