@@ -1,5 +1,4 @@
 import { readFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { detect } from "./detect.js";
 import { firstErrors } from "./log.js";
@@ -14,6 +13,7 @@ import {
   listDevices,
   pickDevice,
 } from "./simulator.js";
+import { stateDir } from "./state.js";
 
 const metroPort = 8081;
 const metroStartSeconds = 120;
@@ -80,9 +80,11 @@ const logTail = async (path: string): Promise<string[]> =>
 
 export async function launch(
   options: LaunchOptions = {},
+  report: (step: string) => void = () => {},
 ): Promise<LaunchResult> {
   const started = Date.now();
   const seconds = () => Math.round((Date.now() - started) / 100) / 10;
+  report("checking the project");
   const detected = await detect(options.dir);
   const { root } = detected;
   const unsupported = (reason: string): LaunchResult => ({
@@ -130,8 +132,7 @@ export async function launch(
   if (!plan) return unsupported(`${detected.stack} cannot launch on iOS.`);
 
   const logDir = join(
-    tmpdir(),
-    "emd",
+    stateDir(),
     "runs",
     `${new Date().toISOString().replace(/[:.]/g, "-")}-${basename(root)}`,
   );
@@ -139,6 +140,7 @@ export async function launch(
   const metroLog = join(logDir, "metro.log");
   const where = { device: { id: device.id, name: device.name }, logDir };
 
+  report("booting the simulator");
   try {
     await boot(device);
   } catch (error) {
@@ -154,6 +156,7 @@ export async function launch(
       where,
     );
   }
+  report("starting the dev server");
   const env = { CI: "1" };
   const metro = startLogged(plan.server, { cwd: root, logPath: metroLog, env });
   const metroState = await untilReady(
@@ -171,6 +174,7 @@ export async function launch(
     );
   }
 
+  report("building and installing the app");
   const build = startLogged(plan.build, { cwd: root, logPath: buildLog, env });
   const outcome = await withTimeout(
     build.exited,
@@ -187,6 +191,7 @@ export async function launch(
     );
   }
 
+  report("launching the app");
   let appPid: number;
   try {
     appPid = await launchApp(device, appId);

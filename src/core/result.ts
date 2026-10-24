@@ -39,3 +39,18 @@ export const launchResultSchema = z.object({
 });
 
 export type LaunchResult = z.infer<typeof launchResultSchema>;
+
+// What a caller sees of a job: enough to know where it is, small enough to
+// poll. `result` appears once the job has finished.
+export const jobViewSchema = z.object({
+  jobId: z.string(),
+  kind: z.literal("launch"),
+  status: z.enum(["queued", "running", "succeeded", "failed"]),
+  // What the job is doing now, while it runs.
+  step: z.string().optional(),
+  // Since the job started (since it was created while still queued).
+  seconds: z.number(),
+  result: launchResultSchema.optional(),
+});
+
+export type JobView = z.infer<typeof jobViewSchema>;
