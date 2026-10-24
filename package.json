@@ -5,8 +5,7 @@
   "license": "Apache-2.0",
   "type": "module",
   "bin": {
-    "emd": "dist/cli.js",
-    "emd-mcp": "dist/mcp.js"
+    "emd": "dist/bin.js"
   },
   "files": [
     "dist",
@@ -33,6 +32,7 @@
     "@biomejs/biome": "^2.0.0",
     "@commitlint/cli": "^19.0.0",
     "@commitlint/config-conventional": "^19.0.0",
+    "@modelcontextprotocol/client": "^2.4.0",
     "@types/node": "^22.0.0",
     "husky": "^9.0.0",
     "lint-staged": "^15.0.0",
@@ -40,7 +40,7 @@
     "vitest": "^3.0.0"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@modelcontextprotocol/server": "^2.4.0",
     "zod": "^4.6.7"
   }
 }

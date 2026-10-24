@@ -1,9 +1,9 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { McpServer } from "@modelcontextprotocol/server";
+import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { z } from "zod";
 import { detect, version } from "../core/index.js";
 
-export async function startServer(): Promise<void> {
+function buildServer(): McpServer {
   const server = new McpServer({ name: "emd", version: version() });
 
   server.registerTool(
@@ -11,19 +11,19 @@ export async function startServer(): Promise<void> {
     {
       description:
         "Detect the mobile stack of a project directory. Returns a small verdict, not file contents.",
-      inputSchema: {
+      inputSchema: z.object({
         dir: z
           .string()
           .optional()
           .describe(
             "Project directory. Defaults to the server's working directory.",
           ),
-      },
-      outputSchema: {
+      }),
+      outputSchema: z.object({
         verdict: z.enum(["detected", "none"]),
         root: z.string(),
         stack: z.enum(["expo"]).optional(),
-      },
+      }),
     },
     async ({ dir }) => {
       const result = await detect(dir);
@@ -34,5 +34,11 @@ export async function startServer(): Promise<void> {
     },
   );
 
-  await server.connect(new StdioServerTransport());
+  return server;
+}
+
+// stdout is the protocol channel: never log to it. Serves 2025-era and
+// 2026-07-28 clients from the same factory.
+export function startServer(): void {
+  serveStdio(buildServer);
 }

@@ -11,7 +11,7 @@ export async function run(argv: string[]): Promise<number> {
       return 0;
     default:
       console.error(
-        `emd: unknown command "${command}". Commands: detect [dir]`,
+        `emd: unknown command "${command}". Commands: detect [dir], mcp`,
       );
       return 2;
   }
