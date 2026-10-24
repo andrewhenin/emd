@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { Client } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import { afterAll, beforeAll, expect, test } from "vitest";
-import { expoProject, makeDir } from "./helpers.ts";
+import { appJson, expoProject, makeDir } from "./helpers.ts";
 
 // Real CLI and real MCP server (`emd mcp`), built into dist/ by `npm test`. No mocks.
 const client = new Client({ name: "emd-test", version: "0.0.0" });
@@ -30,8 +30,18 @@ test("MCP server exposes the detect tool", async () => {
   expect(tools.map((t) => t.name)).toContain("detect");
 });
 
+const sandbox = () =>
+  expoProject({
+    "app.json": appJson({
+      ios: { bundleIdentifier: "com.emd.sandbox" },
+      android: { package: "com.emd.sandbox" },
+    }),
+    ".maestro/smoke.yaml": "",
+    "AGENTS.md": "",
+  });
+
 test.each([
-  ["an Expo project", expoProject],
+  ["an Expo project", sandbox],
   ["an empty directory", () => makeDir()],
 ])("CLI and MCP return the same result for %s", async (_name, make) => {
   const dir = make();
@@ -43,10 +53,20 @@ test.each([
   ).toEqual(fromCli);
 });
 
-test("results stay small: a verdict, the root and the stack, nothing else", async () => {
-  const result = cli(expoProject());
-  expect(Object.keys(result).sort()).toEqual(["root", "stack", "verdict"]);
-  expect(JSON.stringify(result).length).toBeLessThan(300);
+test("results stay small: only the fields launching needs", async () => {
+  const result = cli(sandbox());
+  expect(Object.keys(result).sort()).toEqual([
+    "appIds",
+    "commands",
+    "maestroFlows",
+    "notes",
+    "packageManager",
+    "platforms",
+    "root",
+    "stack",
+    "verdict",
+  ]);
+  expect(JSON.stringify(result).length).toBeLessThan(800);
 });
 
 test("unknown CLI command exits non-zero", () => {

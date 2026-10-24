@@ -1,20 +1,22 @@
 import { resolve } from "node:path";
-import type { StackId } from "./adapter.js";
 import { probeStack } from "./probe.js";
+import { inspectProject } from "./project.js";
 import { loadAdapter } from "./registry.js";
-
-export type DetectResult = {
-  verdict: "detected" | "none";
-  root: string;
-  stack?: StackId;
-};
+import type { DetectResult } from "./result.js";
 
 export async function detect(dir = "."): Promise<DetectResult> {
   const root = resolve(dir);
   const id = await probeStack(root);
   if (!id) return { verdict: "none", root };
-  const found = await (await loadAdapter(id)).detect(root);
-  return found
-    ? { verdict: "detected", root, stack: found.stack }
-    : { verdict: "none", root };
+  const { maestroFlows, notes, ...project } = await inspectProject(root);
+  const found = await (await loadAdapter(id)).detect(root, project);
+  if (!found) return { verdict: "none", root };
+  return {
+    verdict: "detected",
+    root,
+    ...found,
+    packageManager: project.packageManager,
+    maestroFlows,
+    notes,
+  };
 }

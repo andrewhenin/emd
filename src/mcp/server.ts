@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { z } from "zod";
-import { detect, version } from "../core/index.js";
+import { detect, detectResultSchema, version } from "../core/index.js";
 
 function buildServer(): McpServer {
   const server = new McpServer({ name: "emd", version: version() });
@@ -10,7 +10,7 @@ function buildServer(): McpServer {
     "detect",
     {
       description:
-        "Detect the mobile stack of a project directory. Returns a small verdict, not file contents.",
+        "Detect the mobile stack of a project directory and what launching it needs: platforms, app IDs, run commands, package manager. Returns a small result, not file contents.",
       inputSchema: z.object({
         dir: z
           .string()
@@ -19,11 +19,7 @@ function buildServer(): McpServer {
             "Project directory. Defaults to the server's working directory.",
           ),
       }),
-      outputSchema: z.object({
-        verdict: z.enum(["detected", "none"]),
-        root: z.string(),
-        stack: z.enum(["expo"]).optional(),
-      }),
+      outputSchema: detectResultSchema,
     },
     async ({ dir }) => {
       const result = await detect(dir);
