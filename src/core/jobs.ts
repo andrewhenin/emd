@@ -1,69 +1,38 @@
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { type CheckOptions, check } from "./check.js";
+import {
+  type Job,
+  type JobKind,
+  now,
+  readJob,
+  update,
+  write,
+} from "./jobstore.js";
 import { type LaunchOptions, launch } from "./launch.js";
-import type { JobView, LaunchResult } from "./result.js";
-import { stateDir } from "./state.js";
+import type { CheckResult, JobView, LaunchResult } from "./result.js";
 
 // A job is one long-running piece of work, recorded as a JSON file in the
 // shared state dir and run by a detached worker process (`emd job run <id>`).
 // Any process can read it, and it outlives the process that started it. A
 // queue (M2) adds a scheduler that decides when a queued job's worker starts.
 
-export type JobKind = "launch";
+export type { JobKind } from "./jobstore.js";
 
-type Job = {
-  id: string;
-  kind: JobKind;
-  input: LaunchOptions;
-  status: JobView["status"];
-  step?: string;
-  createdAt: string;
-  startedAt?: string;
-  finishedAt?: string;
-  pid?: number;
-  result?: LaunchResult;
-};
+type Inputs = { launch: LaunchOptions; check: CheckOptions };
+type Results = { launch: LaunchResult; check: CheckResult };
 
 export type Report = (step: string) => void;
-export type Handlers = Record<
-  JobKind,
-  (input: LaunchOptions, report: Report) => Promise<LaunchResult>
->;
+export type Handlers = {
+  [K in JobKind]: (input: Inputs[K], report: Report) => Promise<Results[K]>;
+};
 
-const handlers: Handlers = { launch };
+const handlers: Handlers = { launch, check };
 
-// The id comes from callers, so it is checked before it touches a path.
-const idPattern = /^[0-9a-f]{8}$/;
 const workerGraceMs = 30_000;
 const defaultWorker = fileURLToPath(new URL("../bin.js", import.meta.url));
-
-const jobsDir = () => join(stateDir(), "jobs");
-const fileOf = (id: string) => join(jobsDir(), `${id}.json`);
-const now = () => new Date().toISOString();
-
-function write(job: Job): void {
-  mkdirSync(jobsDir(), { recursive: true });
-  const temp = `${fileOf(job.id)}.${process.pid}.tmp`;
-  writeFileSync(temp, JSON.stringify(job));
-  renameSync(temp, fileOf(job.id));
-}
-
-export function readJob(id: string): Job | undefined {
-  if (!idPattern.test(id)) return undefined;
-  try {
-    return JSON.parse(readFileSync(fileOf(id), "utf8")) as Job;
-  } catch {
-    return undefined;
-  }
-}
-
-function update(id: string, patch: Partial<Job>): void {
-  const job = readJob(id);
-  if (job) write({ ...job, ...patch });
-}
 
 function fail(id: string, reason: string): void {
   const job = readJob(id);
@@ -73,11 +42,14 @@ function fail(id: string, reason: string): void {
     status: "failed",
     step: undefined,
     finishedAt: now(),
-    result: {
-      verdict: "failed",
-      root: resolve(job.input.dir ?? "."),
-      reason,
-    },
+    result:
+      job.kind === "launch"
+        ? {
+            verdict: "failed",
+            root: resolve((job.input as LaunchOptions).dir ?? "."),
+            reason,
+          }
+        : { verdict: "error", reason },
   });
 }
 
@@ -104,7 +76,7 @@ function view(job: Job): JobView {
 }
 
 // Records a queued job. Nothing runs it yet.
-export function createJob(kind: JobKind, input: LaunchOptions): Job {
+export function createJob<K extends JobKind>(kind: K, input: Inputs[K]): Job {
   const job: Job = {
     id: randomBytes(4).toString("hex"),
     kind,
@@ -118,9 +90,9 @@ export function createJob(kind: JobKind, input: LaunchOptions): Job {
 
 // Records the job and starts its worker. Returns at once; the job stays queued
 // until the worker picks it up.
-export function startJob(
-  kind: JobKind,
-  input: LaunchOptions,
+export function startJob<K extends JobKind>(
+  kind: K,
+  input: Inputs[K],
   worker: string = defaultWorker,
 ): JobView {
   const job = createJob(kind, input);
@@ -135,6 +107,15 @@ export function startJob(
   return view(job);
 }
 
+const execute = (
+  job: Job,
+  run: Handlers,
+  report: Report,
+): Promise<LaunchResult | CheckResult> =>
+  job.kind === "launch"
+    ? run.launch(job.input as LaunchOptions, report)
+    : run.check(job.input as CheckOptions, report);
+
 // What the worker process runs.
 export async function runJob(
   id: string,
@@ -144,11 +125,12 @@ export async function runJob(
   if (job?.status !== "queued") return;
   update(id, { status: "running", pid: process.pid, startedAt: now() });
   try {
-    const result = await run[job.kind](job.input, (step) =>
-      update(id, { step }),
-    );
+    const result = await execute(job, run, (step) => update(id, { step }));
     update(id, {
-      status: result.verdict === "launched" ? "succeeded" : "failed",
+      status:
+        result.verdict === "launched" || result.verdict === "passed"
+          ? "succeeded"
+          : "failed",
       step: undefined,
       finishedAt: now(),
       result,
@@ -174,3 +156,5 @@ export function jobStatus(id: string): JobView | undefined {
   const current = readJob(id);
   return current && view(current);
 }
+
+export { readJob };

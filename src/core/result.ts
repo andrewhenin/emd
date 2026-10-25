@@ -40,17 +40,62 @@ export const launchResultSchema = z.object({
 
 export type LaunchResult = z.infer<typeof launchResultSchema>;
 
+// The verdict comes only from log events and UI elements. The agent's own
+// reading of a screenshot is recorded next to it as a second opinion and never
+// changes the verdict.
+export const checkResultSchema = z.object({
+  // passed: every expectation met. failed: one was not, and a retry is allowed.
+  // stopped: the retry limit is reached, so stop and report. error: the check
+  // could not run (no app, no simulator); it does not count as an attempt.
+  verdict: z.enum(["passed", "failed", "stopped", "error"]),
+  reason: z.string().optional(),
+  // Failed checks so far for this check name, and how many are allowed.
+  attempt: z.number().optional(),
+  retryLimit: z.number().optional(),
+  logs: z
+    .array(
+      z.object({
+        tag: z.string(),
+        message: z.string().optional(),
+        found: z.boolean(),
+      }),
+    )
+    .optional(),
+  elements: z
+    .array(
+      z.object({
+        id: z.string().optional(),
+        text: z.string().optional(),
+        found: z.boolean(),
+      }),
+    )
+    .optional(),
+  secondOpinion: z
+    .object({
+      // A screenshot of the screen as it was checked.
+      screenshot: z.string().optional(),
+      // The agent's reading of that screenshot, when it gave one.
+      agent: z.enum(["pass", "fail"]).optional(),
+      // Whether that reading matches the verdict.
+      agrees: z.boolean().optional(),
+    })
+    .optional(),
+});
+
+export type CheckResult = z.infer<typeof checkResultSchema>;
+
 // What a caller sees of a job: enough to know where it is, small enough to
 // poll. `result` appears once the job has finished.
 export const jobViewSchema = z.object({
   jobId: z.string(),
-  kind: z.literal("launch"),
+  kind: z.enum(["launch", "check"]),
   status: z.enum(["queued", "running", "succeeded", "failed"]),
   // What the job is doing now, while it runs.
   step: z.string().optional(),
   // Since the job started (since it was created while still queued).
   seconds: z.number(),
-  result: launchResultSchema.optional(),
+  // A launch result or a check result, by `kind`.
+  result: z.union([launchResultSchema, checkResultSchema]).optional(),
 });
 
 export type JobView = z.infer<typeof jobViewSchema>;

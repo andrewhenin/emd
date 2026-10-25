@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { readJob } from "./jobs.js";
 import type { LogsResult } from "./result.js";
+import { resolveRun } from "./run.js";
 
 const run = promisify(execFile);
 
@@ -10,8 +10,6 @@ const run = promisify(execFile);
 // Info level, so `log show` needs --info to see it.
 const taggedLine = /\[EMD:([A-Za-z0-9_.-]+)\]\s?(.*)$/s;
 const tagPattern = /^[A-Za-z0-9_.-]{1,40}$/;
-const deviceId = /^[0-9A-F]{8}(-[0-9A-F]{4}){3}-[0-9A-F]{12}$/i;
-const appIdPattern = /^[A-Za-z0-9.-]+$/;
 const executable = /^[A-Za-z0-9_. -]+$/;
 const defaultLimit = 50;
 const maxLimit = 500;
@@ -108,29 +106,9 @@ export async function logs(options: LogsOptions): Promise<LogsResult> {
     return failed(`limit must be a whole number from 1 to ${maxLimit}.`);
   }
 
-  let { device, appId, since } = options;
-  if (options.jobId) {
-    const job = readJob(options.jobId);
-    if (!job) return failed(`No job with id "${options.jobId}".`);
-    device ??= job.result?.device?.id;
-    appId ??= job.result?.appId;
-    since ??= job.startedAt;
-  }
-  if (!device || !appId) {
-    return failed(
-      options.jobId
-        ? "That job has not launched an app (yet)."
-        : "Give a jobId, or a device and an appId.",
-    );
-  }
-  if (!since) return failed("Give since (an ISO time), or a jobId.");
-  const start = new Date(since);
-  if (Number.isNaN(start.getTime())) {
-    return failed("since must be an ISO time, e.g. 2026-10-24T14:00:00Z.");
-  }
-  if (!deviceId.test(device) || !appIdPattern.test(appId)) {
-    return failed("That device or app ID does not look right.");
-  }
+  const resolved = resolveRun(options);
+  if ("reason" in resolved) return failed(resolved.reason);
+  const { device, appId, since: start } = resolved.run;
   if (process.platform !== "darwin") {
     return failed("iOS simulator logs need macOS.");
   }
