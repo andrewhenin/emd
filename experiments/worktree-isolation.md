@@ -26,3 +26,11 @@ both in parallel. Cold builds, nothing cached.
   partial DerivedData and took 260 s.
 
 Reproduce: `experiments/worktree-isolation.sh [sandbox] [timeout]` (builds EMD first with `npm run build`).
+
+## Which Metro each app loads from
+
+Two Metros (8081, 8082) and the two proof simulators running, Expo's deep link
+(`__expo_url=…:8081`, as in every launch log) sent to both, then `simctl launch`.
+`lsof -a -p <app pid> -iTCP`: the app on the 8081 worktree held 4 connections to
+8081; the app on the 8082 worktree held 4 to 8082. The port is most likely baked into the app
+by `RCT_METRO_PORT` at build time (not isolated as the cause), so no `RCT_jsLocation` default was needed.

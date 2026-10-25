@@ -1,17 +1,14 @@
 import { createHash } from "node:crypto";
 import {
-  closeSync,
   mkdirSync,
-  openSync,
   readdirSync,
   readFileSync,
   realpathSync,
   renameSync,
-  rmSync,
   writeFileSync,
-  writeSync,
 } from "node:fs";
 import { join } from "node:path";
+import { lock } from "proper-lockfile";
 import { homeDir } from "./state.js";
 
 // The ownership ledger (decision 0006): one file per worktree listing every
@@ -23,7 +20,6 @@ export type Entry = { kind: Kind; id: string; state: "creating" | "owned" };
 type Ledger = { root: string; resources: Entry[] };
 
 const ownedDir = () => join(homeDir(), "owned");
-const lockWaitMs = 10_000;
 
 export function worktreeKey(root: string): string {
   let real = root;
@@ -63,42 +59,17 @@ function write(root: string, ledger: Ledger): void {
   renameSync(`${path}.tmp`, path);
 }
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-// The lock file holds its owner's PID. A lock whose owner is no longer running
-// is taken over; one that is empty (being written) or whose owner lives is not.
-function holderGone(lock: string): boolean {
-  try {
-    const pid = Number.parseInt(readFileSync(lock, "utf8"), 10);
-    if (!Number.isInteger(pid) || pid <= 0) return false;
-    process.kill(pid, 0);
-    return false;
-  } catch (error) {
-    return (error as NodeJS.ErrnoException).code === "ESRCH";
-  }
-}
-
 // One lock for the whole machine, so two launches cannot pick the same port.
+// proper-lockfile refreshes it while held and takes over one nobody refreshes.
 async function locked<T>(fn: () => Promise<T> | T): Promise<T> {
   mkdirSync(ownedDir(), { recursive: true });
-  const lock = join(ownedDir(), ".lock");
-  for (let waited = 0; ; waited += 25) {
-    try {
-      const fd = openSync(lock, "wx");
-      writeSync(fd, String(process.pid));
-      closeSync(fd);
-      break;
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-      if (holderGone(lock)) rmSync(lock, { force: true });
-      if (waited > lockWaitMs) throw new Error("The ownership lock is stuck.");
-      await sleep(25);
-    }
-  }
+  const release = await lock(ownedDir(), {
+    retries: { retries: 200, minTimeout: 25, maxTimeout: 100 },
+  });
   try {
     return await fn();
   } finally {
-    rmSync(lock, { force: true });
+    await release();
   }
 }
 

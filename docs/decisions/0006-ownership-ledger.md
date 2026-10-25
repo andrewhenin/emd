@@ -18,7 +18,7 @@ Expo's `run:ios` has no DerivedData option and finds the built app by matching
   exists, then `owned`. Entries leave only when a cleanup succeeds. A failed
   cleanup, or a crash mid-create, leaves the entry. A ledger that cannot be
   read is an error, never an empty ledger.
-- **Atomic allocation:** one machine-wide lock file (`wx`, holds its PID; taken over only when that PID is gone)
+- **Atomic allocation:** one machine-wide lock file (proper-lockfile; its heartbeat marks a lock stale only when nobody refreshes it)
   covers choosing a port and writing its entry. A relaunch gets the same entry.
 - **Resources:** simulator (a clone of a shut-down iPhone, named `emd-<key>`),
   DerivedData (`~/.emd/derived/<key>/Developer/Xcode/DerivedData/<app>`) and
