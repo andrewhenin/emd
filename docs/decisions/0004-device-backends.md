@@ -1,6 +1,6 @@
 # 0004: Device actions go through backends, chosen per machine
 
-Status: Accepted (2026-10-24)
+Status: Superseded by 0005 (the Xcode 27 rule only; the rest stands)
 
 ## Context
 

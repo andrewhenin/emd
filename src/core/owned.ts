@@ -14,7 +14,7 @@ import {
 import { join } from "node:path";
 import { homeDir } from "./state.js";
 
-// The ownership ledger (decision 0005): one file per worktree listing every
+// The ownership ledger (decision 0006): one file per worktree listing every
 // resource EMD created for it. An entry is written as "creating" before the
 // resource exists and stays until a cleanup succeeds. A ledger that cannot be
 // read throws, so unknown is never taken for absent.

@@ -121,7 +121,7 @@ export async function launch(
   }
 
   // Each worktree gets its own simulator, DerivedData and Metro port, recorded
-  // as EMD-owned before they exist (decision 0005).
+  // as EMD-owned before they exist (decision 0006).
   const prefix = "emd-";
   let device: Device | undefined;
   let port: number;

@@ -1,4 +1,4 @@
-# 0005: EMD records what it creates in a ledger, per worktree
+# 0006: EMD records what it creates in a ledger, per worktree
 
 Status: Accepted (2026-10-24)
 
@@ -28,7 +28,7 @@ Expo's `run:ios` has no DerivedData option and finds the built app by matching
 - **Failed-check count:** per worktree, in `~/.emd/checks/`, outside the
   worktree. A pass clears it; so does `emd check reset` (needs a terminal and a
   typed `reset`). The limit is 3 unless a person sets `EMD_RETRY_LIMIT`.
-  Neither `name`, `reset` nor `retryLimit` is an agent input.
+  `reset` and `retryLimit` are not agent inputs; `name` only labels evidence.
 
 ## Consequences
 

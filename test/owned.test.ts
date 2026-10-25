@@ -6,7 +6,7 @@ import { pickPort } from "../src/core/isolate.ts";
 import { confirm, reserve, worktreeKey } from "../src/core/owned.ts";
 import { makeDir } from "./helpers.ts";
 
-// The ownership ledger (decision 0005) on a real temp state dir.
+// The ownership ledger (decision 0006) on a real temp state dir.
 beforeEach(() => {
   process.env.EMD_STATE_DIR = makeDir();
 });

@@ -69,7 +69,7 @@ test("the CLI turns flags into expectations and refuses bad ones", () => {
 });
 
 test("neither the CLI nor the MCP tool lets the agent set the limit or reset the count", async () => {
-  for (const flag of ["--retry-limit", "--name", "--reset"]) {
+  for (const flag of ["--retry-limit", "--reset"]) {
     expect(cli("deadbeef", "--log", "smoke", flag, "1").stderr).toMatch(
       /Unknown option/,
     );
@@ -83,6 +83,7 @@ test("neither the CLI nor the MCP tool lets the agent set the limit or reset the
     "since",
     "logs",
     "elements",
+    "name",
     "agentReading",
   ]);
 });

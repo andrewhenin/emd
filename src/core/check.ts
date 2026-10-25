@@ -10,6 +10,7 @@ import {
 } from "./device/backend.js";
 import { maestroBackend } from "./device/maestro.js";
 import { type ElementSpec, hasElement } from "./device/screen.js";
+import { recordCheck } from "./evidence.js";
 import { type LogsOptions, logs as readLogs, type TaggedLine } from "./logs.js";
 import { worktreeKey } from "./owned.js";
 import type { CheckResult, LogsResult } from "./result.js";
@@ -25,6 +26,8 @@ type LogSpec = { tag: string; message?: string };
 export type CheckOptions = RunRef & {
   logs?: LogSpec[];
   elements?: ElementSpec[];
+  // A label for this check in the evidence bundle. Never part of the count.
+  name?: string;
   // The agent's own reading of the screenshot. Second opinion only.
   agentReading?: "pass" | "fail";
 };
@@ -52,13 +55,14 @@ const realDeps: Deps = {
 };
 
 const tagPattern = /^[A-Za-z0-9_.-]{1,40}$/;
+const namePattern = /^[A-Za-z0-9_.-]{1,40}$/;
 const defaultRetryLimit = 3;
 const maxRetryLimit = 10;
 const maxSpecs = 20;
 const maxText = 200;
 
 // The count is per worktree and lives outside it. Only a pass or a human
-// (`emd check reset`) clears it; the agent has no input that does (decision 0005).
+// (`emd check reset`) clears it; the agent has no input that does (decision 0006).
 const countFile = (key: string) => join(homeDir(), "checks", `${key}.json`);
 
 // 3 unless a human sets EMD_RETRY_LIMIT; never an agent input.
@@ -124,6 +128,12 @@ export async function check(
         `An element expectation needs an id or a text, each at most ${maxText} characters.`,
       );
     }
+  }
+  const name = options.name ?? "check";
+  if (!namePattern.test(name)) {
+    return error(
+      "A check name has letters, digits, dot, dash and underscore only.",
+    );
   }
   const limit = retryLimit();
 
@@ -212,14 +222,20 @@ export async function check(
     secondOpinion,
   };
 
+  // Only a check that read something is a check that ran.
+  const ran = (result: CheckResult): CheckResult => {
+    if (logDir) recordCheck(logDir, name, result);
+    return result;
+  };
+
   if (passed) {
     rmSync(countFile(key), { force: true });
-    return { verdict: "passed", ...evidence };
+    return ran({ verdict: "passed", ...evidence });
   }
   const failures = before + 1;
   setFailures(key, failures);
   const stopped = failures >= limit;
-  return {
+  return ran({
     verdict: stopped ? "stopped" : "failed",
     attempt: failures,
     retryLimit: limit,
@@ -227,5 +243,5 @@ export async function check(
       ? `${failures} failed checks. Stop retrying and report what is missing.`
       : `${failures} of ${limit} attempts used. Fix the cause and check again.`,
     ...evidence,
-  };
+  });
 }

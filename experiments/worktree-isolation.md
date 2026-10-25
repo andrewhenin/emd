@@ -20,11 +20,9 @@ both in parallel. Cold builds, nothing cached.
 - Negative results: `expo run:ios --port` is refused with `--no-bundler`, so
   the port goes in as `RCT_METRO_PORT`. `ios/build` is not the build folder
   (Expo uses Xcode's default DerivedData); an `xcodebuild` shim on PATH adds
-  `-derivedDataPath` instead (decision 0005).
+  `-derivedDataPath` instead (decision 0006).
 - A cold build of two worktrees at once did not finish in the 900 s default
   (two runs, 939 s each); with `--timeout 2400` the relaunch reused the
   partial DerivedData and took 260 s.
 
-Reproduce: `git worktree add --detach <dir> HEAD` twice in the sandbox, copy
-the untracked files in, run `emd launch <dir> --timeout 2400` on both at once,
-and read `derivedData`, `diskMB`, `metro.port` and `device` from the results.
+Reproduce: `experiments/worktree-isolation.sh [sandbox] [timeout]` (builds EMD first with `npm run build`).

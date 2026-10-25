@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
@@ -195,6 +195,53 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
         const other = await readLogs(first.jobId, { tag: "nothing" });
         expect(other).toMatchObject({ verdict: "ok", total: 0, lines: [] });
         expect(JSON.stringify(result).length).toBeLessThan(4000);
+      },
+      minutes(5),
+    );
+
+    test(
+      "evidence gathers the run's check, log line, screenshot and flow, the same each time",
+      async () => {
+        const checked = await finish(
+          await call("check", {
+            jobId: first.jobId,
+            name: "evidence",
+            logs: [{ tag: "smoke", message: "tapped" }],
+            elements: [{ id: "smoke-label" }],
+          }),
+          new Set(),
+        );
+        expect(checked.result?.verdict).toBe("passed");
+        const gather = async () =>
+          (
+            await client.callTool({
+              name: "evidence",
+              arguments: { jobId: first.jobId },
+            })
+          ).structuredContent as {
+            verdict: string;
+            dir: string;
+            checks: number;
+            logLines: number;
+            screenshots: number;
+            flows: number;
+          };
+        const files = (dir: string) =>
+          readdirSync(dir, { recursive: true, withFileTypes: true })
+            .filter((entry) => entry.isFile())
+            .map((entry) => join(entry.parentPath, entry.name))
+            .sort()
+            .map((path) => [path, readFileSync(path, "utf8")]);
+        const once = await gather();
+        expect(once).toMatchObject({
+          verdict: "written",
+          checks: 1,
+          screenshots: 1,
+          flows: 1,
+        });
+        expect(once.logLines).toBeGreaterThanOrEqual(1);
+        const bundle = files(once.dir);
+        expect(files((await gather()).dir)).toEqual(bundle);
       },
       minutes(5),
     );

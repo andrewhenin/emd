@@ -3,6 +3,7 @@ import { parseArgs } from "node:util";
 import {
   check,
   detect,
+  evidence,
   jobStatus,
   launch,
   logs,
@@ -12,7 +13,7 @@ import {
 } from "../core/index.js";
 
 const usage =
-  "Commands: detect [dir], launch [dir] [--device X] [--timeout N], job status <id>, logs <jobId> [--tag T] [--limit N], check <jobId> [--log TAG[=TEXT]] [--element id=X|text=Y] [--agent pass|fail], check reset [dir], mcp";
+  "Commands: detect [dir], launch [dir] [--device X] [--timeout N], job status <id>, logs <jobId> [--tag T] [--limit N], check <jobId> [--log TAG[=TEXT]] [--element id=X|text=Y] [--name N] [--agent pass|fail], check reset [dir], evidence <jobId>, mcp";
 
 // --log smoke   or   --log smoke=tapped
 const logSpec = (raw: string) => {
@@ -33,7 +34,7 @@ const elementSpec = (raw: string): { id?: string; text?: string } => {
   return { [key]: raw.slice(at + 1) };
 };
 
-// Only a person at a terminal can start the failure count over (decision 0005).
+// Only a person at a terminal can start the failure count over (decision 0006).
 async function resetCommand(dir?: string): Promise<number> {
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     console.error("emd: check reset needs a person at a terminal.");
@@ -141,6 +142,7 @@ export async function run(argv: string[]): Promise<number> {
           log: { type: "string", multiple: true },
           element: { type: "string", multiple: true },
           agent: { type: "string" },
+          name: { type: "string" },
           since: { type: "string" },
           device: { type: "string" },
           app: { type: "string" },
@@ -164,10 +166,21 @@ export async function run(argv: string[]): Promise<number> {
         since: values.since,
         logs: (values.log ?? []).map(logSpec),
         elements,
+        name: values.name,
         agentReading: values.agent as "pass" | "fail" | undefined,
       });
       console.log(JSON.stringify(result));
       return result.verdict === "passed" ? 0 : 1;
+    }
+    case "evidence": {
+      const jobId = args[0];
+      if (!jobId) {
+        console.error(`emd: usage: evidence <jobId>. ${usage}`);
+        return 2;
+      }
+      const result = await evidence({ jobId });
+      console.log(JSON.stringify(result));
+      return result.verdict === "written" ? 0 : 1;
     }
     default:
       console.error(`emd: unknown command "${command}". ${usage}`);

@@ -9,15 +9,12 @@ import {
 } from "../src/core/check.ts";
 import type { ScreenRead } from "../src/core/device/backend.ts";
 import type { UiNode } from "../src/core/device/screen.ts";
-import { createJob, runJob } from "../src/core/jobs.ts";
 import type { LogsResult } from "../src/core/result.ts";
-import { cli, makeDir } from "./helpers.ts";
+import { cli, launchedJob, makeDir } from "./helpers.ts";
 
 // The attempt counter, verdicts and validation, with real job and count files
 // in a temp state dir. What the check reads (logs, screen, screenshot) is
 // passed in by small functions; the real readers run in test/e2e.
-const device = "829564DA-13EC-4DE7-95B0-1E3EFF6FE713";
-
 let state: string;
 beforeEach(() => {
   state = makeDir();
@@ -25,21 +22,7 @@ beforeEach(() => {
   delete process.env.EMD_RETRY_LIMIT;
 });
 
-// A finished launch job, so there is a run to check.
-async function launched(root = "/work/app"): Promise<string> {
-  const job = createJob("launch", { dir: root });
-  await runJob(job.id, {
-    launch: async () => ({
-      verdict: "launched",
-      root,
-      appId: "com.emd.sandbox",
-      device: { id: device, name: "iPhone 17" },
-      logDir: join(state, "runs", job.id),
-    }),
-    check: async () => ({ verdict: "error" }),
-  });
-  return job.id;
-}
+const launched = (root?: string) => launchedJob(state, root);
 
 type Screen = { logs?: Record<string, string[]>; nodes?: UiNode[] };
 type Calls = { logs: number; screen: number; screenshot: number };
@@ -240,6 +223,18 @@ test("the agent cannot start a stopped count over", async () => {
   });
 });
 
+test("checks with different names still share one count", async () => {
+  process.env.EMD_RETRY_LIMIT = "2";
+  const jobId = await launched();
+  const { deps } = readers({});
+  const options = { jobId, elements: [{ text: "Nope" }] };
+  expect((await run({ ...options, name: "a" }, deps)).attempt).toBe(1);
+  expect(await run({ ...options, name: "b" }, deps)).toMatchObject({
+    verdict: "stopped",
+    attempt: 2,
+  });
+});
+
 test("a person's reset clears the count; the CLI refuses without a terminal", async () => {
   const jobId = await launched();
   const { deps } = readers({});
@@ -357,6 +352,7 @@ test.each([
     { logs: Array.from({ length: 21 }, () => ({ tag: "a" })) },
     /At most 20/,
   ],
+  ["a bad check name", { logs: [{ tag: "a" }], name: "a b" }, /check name/],
   [
     "an unknown job",
     { logs: [{ tag: "a" }], jobId: "deadbeef" },
