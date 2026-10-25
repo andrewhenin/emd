@@ -9,7 +9,7 @@ on:
     #   - "src/**/*.tsx"
     #   - "src/**/*.js"
     #   - "src/**/*.jsx"
-# One review per PR at a time: a new push cancels the review still running.
+# One review per PR at a time: a newer run for the same PR cancels the one still running.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
   cancel-in-progress: true
