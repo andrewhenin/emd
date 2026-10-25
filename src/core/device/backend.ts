@@ -25,7 +25,7 @@ export type Environment = {
   installed: Record<BackendId, boolean>;
 };
 
-export type Fallback = { backend: BackendId; reason: string };
+type Fallback = { backend: BackendId; reason: string };
 
 // A screen read, and which backend produced it. `fellBack` lists the backends
 // that were tried or skipped first, and why; it is absent when the first
