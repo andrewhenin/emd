@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.5.0](https://github.com/andrewhenin/emd/compare/emd-agents-v0.4.0...emd-agents-v0.5.0) (2026-10-25)
+
+
+### Features
+
+* gather a run's evidence into one folder ([#43](https://github.com/andrewhenin/emd/issues/43)) ([61cee7f](https://github.com/andrewhenin/emd/commit/61cee7fdc1492f0fb5dbb14b9ff4c9020b9feae8))
+* prefer AXe whenever it is installed ([#46](https://github.com/andrewhenin/emd/issues/46)) ([bc82a2d](https://github.com/andrewhenin/emd/commit/bc82a2d6b7fcf98781ca4b41ef9583039f6de68f))
+* read the screen through AXe or Maestro, picked per machine ([#37](https://github.com/andrewhenin/emd/issues/37)) ([e35ac1b](https://github.com/andrewhenin/emd/commit/e35ac1bd3af1afc87f5ba11154bef60d04a4b641))
+
+
+### Bug Fixes
+
+* stop exporting the unused Fallback type ([#45](https://github.com/andrewhenin/emd/issues/45)) ([7077df5](https://github.com/andrewhenin/emd/commit/7077df50a4fc2c2613930f4319667cb0304caa45))
+
 ## [0.4.0](https://github.com/andrewhenin/emd/compare/emd-agents-v0.3.0...emd-agents-v0.4.0) (2026-10-25)
 
 
