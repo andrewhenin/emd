@@ -7,7 +7,7 @@ Notes, findings and decisions: follow [docs/logging.md](docs/logging.md) exactly
 ## Commands
 
 - `npm ci` install
-- `npm run lint` Biome lint and format check, then the import boundaries (`npx biome check --write .` to fix formatting)
+- `npm run lint` Biome lint and format check, import boundaries, unused code (knip), duplicates (jscpd) (`npx biome check --write .` to fix formatting)
 - `npm run check:imports` import boundaries only (decision 0001; also part of lint)
 - `npm run typecheck` TypeScript, no emit
 - `npm test` build, then run Vitest (tests call the built CLI)
