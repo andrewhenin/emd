@@ -21,7 +21,7 @@ const run = promisify(execFile);
 
 // A tagged log event the run must have produced: the tag, and optionally text
 // its message must contain.
-export type LogSpec = { tag: string; message?: string };
+type LogSpec = { tag: string; message?: string };
 
 export type CheckOptions = RunRef & {
   logs?: LogSpec[];

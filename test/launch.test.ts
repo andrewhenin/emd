@@ -1,60 +1,12 @@
-import { spawnSync } from "node:child_process";
-import { Client } from "@modelcontextprotocol/client";
-import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
-import { afterAll, beforeAll, expect, test } from "vitest";
-import { appJson, expoProject, makeDir } from "./helpers.ts";
+import { expect, test } from "vitest";
+import { appJson, cli, expoProject, makeDir, mcpSession } from "./helpers.ts";
 
 // The paths that need no simulator, through the real CLI and the real MCP
 // server (which starts a real worker process per job), so they run on any OS.
 // The real launch is test/e2e/launch.test.ts.
 const state = makeDir();
 process.env.EMD_STATE_DIR = state;
-
-const client = new Client({ name: "emd-test", version: "0.0.0" });
-
-beforeAll(async () => {
-  await client.connect(
-    new StdioClientTransport({
-      command: "node",
-      args: ["dist/bin.js", "mcp"],
-      env: { ...process.env, EMD_STATE_DIR: state } as Record<string, string>,
-    }),
-  );
-});
-
-afterAll(async () => {
-  await client.close();
-});
-
-const cli = (...args: string[]) =>
-  spawnSync("node", ["dist/bin.js", ...args], { encoding: "utf8" });
-
-type View = {
-  jobId: string;
-  kind: string;
-  status: string;
-  step?: string;
-  seconds: number;
-  result?: Record<string, unknown>;
-};
-
-const call = async (name: string, args: Record<string, unknown>) => {
-  const reply = await client.callTool({ name, arguments: args });
-  return reply.structuredContent as View;
-};
-
-const finished = async (jobId: string): Promise<View> => {
-  let job = await call("job_status", { jobId });
-  for (
-    let i = 0;
-    i < 80 && !["succeeded", "failed"].includes(job.status);
-    i++
-  ) {
-    await new Promise((resolve) => setTimeout(resolve, 250));
-    job = await call("job_status", { jobId });
-  }
-  return job;
-};
+const { client, call, finished } = mcpSession(state);
 
 const noAppId = () => expoProject({ "app.json": appJson({ name: "x" }) });
 const androidOnly = () =>

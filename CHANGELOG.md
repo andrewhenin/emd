@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/andrewhenin/emd/compare/emd-agents-v0.3.0...emd-agents-v0.4.0) (2026-10-25)
+
+
+### Features
+
+* check a run against log events and on-screen elements ([#35](https://github.com/andrewhenin/emd/issues/35)) ([a67570f](https://github.com/andrewhenin/emd/commit/a67570f69ed8a1cef936b2d715a0e45619b145b9))
+
 ## [0.3.0](https://github.com/andrewhenin/emd/compare/emd-agents-v0.2.0...emd-agents-v0.3.0) (2026-10-24)
 
 

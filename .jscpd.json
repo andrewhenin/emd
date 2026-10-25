@@ -1,0 +1,8 @@
+{
+  "path": ["src", "scripts", "test"],
+  "minLines": 8,
+  "minTokens": 70,
+  "threshold": 0,
+  "reporters": ["console"],
+  "silent": true
+}
