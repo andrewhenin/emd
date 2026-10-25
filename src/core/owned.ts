@@ -8,8 +8,8 @@ import {
   realpathSync,
   renameSync,
   rmSync,
-  statSync,
   writeFileSync,
+  writeSync,
 } from "node:fs";
 import { join } from "node:path";
 import { homeDir } from "./state.js";
@@ -23,7 +23,6 @@ export type Entry = { kind: Kind; id: string; state: "creating" | "owned" };
 type Ledger = { root: string; resources: Entry[] };
 
 const ownedDir = () => join(homeDir(), "owned");
-const lockStaleMs = 30_000;
 const lockWaitMs = 10_000;
 
 export function worktreeKey(root: string): string {
@@ -66,21 +65,32 @@ function write(root: string, ledger: Ledger): void {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// The lock file holds its owner's PID. A lock whose owner is no longer running
+// is taken over; one that is empty (being written) or whose owner lives is not.
+function holderGone(lock: string): boolean {
+  try {
+    const pid = Number.parseInt(readFileSync(lock, "utf8"), 10);
+    if (!Number.isInteger(pid) || pid <= 0) return false;
+    process.kill(pid, 0);
+    return false;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "ESRCH";
+  }
+}
+
 // One lock for the whole machine, so two launches cannot pick the same port.
 async function locked<T>(fn: () => Promise<T> | T): Promise<T> {
   mkdirSync(ownedDir(), { recursive: true });
   const lock = join(ownedDir(), ".lock");
   for (let waited = 0; ; waited += 25) {
     try {
-      closeSync(openSync(lock, "wx"));
+      const fd = openSync(lock, "wx");
+      writeSync(fd, String(process.pid));
+      closeSync(fd);
       break;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-      try {
-        if (Date.now() - statSync(lock).mtimeMs > lockStaleMs) {
-          rmSync(lock, { force: true });
-        }
-      } catch {}
+      if (holderGone(lock)) rmSync(lock, { force: true });
       if (waited > lockWaitMs) throw new Error("The ownership lock is stuck.");
       await sleep(25);
     }
@@ -118,12 +128,11 @@ export const reserve = (
 
 // The resource now exists. `id` replaces the reserved one when only the
 // resource could say it (a simulator's UDID).
-export const confirm = (root: string, kind: Kind, id?: string): Promise<void> =>
-  locked(() => {
-    const ledger = readLedger(ledgerFile(root));
-    const entry = ledger?.resources.find((e) => e.kind === kind);
-    if (!ledger || !entry) throw new Error(`No ${kind} reserved for ${root}.`);
-    entry.state = "owned";
-    if (id) entry.id = id;
-    write(root, ledger);
-  });
+export function confirm(root: string, kind: Kind, id?: string): void {
+  const ledger = readLedger(ledgerFile(root));
+  const entry = ledger?.resources.find((e) => e.kind === kind);
+  if (!ledger || !entry) throw new Error(`No ${kind} reserved for ${root}.`);
+  entry.state = "owned";
+  if (id) entry.id = id;
+  write(root, ledger);
+}

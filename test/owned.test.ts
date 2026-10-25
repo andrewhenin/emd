@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { join } from "node:path";
@@ -50,4 +51,13 @@ test("an unreadable ledger is an error, never an empty one", async () => {
   await expect(reserve("/work/other", "port", pickPort)).rejects.toThrow(
     /unreadable/,
   );
+});
+
+test("a lock left by a process that is gone is taken over", async () => {
+  const gone = spawnSync("node", ["-e", "0"]);
+  const dir = join(process.env.EMD_STATE_DIR ?? "", "owned");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, ".lock"), String(gone.pid));
+  const entry = await reserve("/work/app", "port", pickPort);
+  expect(entry.state).toBe("creating");
 });

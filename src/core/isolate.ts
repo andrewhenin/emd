@@ -1,7 +1,6 @@
 import { execFile } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
-import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import { promisify } from "node:util";
 import { worktreeKey } from "./owned.js";
@@ -50,9 +49,6 @@ export function xcodebuildShim(root: string, derivedData: string): string {
   );
   return dir;
 }
-
-export const simulatorDataPath = (udid: string): string =>
-  join(homedir(), "Library/Developer/CoreSimulator/Devices", udid);
 
 // Disk use of a folder in MB; absent counts as 0.
 export async function diskMB(path: string): Promise<number> {

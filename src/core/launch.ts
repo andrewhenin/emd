@@ -1,11 +1,11 @@
 import { mkdir, readFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import { detect } from "./detect.js";
 import {
   derivedDataPath,
   diskMB,
   pickPort,
-  simulatorDataPath,
   xcodebuildShim,
 } from "./isolate.js";
 import { firstErrors } from "./log.js";
@@ -161,14 +161,14 @@ export async function launch(
       };
     }
     if (simulator.state !== "owned" || simulator.id !== device.id) {
-      await confirm(root, "simulator", device.id);
+      confirm(root, "simulator", device.id);
     }
     port = Number((await reserve(root, "port", pickPort)).id);
     derivedData = (
       await reserve(root, "derivedData", () => derivedDataPath(root))
     ).id;
     await mkdir(derivedData, { recursive: true });
-    await confirm(root, "derivedData");
+    confirm(root, "derivedData");
     shimDir = xcodebuildShim(root, derivedData);
   } catch (error) {
     return failed(
@@ -232,7 +232,7 @@ export async function launch(
     );
   }
 
-  await confirm(root, "port");
+  confirm(root, "port");
   report("building and installing the app");
   const build = startLogged(plan.build, { cwd: root, logPath: buildLog, env });
   const outcome = await withTimeout(
@@ -272,7 +272,9 @@ export async function launch(
     derivedData,
     diskMB: {
       derivedData: await diskMB(derivedData),
-      simulator: await diskMB(simulatorDataPath(device.id)),
+      simulator: await diskMB(
+        join(homedir(), "Library/Developer/CoreSimulator/Devices", device.id),
+      ),
     },
     seconds: seconds(),
   };

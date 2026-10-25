@@ -129,7 +129,7 @@ export async function check(
       );
     }
   }
-  const name = options.name ?? "check";
+  const name = options.name ?? "default";
   if (!namePattern.test(name)) {
     return error(
       "A check name has letters, digits, dot, dash and underscore only.",
