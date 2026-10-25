@@ -44,6 +44,7 @@ Notes, findings and decisions: follow [docs/logging.md](docs/logging.md) exactly
 - Put behavior in `src/core/`. CLI and MCP import core only through `core/index.ts`, never each other. Adapters never import each other and load only through `core/registry.ts`.
 - `setup` installs only what the detected stack needs. Never install unrelated software.
 - Use Conventional Commit messages and PR titles (`feat:`, `fix:`, `docs:`, `chore:`). Squash merges use the PR title and Release Please reads it; CI checks the title.
+- Link an issue for feat and fix PRs; optional for ci, chore and docs.
 - Never touch signing, provisioning or release settings of a user's project.
 - Don't weaken checks: don't delete a log tag, loosen an assertion, or skip a test or Maestro step. If it is unavoidable, list it in the PR.
 - `gc` removes only resources EMD marked as its own.
