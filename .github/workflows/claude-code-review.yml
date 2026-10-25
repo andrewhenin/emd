@@ -26,7 +26,7 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
-      pull-requests: read
+      pull-requests: write
       issues: read
       id-token: write
 
@@ -41,9 +41,16 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          plugin_marketplaces: "https://github.com/anthropics/claude-code.git"
-          plugins: "code-review@claude-code-plugins"
-          prompt: "/code-review:code-review --comment ${{ github.repository }}/pull/${{ github.event.pull_request.number }}"
-          claude_args: '--model claude-sonnet-5-5 --max-turns 10 --allowedTools "mcp__github_inline_comment__create_inline_comment"'
+          prompt: |
+            Review PR #${{ github.event.pull_request.number }} in ${{ github.repository }}.
+            Read the PR (gh pr view, gh pr diff) and its linked issue's acceptance criteria.
+            Answer, in one PR comment of at most 10 bullets with file:line and why:
+            1. What can be deleted or simplified while still meeting the acceptance criteria?
+            2. Which changed files weren't named in the PR's plan?
+            3. Any AGENTS.md rule broken?
+            If nothing, comment "Nothing to cut." Don't suggest new features.
+          claude_args: >-
+            --model claude-sonnet-5-5 --max-turns 10
+            --allowedTools "Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh issue view:*),Bash(gh pr comment:*)"
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
           # or https://code.claude.com/docs/en/cli-reference for available options
