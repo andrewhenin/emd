@@ -24,7 +24,7 @@ export type { JobKind } from "./jobstore.js";
 type Inputs = { launch: LaunchOptions; check: CheckOptions };
 type Results = { launch: LaunchResult; check: CheckResult };
 
-export type Report = (step: string) => void;
+type Report = (step: string) => void;
 export type Handlers = {
   [K in JobKind]: (input: Inputs[K], report: Report) => Promise<Results[K]>;
 };

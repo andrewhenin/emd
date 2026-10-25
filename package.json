@@ -17,7 +17,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "lint": "biome check . && npm run check:imports",
+    "lint": "biome check . && npm run check:imports && npm run check:unused && npm run check:duplicates",
     "typecheck": "tsc --noEmit",
     "test": "npm run build && vitest run",
     "test:fast": "npm run build && vitest run",
@@ -25,7 +25,9 @@
     "check:sizes": "node --experimental-strip-types scripts/check-doc-sizes.ts",
     "check:imports": "node --experimental-strip-types scripts/check-imports.ts",
     "check:pr-title": "commitlint",
-    "prepare": "husky"
+    "prepare": "husky",
+    "check:unused": "knip",
+    "check:duplicates": "jscpd"
   },
   "lint-staged": {
     "*.{ts,js,json}": "biome check --no-errors-on-unmatched --files-ignore-unknown=true"
@@ -37,6 +39,8 @@
     "@modelcontextprotocol/client": "^2.4.0",
     "@types/node": "^22.0.0",
     "husky": "^9.0.0",
+    "jscpd": "^5.4.2",
+    "knip": "^6.43.0",
     "lint-staged": "^15.0.0",
     "typescript": "^5.6.0",
     "vitest": "^3.0.0"

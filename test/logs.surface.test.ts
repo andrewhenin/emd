@@ -1,32 +1,11 @@
-import { spawnSync } from "node:child_process";
-import { Client } from "@modelcontextprotocol/client";
-import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
-import { afterAll, beforeAll, expect, test } from "vitest";
-import { makeDir } from "./helpers.ts";
+import { expect, test } from "vitest";
+import { cli, makeDir, mcpSession } from "./helpers.ts";
 
 // The `logs` paths that need no simulator, through the real CLI and the real
 // MCP server, so they run on any OS. Real capture is test/e2e/launch.test.ts.
 const state = makeDir();
 process.env.EMD_STATE_DIR = state;
-
-const client = new Client({ name: "emd-test", version: "0.0.0" });
-
-beforeAll(async () => {
-  await client.connect(
-    new StdioClientTransport({
-      command: "node",
-      args: ["dist/bin.js", "mcp"],
-      env: { ...process.env, EMD_STATE_DIR: state } as Record<string, string>,
-    }),
-  );
-});
-
-afterAll(async () => {
-  await client.close();
-});
-
-const cli = (...args: string[]) =>
-  spawnSync("node", ["dist/bin.js", ...args], { encoding: "utf8" });
+const { client } = mcpSession(state);
 
 const mcp = async (args: Record<string, unknown>) =>
   (await client.callTool({ name: "logs", arguments: args })).structuredContent;
