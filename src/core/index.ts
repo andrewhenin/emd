@@ -9,6 +9,7 @@ export type {
 } from "./adapter.js";
 export { check } from "./check.js";
 export { detect } from "./detect.js";
+export { evidence } from "./evidence.js";
 export { jobStatus, runJob, startJob } from "./jobs.js";
 export { launch } from "./launch.js";
 export { logs } from "./logs.js";
@@ -18,6 +19,8 @@ export {
   checkResultSchema,
   type DetectResult,
   detectResultSchema,
+  type EvidenceResult,
+  evidenceResultSchema,
   type JobView,
   jobViewSchema,
   type LaunchResult,

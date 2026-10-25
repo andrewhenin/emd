@@ -4,36 +4,19 @@ import { beforeEach, expect, test } from "vitest";
 import { type CheckOptions, check, type Deps } from "../src/core/check.ts";
 import type { ScreenRead } from "../src/core/device/backend.ts";
 import type { UiNode } from "../src/core/device/screen.ts";
-import { createJob, runJob } from "../src/core/jobs.ts";
 import type { LogsResult } from "../src/core/result.ts";
-import { makeDir } from "./helpers.ts";
+import { launchedJob, makeDir } from "./helpers.ts";
 
 // The attempt counter, verdicts and validation, with real job and count files
 // in a temp state dir. What the check reads (logs, screen, screenshot) is
 // passed in by small functions; the real readers run in test/e2e.
-const device = "829564DA-13EC-4DE7-95B0-1E3EFF6FE713";
-
 let state: string;
 beforeEach(() => {
   state = makeDir();
   process.env.EMD_STATE_DIR = state;
 });
 
-// A finished launch job, so there is a run to check.
-async function launched(root = "/work/app"): Promise<string> {
-  const job = createJob("launch", { dir: root });
-  await runJob(job.id, {
-    launch: async () => ({
-      verdict: "launched",
-      root,
-      appId: "com.emd.sandbox",
-      device: { id: device, name: "iPhone 17" },
-      logDir: join(state, "runs", job.id),
-    }),
-    check: async () => ({ verdict: "error" }),
-  });
-  return job.id;
-}
+const launched = (root?: string) => launchedJob(state, root);
 
 type Screen = { logs?: Record<string, string[]>; nodes?: UiNode[] };
 type Calls = { logs: number; screen: number; screenshot: number };

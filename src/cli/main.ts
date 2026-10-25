@@ -2,6 +2,7 @@ import { parseArgs } from "node:util";
 import {
   check,
   detect,
+  evidence,
   jobStatus,
   launch,
   logs,
@@ -10,7 +11,7 @@ import {
 } from "../core/index.js";
 
 const usage =
-  "Commands: detect [dir], launch [dir] [--device X] [--timeout N], job status <id>, logs <jobId> [--tag T] [--limit N], check <jobId> [--log TAG[=TEXT]] [--element id=X|text=Y] [--retry-limit N] [--name N] [--agent pass|fail] [--reset], mcp";
+  "Commands: detect [dir], launch [dir] [--device X] [--timeout N], job status <id>, logs <jobId> [--tag T] [--limit N], check <jobId> [--log TAG[=TEXT]] [--element id=X|text=Y] [--retry-limit N] [--name N] [--agent pass|fail] [--reset], evidence <jobId>, mcp";
 
 // --log smoke   or   --log smoke=tapped
 const logSpec = (raw: string) => {
@@ -148,6 +149,16 @@ export async function run(argv: string[]): Promise<number> {
       });
       console.log(JSON.stringify(result));
       return result.verdict === "passed" ? 0 : 1;
+    }
+    case "evidence": {
+      const jobId = args[0];
+      if (!jobId) {
+        console.error(`emd: usage: evidence <jobId>. ${usage}`);
+        return 2;
+      }
+      const result = await evidence({ jobId });
+      console.log(JSON.stringify(result));
+      return result.verdict === "written" ? 0 : 1;
     }
     default:
       console.error(`emd: unknown command "${command}". ${usage}`);
