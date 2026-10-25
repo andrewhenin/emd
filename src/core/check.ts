@@ -11,6 +11,7 @@ import {
 } from "./device/backend.js";
 import { maestroBackend } from "./device/maestro.js";
 import { type ElementSpec, hasElement } from "./device/screen.js";
+import { recordCheck } from "./evidence.js";
 import { type LogsOptions, logs as readLogs, type TaggedLine } from "./logs.js";
 import type { CheckResult, LogsResult } from "./result.js";
 import { type RunRef, resolveRun } from "./run.js";
@@ -226,14 +227,20 @@ export async function check(
     secondOpinion,
   };
 
+  // Only a check that read something is a check that ran.
+  const ran = (result: CheckResult): CheckResult => {
+    if (logDir) recordCheck(logDir, name, result);
+    return result;
+  };
+
   if (passed) {
     rmSync(countFile(key), { force: true });
-    return { verdict: "passed", ...evidence };
+    return ran({ verdict: "passed", ...evidence });
   }
   const failures = before + 1;
   setFailures(key, failures);
   const stopped = failures >= retryLimit;
-  return {
+  return ran({
     verdict: stopped ? "stopped" : "failed",
     attempt: failures,
     retryLimit,
@@ -241,5 +248,5 @@ export async function check(
       ? `${failures} failed checks. Stop retrying and report what is missing.`
       : `${failures} of ${retryLimit} attempts used. Fix the cause and check again.`,
     ...evidence,
-  };
+  });
 }

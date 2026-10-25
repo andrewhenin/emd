@@ -92,6 +92,22 @@ export const checkResultSchema = z.object({
 
 export type CheckResult = z.infer<typeof checkResultSchema>;
 
+export const evidenceResultSchema = z.object({
+  verdict: z.enum(["written", "failed"]),
+  // Why it failed, in one line.
+  reason: z.string().optional(),
+  // The bundle folder, and what each file in it is.
+  dir: z.string().optional(),
+  layout: z.record(z.string(), z.string()).optional(),
+  // How much went in. Checks are only those that ran.
+  checks: z.number().optional(),
+  logLines: z.number().optional(),
+  screenshots: z.number().optional(),
+  flows: z.number().optional(),
+});
+
+export type EvidenceResult = z.infer<typeof evidenceResultSchema>;
+
 // What a caller sees of a job: enough to know where it is, small enough to
 // poll. `result` appears once the job has finished.
 export const jobViewSchema = z.object({

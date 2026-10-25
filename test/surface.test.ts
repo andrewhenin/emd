@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { Client } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import { afterAll, beforeAll, expect, test } from "vitest";
@@ -73,4 +73,20 @@ test("unknown CLI command exits non-zero", () => {
   expect(() =>
     execFileSync("node", ["dist/bin.js", "bogus"], { stdio: "pipe" }),
   ).toThrow();
+});
+
+test("CLI and MCP both refuse evidence for a job that does not exist", async () => {
+  const { tools } = await client.listTools();
+  expect(tools.map((t) => t.name)).toContain("evidence");
+  const refused = { verdict: "failed", reason: 'No job with id "deadbeef".' };
+  const fromMcp = await client.callTool({
+    name: "evidence",
+    arguments: { jobId: "deadbeef" },
+  });
+  expect(fromMcp.structuredContent).toEqual(refused);
+  const fromCli = spawnSync("node", ["dist/bin.js", "evidence", "deadbeef"], {
+    encoding: "utf8",
+  });
+  expect(fromCli.status).toBe(1);
+  expect(JSON.parse(fromCli.stdout)).toEqual(refused);
 });

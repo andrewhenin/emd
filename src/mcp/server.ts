@@ -4,6 +4,8 @@ import { z } from "zod";
 import {
   detect,
   detectResultSchema,
+  evidence,
+  evidenceResultSchema,
   jobStatus,
   jobViewSchema,
   logs,
@@ -216,6 +218,25 @@ function buildServer(): McpServer {
       return {
         content: [{ type: "text", text: JSON.stringify(job) }],
         structuredContent: job,
+      };
+    },
+  );
+
+  server.registerTool(
+    "evidence",
+    {
+      description:
+        "Gather a run's evidence into one folder: the checks that ran with their results, the tagged log lines, the screenshots the checks took and the project's Maestro flow files, with a manifest.json that lists them. Returns the folder and what each file in it is. Writing the same run again gives the same bundle.",
+      inputSchema: z.object({
+        jobId: z.string().describe("The launch job whose run to gather."),
+      }),
+      outputSchema: evidenceResultSchema,
+    },
+    async ({ jobId }) => {
+      const result = await evidence({ jobId });
+      return {
+        content: [{ type: "text", text: JSON.stringify(result) }],
+        structuredContent: result,
       };
     },
   );
