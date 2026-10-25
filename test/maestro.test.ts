@@ -1,5 +1,6 @@
 import { expect, test } from "vitest";
-import { hasElement, parseHierarchy } from "../src/core/hierarchy.ts";
+import { parseMaestro } from "../src/core/device/maestro.ts";
+import { hasElement } from "../src/core/device/screen.ts";
 
 // The node shape is copied from a real `maestro hierarchy` run on the sandbox.
 const node = (attributes: Record<string, string>, children: object[] = []) => ({
@@ -34,7 +35,7 @@ const tree = JSON.stringify(
 );
 
 test("flattens the tree to the nodes that have an id or some text", () => {
-  expect(parseHierarchy(tree)).toEqual([
+  expect(parseMaestro(tree)).toEqual([
     { id: "", texts: ["emd-sandbox"] },
     { id: "smoke-label", texts: ["Ready"] },
     { id: "", texts: ["Ready"] },
@@ -44,15 +45,15 @@ test("flattens the tree to the nodes that have an id or some text", () => {
 });
 
 test("ignores anything before the JSON, such as a banner", () => {
-  expect(parseHierarchy(`Starting driver...\n${tree}`)).toHaveLength(5);
+  expect(parseMaestro(`Starting driver...\n${tree}`)).toHaveLength(5);
 });
 
 test("a tree that is not JSON is an error, not an empty screen", () => {
-  expect(() => parseHierarchy("no tree here")).toThrow();
+  expect(() => parseMaestro("no tree here")).toThrow();
 });
 
 test("finds an element by testID, by text, or by both on one node", () => {
-  const nodes = parseHierarchy(tree);
+  const nodes = parseMaestro(tree);
   expect(hasElement(nodes, { id: "smoke-button" })).toBe(true);
   expect(hasElement(nodes, { text: "Tap me" })).toBe(true);
   expect(hasElement(nodes, { id: "smoke-label", text: "Ready" })).toBe(true);
@@ -60,7 +61,7 @@ test("finds an element by testID, by text, or by both on one node", () => {
 });
 
 test("does not find what is not there", () => {
-  const nodes = parseHierarchy(tree);
+  const nodes = parseMaestro(tree);
   expect(hasElement(nodes, { id: "other" })).toBe(false);
   expect(hasElement(nodes, { text: "Tapped" })).toBe(false);
   // Both must hold on the same node: the button is not the label.

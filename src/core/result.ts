@@ -70,6 +70,14 @@ export const checkResultSchema = z.object({
       }),
     )
     .optional(),
+  // Which backend read the screen (decision 0004), and the backends it passed
+  // over first, each with why. Absent when no element was checked.
+  backend: z.enum(["axe", "maestro"]).optional(),
+  fellBack: z
+    .array(
+      z.object({ backend: z.enum(["axe", "maestro"]), reason: z.string() }),
+    )
+    .optional(),
   secondOpinion: z
     .object({
       // A screenshot of the screen as it was checked.

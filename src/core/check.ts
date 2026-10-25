@@ -3,12 +3,14 @@ import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
+import { axeBackend } from "./device/axe.js";
 import {
-  type ElementSpec,
-  hasElement,
-  readHierarchy,
-  type UiNode,
-} from "./hierarchy.js";
+  detectEnvironment,
+  readScreen,
+  type ScreenRead,
+} from "./device/backend.js";
+import { maestroBackend } from "./device/maestro.js";
+import { type ElementSpec, hasElement } from "./device/screen.js";
 import { type LogsOptions, logs as readLogs, type TaggedLine } from "./logs.js";
 import type { CheckResult, LogsResult } from "./result.js";
 import { type RunRef, resolveRun } from "./run.js";
@@ -36,13 +38,14 @@ export type CheckOptions = RunRef & {
 // What the check reads. The real ones read the simulator; tests pass their own.
 export type Deps = {
   logs: (options: LogsOptions) => Promise<LogsResult>;
-  hierarchy: (device: string) => Promise<UiNode[]>;
+  screen: (device: string) => Promise<ScreenRead>;
   screenshot: (device: string, path: string) => Promise<boolean>;
 };
 
 const realDeps: Deps = {
   logs: readLogs,
-  hierarchy: readHierarchy,
+  screen: async (device) =>
+    readScreen(device, await detectEnvironment(), [axeBackend, maestroBackend]),
   screenshot: async (device, path) => {
     try {
       mkdirSync(dirname(path), { recursive: true });
@@ -172,15 +175,16 @@ export async function check(
       byTag.set(tag, got.lines ?? []);
     }
   }
-  let nodes: UiNode[] = [];
+  let screen: ScreenRead | undefined;
   if (elementSpecs.length > 0) {
     report("reading the screen");
     try {
-      nodes = await deps.hierarchy(device);
+      screen = await deps.screen(device);
     } catch (failure) {
       return error(`Could not read the screen: ${firstLine(failure)}`);
     }
   }
+  const nodes = screen?.nodes ?? [];
 
   const logResults = logSpecs.map((spec) => ({
     tag: spec.tag,
@@ -216,6 +220,9 @@ export async function check(
   const evidence = {
     logs: logResults.length > 0 ? logResults : undefined,
     elements: elementResults.length > 0 ? elementResults : undefined,
+    // Which backend read the screen, and any it passed over (decision 0004).
+    backend: screen?.backend,
+    fellBack: screen?.fellBack,
     secondOpinion,
   };
 
