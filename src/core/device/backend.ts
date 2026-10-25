@@ -1,11 +1,7 @@
-import { execFile } from "node:child_process";
 import { accessSync, constants } from "node:fs";
 import { homedir } from "node:os";
 import { delimiter, join } from "node:path";
-import { promisify } from "node:util";
 import type { UiNode } from "./screen.js";
-
-const run = promisify(execFile);
 
 // Decision 0004: device actions go through backends, and core picks the best
 // one that is available on this machine, falling back to the next.
@@ -21,7 +17,6 @@ export interface DeviceBackend {
 
 // What this machine has.
 export type Environment = {
-  xcodeMajor?: number;
   installed: Record<BackendId, boolean>;
 };
 
@@ -38,20 +33,13 @@ export type ScreenRead = {
 
 // Best first.
 const preference: BackendId[] = ["axe", "maestro"];
-const axeMinXcode = 27;
 
 // Why a backend cannot run here, or undefined when it can.
 export function unavailableReason(
   id: BackendId,
   env: Environment,
 ): string | undefined {
-  if (id === "axe") {
-    if (env.xcodeMajor === undefined || env.xcodeMajor < axeMinXcode) {
-      return `Xcode ${env.xcodeMajor ?? "not found"}; AXe needs ${axeMinXcode} or newer`;
-    }
-    return env.installed.axe ? undefined : "axe is not installed";
-  }
-  return env.installed.maestro ? undefined : "maestro is not installed";
+  return env.installed[id] ? undefined : `${id} is not installed`;
 }
 
 const firstLine = (error: unknown) => String(error).split("\n")[0] ?? "";
@@ -105,19 +93,8 @@ function findExecutable(name: string, extraDirs: string[]): boolean {
   });
 }
 
-async function xcodeMajor(): Promise<number | undefined> {
-  try {
-    const { stdout } = await run("xcodebuild", ["-version"]);
-    const major = stdout.match(/^Xcode (\d+)/m)?.[1];
-    return major ? Number(major) : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 export async function detectEnvironment(): Promise<Environment> {
   return {
-    xcodeMajor: await xcodeMajor(),
     installed: {
       axe: findExecutable("axe", []),
       maestro: findExecutable("maestro", [join(homedir(), ".maestro", "bin")]),
