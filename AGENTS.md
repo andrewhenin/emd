@@ -37,6 +37,7 @@ Notes, findings and decisions: follow [docs/logging.md](docs/logging.md) exactly
 - Never mark a PR ready for review. Never claim a human reviewed anything.
 - Never tick the author-readiness checkbox in the PR template. Only the human owner does.
 - Never push to `main` and never force-push. Always work on a branch and open a draft PR.
+- Write the smallest change that meets the acceptance criteria; no code for out-of-scope items; add abstractions only when they remove complexity you've actually seen.
 - Fix problems where they originate. Remove replaced code in the same change.
 - Prefer tests through the real CLI and MCP tools over mocks.
 - Put behavior in `src/core/`. CLI and MCP import core only through `core/index.ts`, never each other. Adapters never import each other and load only through `core/registry.ts`.
@@ -47,6 +48,10 @@ Notes, findings and decisions: follow [docs/logging.md](docs/logging.md) exactly
 - `gc` removes only resources EMD marked as its own.
 - Keep docs within limits: AGENTS.md 200 lines, vision.md 120, findings.md 50 entries, each decision file 40.
 - Don't write about why the project exists or where it came from. Private context stays outside this repo.
+
+## Review criteria
+
+Flag code that can be deleted or simplified while still meeting the linked issue's acceptance criteria, and any file not named in the plan.
 
 ## Definition of done
 
