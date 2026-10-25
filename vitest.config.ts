@@ -1,8 +1,7 @@
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    exclude: [".claude/**", "**/node_modules/**", "dist/**"],
-    maxWorkers: "50%",
+    exclude: [...configDefaults.exclude, ".claude/**"],
   },
 });
