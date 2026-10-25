@@ -62,22 +62,27 @@ test("the CLI turns flags into expectations and refuses bad ones", () => {
     "id=smoke-button",
     "--element",
     '{"text":"Tapped"}',
-    "--retry-limit",
-    "2",
-    "--name",
-    "demo",
     "--agent",
     "pass",
   );
   expect(JSON.parse(run.stdout).reason).toMatch(/No job with id/);
 });
 
-test("an out-of-range retry limit is refused on the CLI and by the MCP schema", async () => {
-  const run = cli("deadbeef", "--log", "smoke", "--retry-limit", "0");
-  expect(JSON.parse(run.stdout).reason).toMatch(/retryLimit/);
-  const tooMany = await client.callTool({
-    name: "check",
-    arguments: { jobId: "deadbeef", logs: [{ tag: "a" }], retryLimit: 99 },
-  });
-  expect(tooMany.isError).toBe(true);
+test("neither the CLI nor the MCP tool lets the agent set the limit or reset the count", async () => {
+  for (const flag of ["--retry-limit", "--name", "--reset"]) {
+    expect(cli("deadbeef", "--log", "smoke", flag, "1").stderr).toMatch(
+      /Unknown option/,
+    );
+  }
+  const { tools } = await client.listTools();
+  const input = tools.find((t) => t.name === "check")?.inputSchema;
+  expect(Object.keys(input?.properties ?? {})).toEqual([
+    "jobId",
+    "device",
+    "appId",
+    "since",
+    "logs",
+    "elements",
+    "agentReading",
+  ]);
 });

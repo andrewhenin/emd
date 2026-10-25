@@ -1,13 +1,22 @@
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { detect } from "./detect.js";
+import {
+  derivedDataPath,
+  diskMB,
+  pickPort,
+  simulatorDataPath,
+  xcodebuildShim,
+} from "./isolate.js";
 import { firstErrors } from "./log.js";
+import { confirm, reserve, worktreeKey } from "./owned.js";
 import { startLogged } from "./process.js";
 import { inspectProject } from "./project.js";
 import { loadAdapter } from "./registry.js";
 import type { LaunchResult } from "./result.js";
 import {
   boot,
+  cloneDevice,
   type Device,
   launchApp,
   listDevices,
@@ -15,13 +24,13 @@ import {
 } from "./simulator.js";
 import { stateDir } from "./state.js";
 
-const metroPort = 8081;
 const metroStartSeconds = 120;
 const defaultTimeoutSeconds = 900;
 
 export type LaunchOptions = {
   dir?: string;
-  // Simulator name or UDID. Default: a booted iPhone, else the newest iPhone.
+  // Simulator to clone for this worktree, by name or UDID. Default: the newest
+  // shut-down iPhone. Ignored once the worktree has its own simulator.
   device?: string;
   // How long the build may take.
   timeoutSeconds?: number;
@@ -29,9 +38,9 @@ export type LaunchOptions = {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function metroRunning(): Promise<boolean> {
+async function metroRunning(port: number): Promise<boolean> {
   try {
-    const response = await fetch(`http://localhost:${metroPort}/status`, {
+    const response = await fetch(`http://localhost:${port}/status`, {
       signal: AbortSignal.timeout(2000),
     });
     return (await response.text()).includes("packager-status:running");
@@ -111,23 +120,68 @@ export async function launch(
     return unsupported("iOS simulators need macOS.");
   }
 
+  // Each worktree gets its own simulator, DerivedData and Metro port, recorded
+  // as EMD-owned before they exist (decision 0005).
+  const prefix = "emd-";
   let device: Device | undefined;
+  let port: number;
+  let derivedData: string;
+  let shimDir: string;
   try {
-    device = pickDevice(await listDevices(), options.device);
-  } catch {
-    return unsupported("xcrun simctl is not available. Install Xcode.");
-  }
-  if (!device) {
+    const devices = await listDevices();
+    const simulator = await reserve(
+      root,
+      "simulator",
+      () => `${prefix}${worktreeKey(root)}`,
+    );
+    device = devices.find(
+      (d) => d.id === simulator.id || d.name === simulator.id,
+    );
+    if (!device) {
+      const base = pickDevice(
+        devices.filter(
+          (d) => !d.name.startsWith(prefix) && d.state !== "Booted",
+        ),
+        options.device,
+      );
+      if (!base) {
+        return failed(
+          options.device
+            ? `No shut-down simulator matches "${options.device}" to clone.`
+            : "No shut-down iPhone simulator is available to clone.",
+        );
+      }
+      report("cloning a simulator");
+      const id = await cloneDevice(base, simulator.id);
+      device = {
+        id,
+        name: simulator.id,
+        state: "Shutdown",
+        version: base.version,
+      };
+    }
+    if (simulator.state !== "owned" || simulator.id !== device.id) {
+      await confirm(root, "simulator", device.id);
+    }
+    port = Number((await reserve(root, "port", pickPort)).id);
+    derivedData = (
+      await reserve(root, "derivedData", () => derivedDataPath(root))
+    ).id;
+    await mkdir(derivedData, { recursive: true });
+    await confirm(root, "derivedData");
+    shimDir = xcodebuildShim(root, derivedData);
+  } catch (error) {
     return failed(
-      options.device
-        ? `No simulator matches "${options.device}".`
-        : "No iPhone simulator is available.",
+      "Could not set up this worktree's simulator and build folders.",
+      {
+        errors: String(error).split("\n").slice(0, 3),
+      },
     );
   }
 
   const plan = (await loadAdapter(detected.stack)).launchPlan(
     await inspectProject(root),
-    { platform: "ios", deviceId: device.id },
+    { platform: "ios", deviceId: device.id, port },
   );
   if (!plan) return unsupported(`${detected.stack} cannot launch on iOS.`);
 
@@ -150,17 +204,21 @@ export async function launch(
     });
   }
 
-  if (await metroRunning()) {
+  if (await metroRunning(port)) {
     return failed(
-      `Port ${metroPort} already serves a dev server. Stop it and retry.`,
+      `Port ${port} already serves a dev server. Stop it and retry.`,
       where,
     );
   }
   report("starting the dev server");
-  const env = { CI: "1" };
+  const env = {
+    CI: "1",
+    RCT_METRO_PORT: String(port),
+    PATH: `${shimDir}:${process.env.PATH}`,
+  };
   const metro = startLogged(plan.server, { cwd: root, logPath: metroLog, env });
   const metroState = await untilReady(
-    metroRunning,
+    () => metroRunning(port),
     metro.exited,
     metroStartSeconds,
   );
@@ -174,6 +232,7 @@ export async function launch(
     );
   }
 
+  await confirm(root, "port");
   report("building and installing the app");
   const build = startLogged(plan.build, { cwd: root, logPath: buildLog, env });
   const outcome = await withTimeout(
@@ -209,7 +268,12 @@ export async function launch(
     ...where,
     appId,
     appPid,
-    metro: { pid: metro.pid, port: metroPort },
+    metro: { pid: metro.pid, port },
+    derivedData,
+    diskMB: {
+      derivedData: await diskMB(derivedData),
+      simulator: await diskMB(simulatorDataPath(device.id)),
+    },
     seconds: seconds(),
   };
 }

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { resetChecks } from "../../src/core/index.ts";
 
 // A real build and launch on an iOS simulator, driven the way an agent does:
 // `launch` starts a job, `job_status` is polled. macOS, Xcode and a sandbox
@@ -62,6 +63,10 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
         new StdioClientTransport({
           command: "node",
           args: ["dist/bin.js", "mcp"],
+          env: { ...process.env, EMD_RETRY_LIMIT: "2" } as Record<
+            string,
+            string
+          >,
         }),
       );
       began = Date.now();
@@ -241,7 +246,6 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
       async () => {
         const tappedLog = [{ tag: "smoke", message: "tapped" }];
         const before = await runCheck({
-          name: "tap",
           logs: tappedLog,
           elements: [{ id: "smoke-button" }, { text: "Ready" }],
         });
@@ -268,7 +272,6 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
           0,
         );
         const after = await runCheck({
-          name: "tap",
           logs: tappedLog,
           elements: [{ id: "smoke-button" }, { text: "Tapped" }],
         });
@@ -284,8 +287,6 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
       "fix-and-retry stops at the retry limit; the agent's reading never changes the verdict",
       async () => {
         const wrong = {
-          name: "limit",
-          retryLimit: 2,
           elements: [{ text: "Nope" }],
         };
         const one = await runCheck({ ...wrong, agentReading: "pass" });
@@ -298,6 +299,7 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
         expect(two.result).toMatchObject({ verdict: "stopped", attempt: 2 });
         const three = await runCheck(wrong);
         expect(three.result).toMatchObject({ verdict: "stopped", attempt: 2 });
+        expect(three.result?.reason).toContain("emd check reset");
         // It did not read the screen again.
         expect(three.seconds).toBeLessThan(20);
         expect(three.result?.secondOpinion).toBeUndefined();
@@ -306,14 +308,10 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
     );
 
     test(
-      "reset starts the count over",
+      "only a person's reset starts the count over",
       async () => {
-        const fixed = await runCheck({
-          name: "limit",
-          retryLimit: 2,
-          reset: true,
-          elements: [{ id: "smoke-button" }],
-        });
+        resetChecks(sandbox ?? "");
+        const fixed = await runCheck({ elements: [{ id: "smoke-button" }] });
         expect(fixed.result).toMatchObject({ verdict: "passed" });
       },
       minutes(4),

@@ -7,7 +7,7 @@ export type {
   StackDetection,
   StackId,
 } from "./adapter.js";
-export { check } from "./check.js";
+export { check, resetChecks } from "./check.js";
 export { detect } from "./detect.js";
 export { jobStatus, runJob, startJob } from "./jobs.js";
 export { launch } from "./launch.js";

@@ -1,12 +1,17 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { beforeEach, expect, test } from "vitest";
-import { type CheckOptions, check, type Deps } from "../src/core/check.ts";
+import {
+  type CheckOptions,
+  check,
+  type Deps,
+  resetChecks,
+} from "../src/core/check.ts";
 import type { ScreenRead } from "../src/core/device/backend.ts";
 import type { UiNode } from "../src/core/device/screen.ts";
 import { createJob, runJob } from "../src/core/jobs.ts";
 import type { LogsResult } from "../src/core/result.ts";
-import { makeDir } from "./helpers.ts";
+import { cli, makeDir } from "./helpers.ts";
 
 // The attempt counter, verdicts and validation, with real job and count files
 // in a temp state dir. What the check reads (logs, screen, screenshot) is
@@ -17,6 +22,7 @@ let state: string;
 beforeEach(() => {
   state = makeDir();
   process.env.EMD_STATE_DIR = state;
+  delete process.env.EMD_RETRY_LIMIT;
 });
 
 // A finished launch job, so there is a run to check.
@@ -105,7 +111,7 @@ test("passes when every log event and element is found", async () => {
 test("a result names the backend that read the screen, and any it passed over", async () => {
   const jobId = await launched();
   const first = await run(
-    { jobId, name: "a", elements: [{ id: "smoke-button" }] },
+    { jobId, elements: [{ id: "smoke-button" }] },
     readers(tapped).deps,
   );
   expect(first.backend).toBe("axe");
@@ -119,7 +125,7 @@ test("a result names the backend that read the screen, and any it passed over", 
     }),
   });
   const second = await run(
-    { jobId, name: "b", elements: [{ id: "smoke-button" }] },
+    { jobId, elements: [{ id: "smoke-button" }] },
     fallback.deps,
   );
   expect(second).toMatchObject({
@@ -130,7 +136,7 @@ test("a result names the backend that read the screen, and any it passed over", 
 
   // A failing check names its backend too.
   const failing = await run(
-    { jobId, name: "c", elements: [{ text: "Nope" }] },
+    { jobId, elements: [{ text: "Nope" }] },
     fallback.deps,
   );
   expect(failing).toMatchObject({ verdict: "failed", backend: "maestro" });
@@ -170,7 +176,6 @@ test("fails when an element is missing, and needs id and text on one node", asyn
   const other = await run(
     {
       jobId,
-      name: "other",
       elements: [{ id: "smoke-button", text: "Tapped" }],
     },
     deps,
@@ -190,13 +195,13 @@ test("a log expectation without a message matches any line with the tag", async 
 });
 
 test("stops at the retry limit and then refuses to run", async () => {
+  process.env.EMD_RETRY_LIMIT = "2";
   const jobId = await launched();
   const { deps, calls } = readers({});
-  const options = { jobId, retryLimit: 2, elements: [{ text: "Nope" }] };
+  const options = { jobId, elements: [{ text: "Nope" }] };
   expect(await run(options, deps)).toMatchObject({
     verdict: "failed",
     attempt: 1,
-    retryLimit: 2,
   });
   expect(await run(options, deps)).toMatchObject({
     verdict: "stopped",
@@ -214,43 +219,57 @@ test("a pass starts the count over", async () => {
   const jobId = await launched();
   const failing = readers({});
   const passing = readers(tapped);
-  const options = { jobId, retryLimit: 2, elements: [{ id: "smoke-button" }] };
+  const options = { jobId, elements: [{ id: "smoke-button" }] };
   expect((await run(options, failing.deps)).attempt).toBe(1);
   expect((await run(options, passing.deps)).verdict).toBe("passed");
   expect((await run(options, failing.deps)).attempt).toBe(1);
 });
 
-test("reset clears a stopped check", async () => {
+test("the agent cannot start a stopped count over", async () => {
   const jobId = await launched();
   const { deps } = readers({});
-  const options = { jobId, retryLimit: 1, elements: [{ text: "Nope" }] };
+  const options = { jobId, elements: [{ text: "Nope" }] };
+  expect((await run(options, deps)).attempt).toBe(1);
+  expect((await run(options, deps)).attempt).toBe(2);
   expect((await run(options, deps)).verdict).toBe("stopped");
-  expect((await run(options, deps)).verdict).toBe("stopped");
-  const again = await run({ ...options, reset: true }, deps);
-  expect(again).toMatchObject({ verdict: "stopped", attempt: 1 });
-  const fixed = await run(
-    { jobId, retryLimit: 1, reset: true, elements: [{ id: "smoke-button" }] },
-    readers(tapped).deps,
-  );
-  expect(fixed.verdict).toBe("passed");
-});
-
-test("checks with different names count separately", async () => {
-  const jobId = await launched();
-  const { deps } = readers({});
-  const options = { jobId, retryLimit: 2, elements: [{ text: "Nope" }] };
-  await run({ ...options, name: "a" }, deps);
-  expect((await run({ ...options, name: "a" }, deps)).verdict).toBe("stopped");
-  expect(await run({ ...options, name: "b" }, deps)).toMatchObject({
-    verdict: "failed",
-    attempt: 1,
+  // Neither a stray reset or name, nor a new limit in the input, changes it.
+  const sneaky = { ...options, reset: true, name: "fresh", retryLimit: 10 };
+  expect(await run(sneaky as CheckOptions, deps)).toMatchObject({
+    verdict: "stopped",
+    attempt: 3,
   });
 });
 
+test("a person's reset clears the count; the CLI refuses without a terminal", async () => {
+  const jobId = await launched();
+  const { deps } = readers({});
+  const options = { jobId, elements: [{ text: "Nope" }] };
+  await run(options, deps);
+  await run(options, deps);
+  expect((await run(options, deps)).verdict).toBe("stopped");
+  const refused = cli("check", "reset", "/work/app");
+  expect(refused.status).toBe(2);
+  expect(refused.stderr).toContain("terminal");
+  expect((await run(options, deps)).verdict).toBe("stopped");
+  resetChecks("/work/app");
+  expect((await run(options, deps)).attempt).toBe(1);
+});
+
+test("EMD_RETRY_LIMIT, set by a person, changes the limit", async () => {
+  process.env.EMD_RETRY_LIMIT = "1";
+  const jobId = await launched();
+  const result = await run(
+    { jobId, elements: [{ text: "Nope" }] },
+    readers({}).deps,
+  );
+  expect(result).toMatchObject({ verdict: "stopped", retryLimit: 1 });
+});
+
 test("the count follows the project across relaunches", async () => {
+  process.env.EMD_RETRY_LIMIT = "2";
   const first = await launched("/work/app");
   const { deps } = readers({});
-  const options = { retryLimit: 2, elements: [{ text: "Nope" }] };
+  const options = { elements: [{ text: "Nope" }] };
   expect((await run({ jobId: first, ...options }, deps)).attempt).toBe(1);
   const second = await launched("/work/app");
   expect(await run({ jobId: second, ...options }, deps)).toMatchObject({
@@ -263,7 +282,7 @@ test("the count follows the project across relaunches", async () => {
 
 test("a check that cannot run is an error and does not count", async () => {
   const jobId = await launched();
-  const options = { jobId, retryLimit: 2, elements: [{ text: "Nope" }] };
+  const options = { jobId, elements: [{ text: "Nope" }] };
   const broken = readers(
     {},
     {
@@ -296,30 +315,21 @@ test("the agent's reading is a second opinion and never changes the verdict", as
   const passing = readers(tapped).deps;
   const failing = readers({}).deps;
 
-  const wrongPass = await run(
-    { ...options, name: "a", agentReading: "pass" },
-    failing,
-  );
+  const wrongPass = await run({ ...options, agentReading: "pass" }, failing);
   expect(wrongPass.verdict).toBe("failed");
   expect(wrongPass.secondOpinion).toMatchObject({
     agent: "pass",
     agrees: false,
   });
 
-  const wrongFail = await run(
-    { ...options, name: "b", agentReading: "fail" },
-    passing,
-  );
+  const wrongFail = await run({ ...options, agentReading: "fail" }, passing);
   expect(wrongFail.verdict).toBe("passed");
   expect(wrongFail.secondOpinion).toMatchObject({
     agent: "fail",
     agrees: false,
   });
 
-  const agrees = await run(
-    { ...options, name: "c", agentReading: "pass" },
-    passing,
-  );
+  const agrees = await run({ ...options, agentReading: "pass" }, passing);
   expect(agrees.secondOpinion).toMatchObject({ agent: "pass", agrees: true });
 });
 
@@ -347,22 +357,6 @@ test.each([
     { logs: Array.from({ length: 21 }, () => ({ tag: "a" })) },
     /At most 20/,
   ],
-  [
-    "a retry limit of zero",
-    { logs: [{ tag: "a" }], retryLimit: 0 },
-    /retryLimit/,
-  ],
-  [
-    "a retry limit above ten",
-    { logs: [{ tag: "a" }], retryLimit: 11 },
-    /retryLimit/,
-  ],
-  [
-    "a retry limit that is not whole",
-    { logs: [{ tag: "a" }], retryLimit: 1.5 },
-    /retryLimit/,
-  ],
-  ["a bad check name", { logs: [{ tag: "a" }], name: "a b" }, /check name/],
   [
     "an unknown job",
     { logs: [{ tag: "a" }], jobId: "deadbeef" },

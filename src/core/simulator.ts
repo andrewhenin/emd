@@ -85,3 +85,12 @@ export async function launchApp(
   if (!Number.isInteger(pid)) throw new Error(`unexpected output: ${stdout}`);
   return pid;
 }
+
+// A new simulator with the same type and runtime as `base`; returns its UDID.
+// The base must be shut down.
+export async function cloneDevice(base: Device, name: string): Promise<string> {
+  const { stdout } = await run("xcrun", ["simctl", "clone", base.id, name], {
+    timeout: 300_000,
+  });
+  return stdout.trim();
+}

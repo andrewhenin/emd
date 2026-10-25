@@ -1,5 +1,4 @@
 import { execFile } from "node:child_process";
-import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
@@ -12,9 +11,10 @@ import {
 import { maestroBackend } from "./device/maestro.js";
 import { type ElementSpec, hasElement } from "./device/screen.js";
 import { type LogsOptions, logs as readLogs, type TaggedLine } from "./logs.js";
+import { worktreeKey } from "./owned.js";
 import type { CheckResult, LogsResult } from "./result.js";
 import { type RunRef, resolveRun } from "./run.js";
-import { stateDir } from "./state.js";
+import { homeDir, stateDir } from "./state.js";
 
 const run = promisify(execFile);
 
@@ -25,12 +25,6 @@ type LogSpec = { tag: string; message?: string };
 export type CheckOptions = RunRef & {
   logs?: LogSpec[];
   elements?: ElementSpec[];
-  // Failed checks allowed before the check says stop. Default 3.
-  retryLimit?: number;
-  // Which check this is, so separate checks count separately. Default "default".
-  name?: string;
-  // Start the count over.
-  reset?: boolean;
   // The agent's own reading of the screenshot. Second opinion only.
   agentReading?: "pass" | "fail";
 };
@@ -58,18 +52,26 @@ const realDeps: Deps = {
 };
 
 const tagPattern = /^[A-Za-z0-9_.-]{1,40}$/;
-const namePattern = /^[A-Za-z0-9_.-]{1,40}$/;
 const defaultRetryLimit = 3;
 const maxRetryLimit = 10;
 const maxSpecs = 20;
 const maxText = 200;
 
-const countFile = (key: string) =>
-  join(
-    stateDir(),
-    "checks",
-    `${createHash("sha1").update(key).digest("hex").slice(0, 16)}.json`,
-  );
+// The count is per worktree and lives outside it. Only a pass or a human
+// (`emd check reset`) clears it; the agent has no input that does (decision 0005).
+const countFile = (key: string) => join(homeDir(), "checks", `${key}.json`);
+
+// 3 unless a human sets EMD_RETRY_LIMIT; never an agent input.
+function retryLimit(): number {
+  const wanted = Number(process.env.EMD_RETRY_LIMIT);
+  return Number.isInteger(wanted) && wanted >= 1 && wanted <= maxRetryLimit
+    ? wanted
+    : defaultRetryLimit;
+}
+
+export function resetChecks(root: string): void {
+  rmSync(countFile(worktreeKey(root)), { force: true });
+}
 
 function failuresSoFar(key: string): number {
   try {
@@ -89,7 +91,7 @@ const firstLine = (error: unknown) => String(error).split("\n")[0] ?? "";
 
 // Independent pass or fail from machine-checkable signals: the tagged log
 // events the run wrote and the elements on the simulator's screen. It counts
-// failed checks per check name, so fix-and-retry stops at the retry limit.
+// failed checks per worktree, so fix-and-retry stops at the retry limit.
 export async function check(
   options: CheckOptions,
   report: (step: string) => void = () => {},
@@ -123,38 +125,22 @@ export async function check(
       );
     }
   }
-  const retryLimit = options.retryLimit ?? defaultRetryLimit;
-  if (
-    !Number.isInteger(retryLimit) ||
-    retryLimit < 1 ||
-    retryLimit > maxRetryLimit
-  ) {
-    return error(
-      `retryLimit must be a whole number from 1 to ${maxRetryLimit}.`,
-    );
-  }
-  const name = options.name ?? "default";
-  if (!namePattern.test(name)) {
-    return error(
-      "A check name has letters, digits, dot, dash and underscore only.",
-    );
-  }
+  const limit = retryLimit();
 
   const resolved = resolveRun(options);
   if ("reason" in resolved) return error(resolved.reason);
   const { device, appId, since, root, logDir } = resolved.run;
 
-  // Failed checks count per project (or per app) and check name, across
-  // relaunches, because a fix usually means launching again.
-  const key = `${root ?? `${device}:${appId}`}::${name}`;
-  if (options.reset) rmSync(countFile(key), { force: true });
+  // Failed checks count per worktree (or per device and app when no job names
+  // one), across relaunches, because a fix usually means launching again.
+  const key = root ? worktreeKey(root) : `${device}-${appId}`;
   const before = failuresSoFar(key);
-  if (before >= retryLimit) {
+  if (before >= limit) {
     return {
       verdict: "stopped",
       attempt: before,
-      retryLimit,
-      reason: `${before} failed checks already. Stop retrying and report what is still missing; pass reset to start over.`,
+      retryLimit: limit,
+      reason: `${before} failed checks already. Stop retrying and report what is still missing. Only a person can start over (emd check reset).`,
     };
   }
 
@@ -232,14 +218,14 @@ export async function check(
   }
   const failures = before + 1;
   setFailures(key, failures);
-  const stopped = failures >= retryLimit;
+  const stopped = failures >= limit;
   return {
     verdict: stopped ? "stopped" : "failed",
     attempt: failures,
-    retryLimit,
+    retryLimit: limit,
     reason: stopped
       ? `${failures} failed checks. Stop retrying and report what is missing.`
-      : `${failures} of ${retryLimit} attempts used. Fix the cause and check again.`,
+      : `${failures} of ${limit} attempts used. Fix the cause and check again.`,
     ...evidence,
   };
 }

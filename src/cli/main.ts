@@ -1,3 +1,4 @@
+import { createInterface } from "node:readline/promises";
 import { parseArgs } from "node:util";
 import {
   check,
@@ -5,12 +6,13 @@ import {
   jobStatus,
   launch,
   logs,
+  resetChecks,
   runJob,
   version,
 } from "../core/index.js";
 
 const usage =
-  "Commands: detect [dir], launch [dir] [--device X] [--timeout N], job status <id>, logs <jobId> [--tag T] [--limit N], check <jobId> [--log TAG[=TEXT]] [--element id=X|text=Y] [--retry-limit N] [--name N] [--agent pass|fail] [--reset], mcp";
+  "Commands: detect [dir], launch [dir] [--device X] [--timeout N], job status <id>, logs <jobId> [--tag T] [--limit N], check <jobId> [--log TAG[=TEXT]] [--element id=X|text=Y] [--agent pass|fail], check reset [dir], mcp";
 
 // --log smoke   or   --log smoke=tapped
 const logSpec = (raw: string) => {
@@ -30,6 +32,30 @@ const elementSpec = (raw: string): { id?: string; text?: string } => {
   }
   return { [key]: raw.slice(at + 1) };
 };
+
+// Only a person at a terminal can start the failure count over (decision 0005).
+async function resetCommand(dir?: string): Promise<number> {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    console.error("emd: check reset needs a person at a terminal.");
+    return 2;
+  }
+  const { root } = await detect(dir);
+  const prompt = createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+  const typed = await prompt.question(
+    `Clear the failed-check count for ${root}? Type "reset": `,
+  );
+  prompt.close();
+  if (typed.trim() !== "reset") {
+    console.error("emd: not reset.");
+    return 1;
+  }
+  resetChecks(root);
+  console.log(JSON.stringify({ verdict: "reset", root }));
+  return 0;
+}
 
 export async function run(argv: string[]): Promise<number> {
   const [command, ...args] = argv;
@@ -107,16 +133,14 @@ export async function run(argv: string[]): Promise<number> {
       return result.verdict === "ok" ? 0 : 1;
     }
     case "check": {
+      if (args[0] === "reset") return resetCommand(args[1]);
       const { values, positionals } = parseArgs({
         args,
         allowPositionals: true,
         options: {
           log: { type: "string", multiple: true },
           element: { type: "string", multiple: true },
-          "retry-limit": { type: "string" },
-          name: { type: "string" },
           agent: { type: "string" },
-          reset: { type: "boolean" },
           since: { type: "string" },
           device: { type: "string" },
           app: { type: "string" },
@@ -133,7 +157,6 @@ export async function run(argv: string[]): Promise<number> {
         console.error(`emd: ${(error as Error).message}`);
         return 2;
       }
-      const retryLimit = values["retry-limit"];
       const result = await check({
         jobId: positionals[0],
         device: values.device,
@@ -141,9 +164,6 @@ export async function run(argv: string[]): Promise<number> {
         since: values.since,
         logs: (values.log ?? []).map(logSpec),
         elements,
-        retryLimit: retryLimit === undefined ? undefined : Number(retryLimit),
-        name: values.name,
-        reset: values.reset,
         agentReading: values.agent as "pass" | "fail" | undefined,
       });
       console.log(JSON.stringify(result));
