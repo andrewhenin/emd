@@ -1,4 +1,4 @@
-# EMD (Everything Mobile Development)
+# EMD: Everything Mobile Development
 
 Build, run, check and prove mobile changes from any coding agent, without opening Xcode or Android Studio.
 
