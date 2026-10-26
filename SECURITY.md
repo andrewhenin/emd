@@ -6,4 +6,4 @@ Report it through GitHub private vulnerability reporting: open the repository's 
 
 ## Supported versions
 
-The latest 0.x release.
+The main branch, until the first npm release.
