@@ -61,3 +61,11 @@ test("a lock nobody refreshes is taken over", async () => {
   const entry = await reserve("/work/app", "port", pickPort);
   expect(entry.state).toBe("creating");
 });
+
+test("a worktree gets the same Metro port on relaunch, whoever allocated since", async () => {
+  const first = await reserve("/work/app", "port", pickPort);
+  await reserve("/work/other", "port", pickPort);
+  const again = await reserve("/work/app", "port", pickPort);
+  expect(again.id).toBe(first.id);
+  expect(await reserve("/work/other", "port", pickPort)).not.toEqual(first);
+});
