@@ -45,8 +45,11 @@ function readAll(): Ledger[] {
   let names: string[];
   try {
     names = readdirSync(ownedDir());
-  } catch {
-    return [];
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw new Error(
+      `Ownership directory ${ownedDir()} is unreadable: ${error}`,
+    );
   }
   return names
     .filter((name) => name.endsWith(".json"))
