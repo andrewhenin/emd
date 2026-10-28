@@ -38,8 +38,6 @@ Notes, findings and decisions: follow [docs/logging.md](docs/logging.md) exactly
 - Never mark a PR ready for review. Never claim a human reviewed anything.
 - Never tick the author-readiness checkbox in the PR template. Only the human owner does.
 - Never push to `main` and never force-push. Always work on a branch and open a draft PR.
-- To update a PR branch, merge main into it. Never force-push.
-- If scope changes during a PR, update the linked issue's acceptance criteria in the same PR.
 - Write the smallest change that meets the acceptance criteria; no code for out-of-scope items; add abstractions only when they remove complexity you've actually seen.
 - Fix problems where they originate. Remove replaced code in the same change.
 - Prefer tests through the real CLI and MCP tools over mocks.
