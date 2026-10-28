@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/andrewhenin/emd/compare/emd-agents-v0.5.0...emd-agents-v0.6.0) (2026-10-28)
+
+
+### Features
+
+* per-worktree simulator, DerivedData and Metro port, recorded as EMD-owned ([#47](https://github.com/andrewhenin/emd/issues/47)) ([292f3a2](https://github.com/andrewhenin/emd/commit/292f3a2c12b3e812a8eab2757fd3b102232f0294))
+
 ## [0.5.0](https://github.com/andrewhenin/emd/compare/emd-agents-v0.4.0...emd-agents-v0.5.0) (2026-10-25)
 
 
