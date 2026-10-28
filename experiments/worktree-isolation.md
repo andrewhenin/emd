@@ -25,6 +25,16 @@ both in parallel. Cold builds, nothing cached.
   (two runs, 939 s each); with `--timeout 2400` the relaunch reused the
   partial DerivedData and took 260 s.
 
+## Run of the script, 2026-10-27: blocked by load
+
+`experiments/worktree-isolation.sh` end to end, cold. Both worktrees compiled
+(0 errors) on separate simulators (`emd-1f1ce4dcafc2`, `emd-8825c9ed16c3`) with
+separate Metro ports (8093 for a, 8092 for b, from the ledger). Expo's
+`simctl openurl` then timed out (POSIX 60) on both, so both launches ended
+`failed`. The `__expo_url=…:8081` in those logs is Expo's deep link, not the
+worktree's port. The end-to-end run is blocked by load, not passed; the
+numbers above come from the 2026-10-24 run.
+
 Reproduce: `experiments/worktree-isolation.sh [sandbox] [timeout]` (builds EMD first with `npm run build`).
 
 ## Which Metro each app loads from
