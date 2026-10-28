@@ -166,6 +166,20 @@ test("fails when an element is missing, and needs id and text on one node", asyn
   expect(other.verdict).toBe("failed");
 });
 
+test("finds an expected log line older than the last 500 of its tag", async () => {
+  const jobId = await launched();
+  const render = ["mounted", ...Array.from({ length: 599 }, (_, i) => `r${i}`)];
+  const { deps } = readers({ logs: { render } });
+  const result = await run(
+    { jobId, logs: [{ tag: "render", message: "mounted" }] },
+    deps,
+  );
+  expect(result).toMatchObject({
+    verdict: "passed",
+    logs: [{ tag: "render", message: "mounted", found: true }],
+  });
+});
+
 test("a log expectation without a message matches any line with the tag", async () => {
   const jobId = await launched();
   const { deps } = readers(tapped);
