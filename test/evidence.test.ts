@@ -20,6 +20,7 @@ let state: string;
 beforeEach(() => {
   state = makeDir();
   process.env.EMD_STATE_DIR = state;
+  delete process.env.EMD_RETRY_LIMIT;
 });
 
 const taps = [
@@ -92,7 +93,8 @@ test("the bundle holds the checks that ran, the log lines, screenshots and flows
 
 test("only checks that ran are listed: not invalid ones, not ones refused for the retry limit", async () => {
   const jobId = await launchedJob(state, sandbox());
-  const options = { jobId, ...smoke, retryLimit: 1 };
+  process.env.EMD_RETRY_LIMIT = "1";
+  const options = { jobId, ...smoke };
   const invalid = await check({ jobId }, undefined, readers(true));
   const first = await check(options, undefined, readers(false));
   const refused = await check(options, undefined, readers(false));

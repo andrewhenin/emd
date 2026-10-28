@@ -38,6 +38,6 @@ export interface StackAdapter {
   ): Promise<StackDetection | undefined>;
   launchPlan(
     project: ProjectInfo,
-    request: { platform: Platform; deviceId: string },
+    request: { platform: Platform; deviceId: string; port: number },
   ): LaunchPlan | undefined;
 }

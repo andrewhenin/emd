@@ -194,18 +194,12 @@ function buildServer(): McpServer {
           .describe(
             "Elements that must be on screen now. Give id, text or both.",
           ),
-        retryLimit: z
-          .number()
-          .int()
-          .min(1)
-          .max(10)
-          .optional()
-          .describe("Failed checks allowed before verdict stopped. Default 3."),
         name: z
           .string()
           .optional()
-          .describe("Names this check so separate checks count separately."),
-        reset: z.boolean().optional().describe("Start the failure count over."),
+          .describe(
+            "A label for this check in the evidence. It does not change the retry count.",
+          ),
         agentReading: z
           .enum(["pass", "fail"])
           .optional()

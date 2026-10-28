@@ -33,6 +33,11 @@ export const launchResultSchema = z.object({
   appPid: z.number().optional(),
   // The dev server left running for the app.
   metro: z.object({ pid: z.number(), port: z.number() }).optional(),
+  // This worktree's own build folder, and what it and its simulator weigh.
+  derivedData: z.string().optional(),
+  diskMB: z
+    .object({ derivedData: z.number(), simulator: z.number() })
+    .optional(),
   // Full build and server logs live here; read them only when needed.
   logDir: z.string().optional(),
   seconds: z.number().optional(),
