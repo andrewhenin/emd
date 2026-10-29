@@ -43,8 +43,7 @@ Notes, findings and decisions: follow [docs/logging.md](docs/logging.md) exactly
 - Write the smallest change that meets the acceptance criteria; no code for out-of-scope items; add abstractions only when they remove complexity you've actually seen.
 - Fix problems where they originate. Remove replaced code in the same change.
 - Prefer tests through the real CLI and MCP tools over mocks.
-- Run `npm run test:e2e` only when the change alters a call to the simulator or build tools (command, arguments, timeout, or how its output is read) or launch and job handling. Otherwise say in the PR that it was skipped and why.
-- Run e2e at most once per PR on a laptop. If it fails in code the PR didn't change, report it; don't rerun.
+- Run `npm run test:e2e` only when the change alters a call to the simulator or build tools (command, arguments, timeout, or how its output is read) or launch and job handling, and at most once per PR on a laptop. If skipped, say why in the PR. If it fails in code the PR didn't change, report it; don't rerun.
 - Put behavior in `src/core/`. CLI and MCP import core only through `core/index.ts`, never each other. Adapters never import each other and load only through `core/registry.ts`.
 - `setup` installs only what the detected stack needs. Never install unrelated software.
 - Use Conventional Commit messages and PR titles (`feat:`, `fix:`, `docs:`, `chore:`). Squash merges use the PR title and Release Please reads it; CI checks the title.
