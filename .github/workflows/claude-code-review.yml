@@ -45,7 +45,10 @@ jobs:
             Answer, in one PR comment of at most 10 bullets with file:line and why:
             1. What can be deleted or simplified while still meeting the acceptance criteria?
             2. Which changed files weren't named in the PR's plan?
-            3. Any AGENTS.md rule broken?
+            3. Any AGENTS.md rule broken? Skip draft status, the readiness box and
+            whether checks ran locally: the owner sets the first two before this
+            review runs, and the required `check` job reruns lint, typecheck, test
+            and check:sizes.
             If nothing, comment "Nothing to cut." Don't suggest new features.
           claude_args: >-
             --model claude-sonnet-5-5 --max-turns 30
