@@ -1,12 +1,10 @@
-import { execFile } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { basename, join } from "node:path";
-import { promisify } from "node:util";
 import { worktreeKey } from "./owned.js";
 import { homeDir } from "./state.js";
+import { runTool } from "./tool.js";
 
-const run = promisify(execFile);
 const firstPort = 8081;
 
 const free = (port: number): Promise<boolean> =>
@@ -53,7 +51,7 @@ export function xcodebuildShim(root: string, derivedData: string): string {
 // Disk use of a folder in MB; absent counts as 0.
 export async function diskMB(path: string): Promise<number> {
   try {
-    const { stdout } = await run("du", ["-sk", path]);
+    const { stdout } = await runTool("du", "du", ["-sk", path], 60);
     return Math.round(Number(stdout.split("\t")[0]) / 1024);
   } catch {
     return 0;

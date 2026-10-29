@@ -1,7 +1,5 @@
-import { execFile } from "node:child_process";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { promisify } from "node:util";
 import { axeBackend } from "./device/axe.js";
 import {
   detectEnvironment,
@@ -16,8 +14,7 @@ import { worktreeKey } from "./owned.js";
 import type { CheckResult, LogsResult } from "./result.js";
 import { type RunRef, resolveRun } from "./run.js";
 import { homeDir, stateDir } from "./state.js";
-
-const run = promisify(execFile);
+import { runTool } from "./tool.js";
 
 // A tagged log event the run must have produced: the tag, and optionally text
 // its message must contain.
@@ -46,7 +43,12 @@ const realDeps: Deps = {
   screenshot: async (device, path) => {
     try {
       mkdirSync(dirname(path), { recursive: true });
-      await run("xcrun", ["simctl", "io", device, "screenshot", path]);
+      await runTool(
+        "simctl screenshot",
+        "xcrun",
+        ["simctl", "io", device, "screenshot", path],
+        60,
+      );
       return true;
     } catch {
       return false;
