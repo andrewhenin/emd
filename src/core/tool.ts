@@ -27,7 +27,7 @@ export function runTool(
     const timer = setTimeout(() => {
       timedOut = true;
       try {
-        process.kill(-(child.pid ?? 0), "SIGKILL");
+        if (child.pid) process.kill(-child.pid, "SIGKILL");
       } catch {}
     }, seconds * 1000);
     child.on("error", (error) => {

@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import { runTool } from "../src/core/tool.ts";
 
 const running = (marker: string): boolean => {
@@ -24,6 +24,18 @@ test("a failed call keeps the tool's own error text", async () => {
   await expect(
     runTool("failer", "sh", ["-c", "echo boom >&2; exit 3"], 5),
   ).rejects.toThrow("failer failed (exit 3): boom");
+});
+
+test("a tool that cannot start rejects without killing anything", async () => {
+  const kill = vi.spyOn(process, "kill");
+  try {
+    await expect(runTool("ghost", "emd-no-such-binary", [], 5)).rejects.toThrow(
+      "ENOENT",
+    );
+    expect(kill).not.toHaveBeenCalled();
+  } finally {
+    kill.mockRestore();
+  }
 });
 
 test("a timeout leaves no process behind when the tool does not pass signals on", async () => {
