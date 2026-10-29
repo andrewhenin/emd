@@ -92,7 +92,10 @@ async function appExecutable(device: string, appId: string): Promise<string> {
   return name.trim();
 }
 
-export async function logs(options: LogsOptions): Promise<LogsResult> {
+// Every tagged line of a run, oldest first. `logs` windows them for display.
+export async function allLines(
+  options: Omit<LogsOptions, "limit">,
+): Promise<LogsResult> {
   const failed = (reason: string): LogsResult => ({
     verdict: "failed",
     reason,
@@ -100,10 +103,6 @@ export async function logs(options: LogsOptions): Promise<LogsResult> {
 
   if (options.tag !== undefined && !tagPattern.test(options.tag)) {
     return failed("A tag has letters, digits, dot, dash and underscore only.");
-  }
-  const limit = options.limit ?? defaultLimit;
-  if (!Number.isInteger(limit) || limit < 1 || limit > maxLimit) {
-    return failed(`limit must be a whole number from 1 to ${maxLimit}.`);
   }
 
   const resolved = resolveRun(options);
@@ -139,11 +138,23 @@ export async function logs(options: LogsOptions): Promise<LogsResult> {
       verdict: "ok",
       since: start.toISOString(),
       total: lines.length,
-      lines: lines.slice(-limit),
+      lines,
     };
   } catch (error) {
     return failed(
       `Could not read the simulator log: ${String(error).split("\n")[0]}`,
     );
   }
+}
+
+export async function logs(options: LogsOptions): Promise<LogsResult> {
+  const limit = options.limit ?? defaultLimit;
+  if (!Number.isInteger(limit) || limit < 1 || limit > maxLimit) {
+    return {
+      verdict: "failed",
+      reason: `limit must be a whole number from 1 to ${maxLimit}.`,
+    };
+  }
+  const all = await allLines(options);
+  return all.lines ? { ...all, lines: all.lines.slice(-limit) } : all;
 }

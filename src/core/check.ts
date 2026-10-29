@@ -11,7 +11,7 @@ import {
 import { maestroBackend } from "./device/maestro.js";
 import { type ElementSpec, hasElement } from "./device/screen.js";
 import { recordCheck } from "./evidence.js";
-import { type LogsOptions, logs as readLogs, type TaggedLine } from "./logs.js";
+import { allLines, type LogsOptions, type TaggedLine } from "./logs.js";
 import { worktreeKey } from "./owned.js";
 import type { CheckResult, LogsResult } from "./result.js";
 import { type RunRef, resolveRun } from "./run.js";
@@ -34,13 +34,13 @@ export type CheckOptions = RunRef & {
 
 // What the check reads. The real ones read the simulator; tests pass their own.
 export type Deps = {
-  logs: (options: LogsOptions) => Promise<LogsResult>;
+  logs: (options: Omit<LogsOptions, "limit">) => Promise<LogsResult>;
   screen: (device: string) => Promise<ScreenRead>;
   screenshot: (device: string, path: string) => Promise<boolean>;
 };
 
 const realDeps: Deps = {
-  logs: readLogs,
+  logs: allLines,
   screen: async (device) =>
     readScreen(device, await detectEnvironment(), [axeBackend, maestroBackend]),
   screenshot: async (device, path) => {
@@ -164,7 +164,7 @@ export async function check(
   if (logSpecs.length > 0) {
     report("reading the logs");
     for (const tag of new Set(logSpecs.map((spec) => spec.tag))) {
-      const got = await deps.logs({ ...ref, tag, limit: 500 });
+      const got = await deps.logs({ ...ref, tag });
       if (got.verdict !== "ok") {
         return error(got.reason ?? "Could not read the logs.");
       }
