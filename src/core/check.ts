@@ -15,7 +15,7 @@ import { allLines, type LogsOptions, type TaggedLine } from "./logs.js";
 import { worktreeKey } from "./owned.js";
 import type { CheckResult, LogsResult } from "./result.js";
 import { type RunRef, resolveRun } from "./run.js";
-import { homeDir, stateDir } from "./state.js";
+import { homeDir } from "./state.js";
 
 const run = promisify(execFile);
 
@@ -139,11 +139,11 @@ export async function check(
 
   const resolved = resolveRun(options);
   if ("reason" in resolved) return error(resolved.reason);
-  const { device, appId, since, root, logDir } = resolved.run;
+  const { device, root, logDir } = resolved.run;
 
-  // Failed checks count per worktree (or per device and app when no job names
-  // one), across relaunches, because a fix usually means launching again.
-  const key = root ? worktreeKey(root) : `${device}-${appId}`;
+  // Failed checks count per worktree, across relaunches, because a fix
+  // usually means launching again.
+  const key = worktreeKey(root);
   const before = failuresSoFar(key);
   if (before >= limit) {
     return {
@@ -154,17 +154,11 @@ export async function check(
     };
   }
 
-  const ref = {
-    jobId: options.jobId,
-    device,
-    appId,
-    since: since.toISOString(),
-  };
   const byTag = new Map<string, TaggedLine[]>();
   if (logSpecs.length > 0) {
     report("reading the logs");
     for (const tag of new Set(logSpecs.map((spec) => spec.tag))) {
-      const got = await deps.logs({ ...ref, tag });
+      const got = await deps.logs({ jobId: options.jobId, tag });
       if (got.verdict !== "ok") {
         return error(got.reason ?? "Could not read the logs.");
       }
@@ -198,10 +192,7 @@ export async function check(
   const passed = [...logResults, ...elementResults].every((r) => r.found);
 
   report("taking a screenshot");
-  const shotPath = join(
-    logDir ?? join(stateDir(), "checks"),
-    `check-${Date.now()}.png`,
-  );
+  const shotPath = join(logDir, `check-${Date.now()}.png`);
   const shot = (await deps.screenshot(device, shotPath)) ? shotPath : undefined;
   const reading = options.agentReading;
   const secondOpinion =
@@ -224,7 +215,7 @@ export async function check(
 
   // Only a check that read something is a check that ran.
   const ran = (result: CheckResult): CheckResult => {
-    if (logDir) recordCheck(logDir, name, result);
+    recordCheck(logDir, name, result);
     return result;
   };
 

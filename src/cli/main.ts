@@ -117,17 +117,16 @@ export async function run(argv: string[]): Promise<number> {
         options: {
           tag: { type: "string" },
           limit: { type: "string" },
-          since: { type: "string" },
-          device: { type: "string" },
-          app: { type: "string" },
         },
       });
+      const jobId = positionals[0];
+      if (!jobId) {
+        console.error(`emd: usage: logs <jobId>. ${usage}`);
+        return 2;
+      }
       const result = await logs({
-        jobId: positionals[0],
+        jobId,
         tag: values.tag,
-        since: values.since,
-        device: values.device,
-        appId: values.app,
         limit: values.limit === undefined ? undefined : Number(values.limit),
       });
       console.log(JSON.stringify(result));
@@ -143,9 +142,6 @@ export async function run(argv: string[]): Promise<number> {
           element: { type: "string", multiple: true },
           agent: { type: "string" },
           name: { type: "string" },
-          since: { type: "string" },
-          device: { type: "string" },
-          app: { type: "string" },
         },
       });
       if (values.agent && values.agent !== "pass" && values.agent !== "fail") {
@@ -159,11 +155,13 @@ export async function run(argv: string[]): Promise<number> {
         console.error(`emd: ${(error as Error).message}`);
         return 2;
       }
+      const jobId = positionals[0];
+      if (!jobId) {
+        console.error(`emd: usage: check <jobId>. ${usage}`);
+        return 2;
+      }
       const result = await check({
-        jobId: positionals[0],
-        device: values.device,
-        appId: values.app,
-        since: values.since,
+        jobId,
         logs: (values.log ?? []).map(logSpec),
         elements,
         name: values.name,

@@ -17,12 +17,8 @@ const maxLimit = 500;
 export type TaggedLine = { time: string; tag: string; message: string };
 
 export type LogsOptions = {
-  // A launch job: its device, app and start time define the run.
-  jobId?: string;
-  // Or name the run directly.
-  device?: string;
-  appId?: string;
-  since?: string;
+  // The launch job whose device, app and start time define the run.
+  jobId: string;
   // Only lines with this tag.
   tag?: string;
   limit?: number;
