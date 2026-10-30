@@ -107,23 +107,7 @@ function buildServer(): McpServer {
       description:
         "Tagged log lines an app wrote during a run: lines containing [EMD:<tag>], as written by console.log in the app, with time, tag and message. A run is a launch job, so pass the jobId from launch; only that app's lines since the job started are returned, never an earlier run's or another app's. Returns the most recent lines and the total count.",
       inputSchema: z.object({
-        jobId: z
-          .string()
-          .optional()
-          .describe("The launch job whose run to read. Preferred."),
-        device: z
-          .string()
-          .optional()
-          .describe(
-            "Simulator UDID, with appId and since, instead of a jobId.",
-          ),
-        appId: z.string().optional().describe("App ID, with device and since."),
-        since: z
-          .string()
-          .optional()
-          .describe(
-            "ISO time to read from. Defaults to the job's start; use it to read only what is new.",
-          ),
+        jobId: z.string().describe("The launch job whose run to read."),
         tag: z
           .string()
           .optional()
@@ -153,19 +137,7 @@ function buildServer(): McpServer {
       description:
         "Check a run against what you expect, from signals a machine can read, not your own judgment: tagged log events the app wrote ([EMD:<tag>] lines) and elements on the simulator's screen (by testID or by text). Starts a job and returns it within seconds; poll job_status until it finishes, which can take a minute. The result's verdict is passed, failed (fix the cause and check again), stopped (the retry limit is reached: stop and report what is missing) or error (the check could not run; not counted). Your reading of the returned screenshot may be passed as agentReading; it is recorded as a second opinion and never changes the verdict.",
       inputSchema: z.object({
-        jobId: z
-          .string()
-          .optional()
-          .describe("The launch job whose run to check. Preferred."),
-        device: z
-          .string()
-          .optional()
-          .describe("Simulator UDID, instead of a jobId."),
-        appId: z.string().optional().describe("App ID, with device and since."),
-        since: z
-          .string()
-          .optional()
-          .describe("ISO time the run started. Defaults to the job's start."),
+        jobId: z.string().describe("The launch job whose run to check."),
         logs: z
           .array(
             z.object({

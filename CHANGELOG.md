@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/andrewhenin/emd/compare/emd-agents-v0.6.0...emd-agents-v0.6.1) (2026-10-29)
+
+
+### Bug Fixes
+
+* check matches expected log lines beyond the last 500 of a tag ([#66](https://github.com/andrewhenin/emd/issues/66)) ([f0bbef3](https://github.com/andrewhenin/emd/commit/f0bbef3b83848bbb389b409df6617b7f6842238f))
+
 ## [0.6.0](https://github.com/andrewhenin/emd/compare/emd-agents-v0.5.0...emd-agents-v0.6.0) (2026-10-28)
 
 

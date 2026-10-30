@@ -372,7 +372,6 @@ test.each([
     { logs: [{ tag: "a" }], jobId: "deadbeef" },
     /No job with id/,
   ],
-  ["no run at all", { logs: [{ tag: "a" }] }, /Give a jobId/],
 ])("refuses %s before reading anything", async (_name, options, reason) => {
   const { deps, calls } = readers(tapped);
   const result = await check(options as CheckOptions, () => {}, deps);
