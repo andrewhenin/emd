@@ -16,26 +16,29 @@ test("MCP server exposes the check tool", async () => {
 });
 
 test.each([
-  ["no expectation", [], { verdict: "error" }, /at least one expectation/],
+  [
+    "no expectation",
+    ["deadbeef"],
+    { jobId: "deadbeef" },
+    { verdict: "error" },
+    /at least one expectation/,
+  ],
   [
     "an unknown job",
     ["deadbeef", "--log", "smoke"],
+    { jobId: "deadbeef", logs: [{ tag: "smoke" }] },
     { verdict: "error" },
     /No job with id/,
   ],
 ])(
   "%s: the CLI blocks, MCP starts a check job that ends the same",
-  async (_name, args, shape, reason) => {
+  async (_name, args, mcpArgs, shape, reason) => {
     const run = cli(...args);
     expect(run.status).toBe(1);
     const fromCli = JSON.parse(run.stdout);
     expect(fromCli).toMatchObject(shape);
     expect(fromCli.reason).toMatch(reason);
 
-    const mcpArgs =
-      args[0] === "deadbeef"
-        ? { jobId: "deadbeef", logs: [{ tag: "smoke" }] }
-        : {};
     const started = Date.now();
     const job = await call("check", mcpArgs);
     expect(Date.now() - started).toBeLessThan(5000);
@@ -78,9 +81,6 @@ test("neither the CLI nor the MCP tool lets the agent set the limit or reset the
   const input = tools.find((t) => t.name === "check")?.inputSchema;
   expect(Object.keys(input?.properties ?? {})).toEqual([
     "jobId",
-    "device",
-    "appId",
-    "since",
     "logs",
     "elements",
     "name",

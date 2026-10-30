@@ -66,15 +66,8 @@ export async function evidence(
   const resolved = resolveRun(ref);
   if ("reason" in resolved) return failed(resolved.reason);
   const { device, appId, since, root, logDir } = resolved.run;
-  if (!logDir) return failed("Give the jobId of a launch job.");
 
-  const lines = await deps.logs({
-    jobId: ref.jobId,
-    device,
-    appId,
-    since: since.toISOString(),
-    limit: 500,
-  });
+  const lines = await deps.logs({ jobId: ref.jobId, limit: 500 });
   if (lines.verdict !== "ok") {
     return failed(lines.reason ?? "Could not read the logs.");
   }
@@ -101,23 +94,21 @@ export async function evidence(
   });
 
   const flows: string[] = [];
-  if (root) {
-    for (const flow of (await detect(root)).maestroFlows ?? []) {
-      mkdirSync(join(dir, "flows"), { recursive: true });
-      copyFileSync(join(root, flow), join(dir, "flows", basename(flow)));
-      flows.push(`flows/${basename(flow)}`);
-    }
+  for (const flow of (await detect(root)).maestroFlows ?? []) {
+    mkdirSync(join(dir, "flows"), { recursive: true });
+    copyFileSync(join(root, flow), join(dir, "flows", basename(flow)));
+    flows.push(`flows/${basename(flow)}`);
   }
 
   const logLines = lines.lines ?? [];
   writeFileSync(join(dir, "logs.json"), JSON.stringify(logLines, null, 2));
   const manifest = {
     run: {
-      ...(ref.jobId ? { jobId: ref.jobId } : {}),
+      jobId: ref.jobId,
       device,
       appId,
       since: since.toISOString(),
-      ...(root ? { root } : {}),
+      root,
     },
     checks,
     logs: { file: "logs.json", total: lines.total ?? logLines.length },

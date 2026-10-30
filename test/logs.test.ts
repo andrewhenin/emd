@@ -93,18 +93,6 @@ test.each([
     /limit must be/,
   ],
   ["an unknown job", { jobId: "deadbeef" }, /No job with id/],
-  ["no job and no device", {}, /Give a jobId/],
-  ["a device without a time", { device: "x", appId: "a.b" }, /Give since/],
-  [
-    "a time that is not a time",
-    { device: "x", appId: "a.b", since: "soon" },
-    /ISO time/,
-  ],
-  [
-    "a device that does not look like one",
-    { device: "../x", appId: "a.b", since: "2026-10-24T14:00:00Z" },
-    /does not look right/,
-  ],
 ])(
   "refuses %s before touching the simulator",
   async (_name, options, reason) => {
