@@ -7,8 +7,8 @@ import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { resetChecks } from "../../src/core/index.ts";
 
 // A real build and launch on an iOS simulator, driven the way an agent does:
-// `launch` starts a job, `job_status` is polled. macOS, Xcode and a sandbox
-// app only: `npm run test:e2e`. Skipped otherwise, so CI never runs it.
+// `launch` starts a job, `job_status` is polled. macOS, Xcode and a fixture
+// app only: `npm run test:e2e`. Skipped otherwise, so the CI check job skips it.
 const sandbox = process.env.EMD_E2E_SANDBOX;
 const minutes = (n: number) => n * 60_000;
 

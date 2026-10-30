@@ -12,7 +12,7 @@ Notes, findings and decisions: follow [docs/logging.md](docs/logging.md) exactly
 - `npm run typecheck` TypeScript, no emit
 - `npm test` build, then run Vitest (tests call the built CLI)
 - `npm run test:fast` same set the pre-push hook runs
-- `npm run test:e2e` real launch on an iOS simulator against `~/emd-sandbox` (macOS, Xcode; minutes; never runs in CI)
+- `npm run test:e2e` real launch on an iOS simulator against `fixtures/expo` (macOS, Xcode; minutes; CI runs it via `e2e.yml`)
   Until e2e runs in CI, its result is advisory: open the PR with the result in the body and don't wait for approval.
 - `npm run check:sizes` doc size limits (also runs in CI)
 - `npm run check:pr-title` reads a PR title on stdin and checks it is a Conventional Commit (CI runs it on every PR)
