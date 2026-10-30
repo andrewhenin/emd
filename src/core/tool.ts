@@ -28,7 +28,9 @@ export function runTool(
       timedOut = true;
       try {
         if (child.pid) process.kill(-child.pid, "SIGKILL");
-      } catch {}
+      } catch {
+        // The group may already be dead.
+      }
     }, seconds * 1000);
     child.on("error", (error) => {
       clearTimeout(timer);
