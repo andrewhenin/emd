@@ -11,7 +11,13 @@ import {
 import { maestroBackend } from "./device/maestro.js";
 import { type ElementSpec, hasElement } from "./device/screen.js";
 import { recordCheck } from "./evidence.js";
-import { allLines, type LogsOptions, type TaggedLine } from "./logs.js";
+import { firstLine } from "./log.js";
+import {
+  allLines,
+  type LogsOptions,
+  type TaggedLine,
+  tagPattern,
+} from "./logs.js";
 import { worktreeKey } from "./owned.js";
 import type { CheckResult, LogsResult } from "./result.js";
 import { type RunRef, resolveRun } from "./run.js";
@@ -54,8 +60,6 @@ const realDeps: Deps = {
   },
 };
 
-const tagPattern = /^[A-Za-z0-9_.-]{1,40}$/;
-const namePattern = /^[A-Za-z0-9_.-]{1,40}$/;
 const defaultRetryLimit = 3;
 const maxRetryLimit = 10;
 const maxSpecs = 20;
@@ -88,10 +92,8 @@ function failuresSoFar(key: string): number {
 
 function setFailures(key: string, failures: number): void {
   mkdirSync(dirname(countFile(key)), { recursive: true });
-  writeFileSync(countFile(key), JSON.stringify({ key, failures }));
+  writeFileSync(countFile(key), JSON.stringify({ failures }));
 }
-
-const firstLine = (error: unknown) => String(error).split("\n")[0] ?? "";
 
 // Independent pass or fail from machine-checkable signals: the tagged log
 // events the run wrote and the elements on the simulator's screen. It counts
@@ -130,7 +132,7 @@ export async function check(
     }
   }
   const name = options.name ?? "default";
-  if (!namePattern.test(name)) {
+  if (!tagPattern.test(name)) {
     return error(
       "A check name has letters, digits, dot, dash and underscore only.",
     );
