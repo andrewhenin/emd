@@ -9,6 +9,9 @@ const caretMessage = /^\|\s*\^\s*(.+)$/;
 const snippetReach = 8;
 const maxLine = 200;
 
+export const firstLine = (error: unknown): string =>
+  String(error).split("\n")[0] ?? "";
+
 export const stripAnsi = (text: string): string => text.replace(ansi, "");
 
 // The first few lines of a build or server log that say what went wrong:

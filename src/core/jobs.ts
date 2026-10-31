@@ -12,6 +12,7 @@ import {
   write,
 } from "./jobstore.js";
 import { type LaunchOptions, launch } from "./launch.js";
+import { firstLine } from "./log.js";
 import type { CheckResult, JobView, LaunchResult } from "./result.js";
 
 // A job is one long-running piece of work, recorded as a JSON file in the
@@ -136,7 +137,7 @@ export async function runJob(
       result,
     });
   } catch (error) {
-    fail(id, String(error).split("\n")[0] ?? "The job failed.");
+    fail(id, firstLine(error) || "The job failed.");
   }
 }
 
@@ -156,5 +157,3 @@ export function jobStatus(id: string): JobView | undefined {
   const current = readJob(id);
   return current && view(current);
 }
-
-export { readJob };

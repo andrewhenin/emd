@@ -1,6 +1,7 @@
 import { accessSync, constants } from "node:fs";
 import { homedir } from "node:os";
 import { delimiter, join } from "node:path";
+import { firstLine } from "../log.js";
 import type { UiNode } from "./screen.js";
 
 // Decision 0004: device actions go through backends, and core picks the best
@@ -29,8 +30,6 @@ export type ScreenRead = {
   backend: BackendId;
   fellBack?: Fallback[];
 };
-
-const firstLine = (error: unknown) => String(error).split("\n")[0] ?? "";
 
 // Tries the backends in the order given (best first), skipping any that cannot run here
 // and moving on from any that fails, and says which one answered.

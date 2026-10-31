@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { firstLine } from "./log.js";
 import type { LogsResult } from "./result.js";
 import { resolveRun } from "./run.js";
 
@@ -9,7 +10,7 @@ const run = promisify(execFile);
 // with console.log (or NSLog); the simulator keeps it in its unified log at
 // Info level, so `log show` needs --info to see it.
 const taggedLine = /\[EMD:([A-Za-z0-9_.-]+)\]\s?(.*)$/s;
-const tagPattern = /^[A-Za-z0-9_.-]{1,40}$/;
+export const tagPattern = /^[A-Za-z0-9_.-]{1,40}$/;
 const executable = /^[A-Za-z0-9_. -]+$/;
 const defaultLimit = 50;
 const maxLimit = 500;
@@ -137,9 +138,7 @@ export async function allLines(
       lines,
     };
   } catch (error) {
-    return failed(
-      `Could not read the simulator log: ${String(error).split("\n")[0]}`,
-    );
+    return failed(`Could not read the simulator log: ${firstLine(error)}`);
   }
 }
 

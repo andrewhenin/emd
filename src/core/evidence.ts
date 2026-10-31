@@ -8,8 +8,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, join } from "node:path";
-import { detect } from "./detect.js";
 import { type LogsOptions, logs as readLogs } from "./logs.js";
+import { inspectProject } from "./project.js";
 import type { CheckResult, EvidenceResult, LogsResult } from "./result.js";
 import { type RunRef, resolveRun } from "./run.js";
 
@@ -94,7 +94,7 @@ export async function evidence(
   });
 
   const flows: string[] = [];
-  for (const flow of (await detect(root)).maestroFlows ?? []) {
+  for (const flow of (await inspectProject(root)).maestroFlows ?? []) {
     mkdirSync(join(dir, "flows"), { recursive: true });
     copyFileSync(join(root, flow), join(dir, "flows", basename(flow)));
     flows.push(`flows/${basename(flow)}`);
