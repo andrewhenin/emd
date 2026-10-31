@@ -1,0 +1,98 @@
+name: e2e
+
+# A real launch of fixtures/expo on an iOS simulator (decision 0007).
+# The paths are checked in the first step, not in a `paths:` filter, so the
+# `e2e` label can force a run on any PR.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * *"
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  e2e:
+    if: github.event.pull_request.draft != true
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Decide whether to run
+        id: gate
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+          LABELLED: ${{ contains(github.event.pull_request.labels.*.name, 'e2e') }}
+        run: |
+          paths='^(src/core/(simulator|launch|isolate|jobs|process|logs|tool)\.ts|src/core/device/|src/adapters/|test/e2e/|fixtures/|\.github/workflows/e2e\.yml)'
+          if [ "$EVENT" != pull_request ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          elif [ "$LABELLED" = true ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "The e2e label is on."
+          elif git diff --name-only HEAD^1 HEAD | grep -E "$paths"; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "No changed file touches the e2e paths and the e2e label is off."
+          fi
+
+      - if: steps.gate.outputs.run == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - if: steps.gate.outputs.run == 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install tools
+        if: steps.gate.outputs.run == 'true'
+        shell: bash
+        run: |
+          npm ci
+          npm ci --prefix fixtures/expo
+          brew install cameroncooke/axe/axe
+          curl -fsSL "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+
+      - name: Print versions
+        if: steps.gate.outputs.run == 'true'
+        shell: bash
+        run: |
+          xcodebuild -version
+          xcrun simctl list runtimes
+          java -version
+          node --version
+          "$HOME/.maestro/bin/maestro" --version
+          axe --version || true
+
+      - name: Run e2e
+        if: steps.gate.outputs.run == 'true'
+        shell: bash
+        env:
+          EMD_STATE_DIR: ${{ runner.temp }}/emd-state
+        run: npm run test:e2e 2>&1 | tee e2e-output.txt
+
+      - name: Upload output and run logs
+        if: always() && steps.gate.outputs.run == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-${{ github.run_id }}
+          path: |
+            e2e-output.txt
+            ${{ runner.temp }}/emd-state/runs
+          if-no-files-found: warn

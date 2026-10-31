@@ -12,8 +12,7 @@ Notes, findings and decisions: follow [docs/logging.md](docs/logging.md) exactly
 - `npm run typecheck` TypeScript, no emit
 - `npm test` build, then run Vitest (tests call the built CLI)
 - `npm run test:fast` same set the pre-push hook runs
-- `npm run test:e2e` real launch on an iOS simulator against `~/emd-sandbox` (macOS, Xcode; minutes; never runs in CI)
-  Until e2e runs in CI, its result is advisory: open the PR with the result in the body and don't wait for approval.
+- `npm run test:e2e` real launch on an iOS simulator against `fixtures/expo` (macOS, Xcode; minutes)
 - `npm run check:sizes` doc size limits (also runs in CI)
 - `npm run check:pr-title` reads a PR title on stdin and checks it is a Conventional Commit (CI runs it on every PR)
 
@@ -44,7 +43,7 @@ Notes, findings and decisions: follow [docs/logging.md](docs/logging.md) exactly
 - Write the smallest change that meets the acceptance criteria; no code for out-of-scope items; add abstractions only when they remove complexity you've actually seen.
 - Fix problems where they originate. Remove replaced code in the same change.
 - Prefer tests through the real CLI and MCP tools over mocks.
-- Run `npm run test:e2e` only when the change alters a call to the simulator or build tools (command, arguments, timeout, or how its output is read) or launch and job handling, and at most once per PR on a laptop. If skipped, say why in the PR. If it fails in code the PR didn't change, report it; don't rerun.
+- Agents never run `npm run test:e2e` locally; the e2e workflow runs it. Write "e2e: left to CI" in the PR.
 - Put behavior in `src/core/`. CLI and MCP import core only through `core/index.ts`, never each other. Adapters never import each other and load only through `core/registry.ts`.
 - `setup` installs only what the detected stack needs. Never install unrelated software.
 - Use Conventional Commit messages and PR titles (`feat:`, `fix:`, `docs:`, `chore:`). Squash merges use the PR title and Release Please reads it; CI checks the title.

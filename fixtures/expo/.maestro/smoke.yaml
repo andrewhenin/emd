@@ -1,0 +1,10 @@
+appId: com.emd.sandbox
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Ready"
+    timeout: 90000
+- assertVisible: "Ready"
+- tapOn:
+    id: "smoke-button"
+- assertVisible: "Tapped"
