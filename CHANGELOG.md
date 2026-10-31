@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.7.0](https://github.com/andrewhenin/emd/compare/emd-agents-v0.6.1...emd-agents-v0.7.0) (2026-10-31)
+
+
+### ⚠ BREAKING CHANGES
+
+* name a run by its launch job only ([#71](https://github.com/andrewhenin/emd/issues/71))
+
+### Features
+
+* name a run by its launch job only ([#71](https://github.com/andrewhenin/emd/issues/71)) ([f8f062b](https://github.com/andrewhenin/emd/commit/f8f062b84036374b7887720171192fbef113f1bd))
+
+
+### Bug Fixes
+
+* run AXe and Maestro from the path where they were found ([#76](https://github.com/andrewhenin/emd/issues/76)) ([86edb59](https://github.com/andrewhenin/emd/commit/86edb59236c75099b9179feb4371d9ced7129988))
+
 ## [0.6.1](https://github.com/andrewhenin/emd/compare/emd-agents-v0.6.0...emd-agents-v0.6.1) (2026-10-29)
 
 
