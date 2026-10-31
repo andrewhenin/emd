@@ -17,9 +17,6 @@ concurrency:
   group: e2e-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-env:
-  EMD_STATE_DIR: ${{ runner.temp }}/emd-state
-
 jobs:
   e2e:
     if: github.event.pull_request.draft != true
@@ -86,6 +83,8 @@ jobs:
       - name: Run e2e
         if: steps.gate.outputs.run == 'true'
         shell: bash
+        env:
+          EMD_STATE_DIR: ${{ runner.temp }}/emd-state
         run: npm run test:e2e 2>&1 | tee e2e-output.txt
 
       - name: Upload output and run logs
