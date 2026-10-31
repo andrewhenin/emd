@@ -7,19 +7,18 @@ import type { UiNode } from "./screen.js";
 // Decision 0004: device actions go through backends, and core picks the best
 // one that is available on this machine, falling back to the next.
 
-export type BackendId = "axe" | "maestro";
+export const backendIds = ["axe", "maestro"] as const;
+export type BackendId = (typeof backendIds)[number];
 
 // A tool that can act on a simulator. Reading the screen is the only action so
 // far; tapping joins it with the step runner.
 export interface DeviceBackend {
   id: BackendId;
-  readScreen(device: string): Promise<UiNode[]>;
+  readScreen(device: string, bin: string): Promise<UiNode[]>;
 }
 
-// What this machine has.
-export type Environment = {
-  installed: Record<BackendId, boolean>;
-};
+// Where each installed backend's executable was found; absent when not installed.
+export type Environment = Partial<Record<BackendId, string>>;
 
 type Fallback = { backend: BackendId; reason: string };
 
@@ -32,18 +31,7 @@ export type ScreenRead = {
   fellBack?: Fallback[];
 };
 
-// Best first.
-const preference: BackendId[] = ["axe", "maestro"];
-
-// Why a backend cannot run here, or undefined when it can.
-export function unavailableReason(
-  id: BackendId,
-  env: Environment,
-): string | undefined {
-  return env.installed[id] ? undefined : `${id} is not installed`;
-}
-
-// Tries the backends in order of preference, skipping any that cannot run here
+// Tries the backends in the order given (best first), skipping any that cannot run here
 // and moving on from any that fails, and says which one answered.
 export async function readScreen(
   device: string,
@@ -51,16 +39,14 @@ export async function readScreen(
   backends: DeviceBackend[],
 ): Promise<ScreenRead> {
   const fellBack: Fallback[] = [];
-  for (const id of preference) {
-    const unavailable = unavailableReason(id, env);
-    if (unavailable) {
-      fellBack.push({ backend: id, reason: unavailable });
+  for (const { id, readScreen: read } of backends) {
+    const bin = env[id];
+    if (!bin) {
+      fellBack.push({ backend: id, reason: `${id} is not installed` });
       continue;
     }
     try {
-      const backend = backends.find((b) => b.id === id);
-      if (!backend) throw new Error("no such backend");
-      const nodes = await backend.readScreen(device);
+      const nodes = await read(device, bin);
       return {
         nodes,
         backend: id,
@@ -75,28 +61,26 @@ export async function readScreen(
   );
 }
 
-function findExecutable(name: string, extraDirs: string[]): boolean {
+function findExecutable(name: string, extraDirs: string[]): string | undefined {
   const dirs = [
     ...(process.env.PATH ?? "").split(delimiter),
     ...extraDirs,
     "/opt/homebrew/bin",
     "/usr/local/bin",
   ];
-  return dirs.some((dir) => {
+  for (const dir of dirs) {
+    const path = join(dir, name);
     try {
-      accessSync(join(dir, name), constants.X_OK);
-      return true;
-    } catch {
-      return false;
-    }
-  });
+      accessSync(path, constants.X_OK);
+      return path;
+    } catch {}
+  }
+  return undefined;
 }
 
 export async function detectEnvironment(): Promise<Environment> {
   return {
-    installed: {
-      axe: findExecutable("axe", []),
-      maestro: findExecutable("maestro", [join(homedir(), ".maestro", "bin")]),
-    },
+    axe: findExecutable("axe", []),
+    maestro: findExecutable("maestro", [join(homedir(), ".maestro", "bin")]),
   };
 }
