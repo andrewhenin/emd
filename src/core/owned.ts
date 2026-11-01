@@ -22,7 +22,8 @@ type Ledger = { root: string; resources: Entry[] };
 // A ledger with its file name, which is the key it was written under.
 export type KeyedLedger = Ledger & { key: string };
 
-const LEDGER_FILE = /^[0-9a-f]{12}\.json$/;
+const KEY_LENGTH = 12;
+const LEDGER_FILE = new RegExp(`^[0-9a-f]{${KEY_LENGTH}}\\.json$`);
 
 const ownedDir = () => join(homeDir(), "owned");
 
@@ -31,7 +32,7 @@ export function worktreeKey(root: string): string {
   try {
     real = realpathSync(root);
   } catch {}
-  return createHash("sha1").update(real).digest("hex").slice(0, 12);
+  return createHash("sha1").update(real).digest("hex").slice(0, KEY_LENGTH);
 }
 
 const ledgerFile = (root: string) =>
