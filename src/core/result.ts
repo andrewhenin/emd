@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { packageManagers, platforms, stackIds } from "./adapter.js";
+import { backendIds } from "./device/backend.js";
 
 const perPlatform = z.object({
   ios: z.string().optional(),
@@ -33,6 +34,9 @@ export const launchResultSchema = z.object({
   appPid: z.number().optional(),
   // The dev server left running for the app.
   metro: z.object({ pid: z.number(), port: z.number() }).optional(),
+  // The log stream that captures the app's tagged lines; the next launch in
+  // this worktree stops it.
+  logStream: z.object({ pid: z.number() }).optional(),
   // This worktree's own build folder, and what it and its simulator weigh.
   derivedData: z.string().optional(),
   diskMB: z
@@ -77,11 +81,9 @@ export const checkResultSchema = z.object({
     .optional(),
   // Which backend read the screen (decision 0004), and the backends it passed
   // over first, each with why. Absent when no element was checked.
-  backend: z.enum(["axe", "maestro"]).optional(),
+  backend: z.enum(backendIds).optional(),
   fellBack: z
-    .array(
-      z.object({ backend: z.enum(["axe", "maestro"]), reason: z.string() }),
-    )
+    .array(z.object({ backend: z.enum(backendIds), reason: z.string() }))
     .optional(),
   secondOpinion: z
     .object({

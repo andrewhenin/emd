@@ -38,8 +38,8 @@ export function parseAxe(output: string): UiNode[] {
 
 // The accessibility tree of what is on the simulator's screen now. AXe talks to
 // the simulator directly, with no driver to start.
-async function readScreen(device: string): Promise<UiNode[]> {
-  const { stdout } = await run("axe", ["describe-ui", "--udid", device], {
+async function readScreen(device: string, bin: string): Promise<UiNode[]> {
+  const { stdout } = await run(bin, ["describe-ui", "--udid", device], {
     maxBuffer: 64 * 1024 * 1024,
     timeout: 120_000,
   });

@@ -4,7 +4,6 @@ import {
   type DeviceBackend,
   type Environment,
   readScreen,
-  unavailableReason,
 } from "../src/core/device/backend.ts";
 import type { UiNode } from "../src/core/device/screen.ts";
 
@@ -13,7 +12,8 @@ import type { UiNode } from "../src/core/device/screen.ts";
 const env = (
   installed: Partial<Record<BackendId, boolean>> = {},
 ): Environment => ({
-  installed: { axe: true, maestro: true, ...installed },
+  ...(installed.axe !== false && { axe: "/bin/axe" }),
+  ...(installed.maestro !== false && { maestro: "/bin/maestro" }),
 });
 
 const nodesFrom = (id: BackendId): UiNode[] => [
@@ -37,13 +37,21 @@ const breaks = (id: BackendId, message: string, calls: BackendId[] = []) =>
     },
   }) as DeviceBackend;
 
-test.each([
-  ["axe", env(), undefined],
-  ["axe", env({ axe: false }), "axe is not installed"],
-  ["maestro", env(), undefined],
-  ["maestro", env({ maestro: false }), "maestro is not installed"],
-] as const)("%s on %j: unavailable because %s", (id, environment, reason) => {
-  expect(unavailableReason(id, environment)).toBe(reason);
+test("hands each backend the path it was found at", async () => {
+  const paths: string[] = [];
+  const at = (id: BackendId): DeviceBackend => ({
+    id,
+    readScreen: async (_device, bin) => {
+      paths.push(bin);
+      throw new Error("next");
+    },
+  });
+  await readScreen(
+    "udid",
+    { axe: "/not/on/path/axe", maestro: "/home/me/.maestro/bin/maestro" },
+    [at("axe"), at("maestro")],
+  ).catch(() => {});
+  expect(paths).toEqual(["/not/on/path/axe", "/home/me/.maestro/bin/maestro"]);
 });
 
 test("uses AXe, and says so, whenever it is installed", async () => {
@@ -98,16 +106,11 @@ test("when no backend can read the screen, the error names each reason", async (
     "no backend could read the screen (axe: Error: session timed out; maestro: Error: driver crashed)",
   );
   await expect(
-    readScreen("udid", env({ axe: false, maestro: false }), []),
+    readScreen("udid", env({ axe: false, maestro: false }), [
+      works("axe"),
+      works("maestro"),
+    ]),
   ).rejects.toThrow(
     "axe: axe is not installed; maestro: maestro is not installed",
   );
-});
-
-test("a backend that is missing from the list counts as failed, not as success", async () => {
-  const read = await readScreen("udid", env(), [works("maestro")]);
-  expect(read.backend).toBe("maestro");
-  expect(read.fellBack).toEqual([
-    { backend: "axe", reason: "Error: no such backend" },
-  ]);
 });

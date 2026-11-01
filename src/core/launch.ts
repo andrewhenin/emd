@@ -9,8 +9,9 @@ import {
   xcodebuildShim,
 } from "./isolate.js";
 import { firstErrors } from "./log.js";
+import { startCapture, stopCaptures } from "./logs.js";
 import { confirm, reserve, worktreeKey } from "./owned.js";
-import { startLogged } from "./process.js";
+import { type LoggedProcess, startLogged } from "./process.js";
 import { inspectProject } from "./project.js";
 import { loadAdapter } from "./registry.js";
 import type { LaunchResult } from "./result.js";
@@ -210,6 +211,7 @@ export async function launch(
       where,
     );
   }
+  stopCaptures(root);
   report("starting the dev server");
   const env = {
     CI: "1",
@@ -251,10 +253,21 @@ export async function launch(
   }
 
   report("launching the app");
+  let capture: LoggedProcess;
+  try {
+    capture = await startCapture(device.id, appId, logDir);
+  } catch (error) {
+    metro.kill();
+    return failed("Built, but could not capture the app's log.", {
+      ...where,
+      errors: String(error).split("\n").slice(0, 3),
+    });
+  }
   let appPid: number;
   try {
     appPid = await launchApp(device, appId);
   } catch (error) {
+    capture.kill();
     metro.kill();
     return failed(`Built, but launching ${appId} failed.`, {
       ...where,
@@ -269,6 +282,7 @@ export async function launch(
     appId,
     appPid,
     metro: { pid: metro.pid, port },
+    logStream: { pid: capture.pid },
     derivedData,
     diskMB: {
       derivedData: await diskMB(derivedData),

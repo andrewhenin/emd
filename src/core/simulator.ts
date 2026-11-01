@@ -99,3 +99,31 @@ export async function cloneDevice(base: Device, name: string): Promise<string> {
   });
   return stdout.trim();
 }
+
+export type Simulator = { id: string; name: string; state: string };
+
+// Every simulator on the machine, available or not.
+export async function listSimulators(): Promise<Simulator[]> {
+  const { stdout } = await run(
+    "xcrun",
+    ["simctl", "list", "devices", "--json"],
+    { timeout: 60_000 },
+  );
+  const { devices } = JSON.parse(stdout) as SimctlList;
+  return Object.values(devices).flatMap((list) =>
+    list.map((d) => ({ id: d.udid, name: d.name, state: d.state })),
+  );
+}
+
+// Shuts a simulator down if it is booted, then deletes it.
+export async function removeSimulator(device: Simulator): Promise<void> {
+  const timeout = 120_000;
+  if (device.state === "Booted") {
+    try {
+      await run("xcrun", ["simctl", "shutdown", device.id], { timeout });
+    } catch (error) {
+      if (!/current state: Shutdown/i.test(String(error))) throw error;
+    }
+  }
+  await run("xcrun", ["simctl", "delete", device.id], { timeout });
+}

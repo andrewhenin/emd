@@ -6,10 +6,10 @@ import {
   createJob,
   type Handlers,
   jobStatus,
-  readJob,
   runJob,
   startJob,
 } from "../src/core/jobs.ts";
+import { readJob } from "../src/core/jobstore.ts";
 import type { CheckResult, LaunchResult } from "../src/core/result.ts";
 import { makeDir } from "./helpers.ts";
 
