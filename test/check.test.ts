@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { beforeEach, expect, test } from "vitest";
 import {
@@ -89,6 +89,20 @@ test("passes when every log event and element is found", async () => {
   const shot = result.secondOpinion?.screenshot ?? "";
   expect(shot).toMatch(/check-\d+\.png$/);
   expect(existsSync(shot)).toBe(true);
+  const screen = shot.replace(/check-(\d+)\.png$/, "screen-$1.json");
+  expect(JSON.parse(readFileSync(screen, "utf8"))).toEqual(tapped.nodes);
+});
+
+test("a check that expects no element reads no screen and writes no screen file", async () => {
+  const jobId = await launched();
+  const result = await run(
+    { jobId, logs: [{ tag: "smoke", message: "tapped" }] },
+    readers(tapped).deps,
+  );
+  const shot = result.secondOpinion?.screenshot ?? "";
+  expect(existsSync(shot.replace(/check-(\d+)\.png$/, "screen-$1.json"))).toBe(
+    false,
+  );
 });
 
 test("a result names the backend that read the screen, and any it passed over", async () => {
