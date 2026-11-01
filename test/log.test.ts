@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { firstErrors, stripAnsi } from "../src/core/log.ts";
+import { firstErrors, onlyOpenFailed, stripAnsi } from "../src/core/log.ts";
 
 const esc = String.fromCharCode(27);
 
@@ -68,4 +68,32 @@ test("falls back to the last lines when nothing looks like an error", () => {
     "line 10",
     "line 11",
   ]);
+});
+
+// Lines copied from CI run 41329647784: the build compiled and installed, then
+// Expo's own `simctl openurl` timed out (code 60) and `expo run:ios` exited 1.
+const openTimedOut = [
+  "\u203a Build Succeeded",
+  "\u203a 0 error(s), and 4 warning(s)",
+  "\u203a Installing on emd-f3854e2698c7",
+  "\u203a Opening on emd-f3854e2698c7 (com.emd.sandbox)",
+  "Error: xcrun simctl openurl 27E16346-5520-4AE2-A1AF-0C12F764D373 com.emd.sandbox://?__expo_url=http%3A%2F%2F192.168.64.22%3A8081 exited with non-zero code: 60",
+  "An error was encountered processing the command (domain=NSPOSIXErrorDomain, code=60):",
+  "Operation timed out",
+];
+
+test("recognizes a build that failed only in Expo's open step", () => {
+  expect(onlyOpenFailed(openTimedOut.join("\n"))).toBe(true);
+});
+
+test.each([
+  ["the compile did not succeed", 0],
+  ["the install had not returned", 3],
+  ["a different command failed", 4],
+])("does not continue when %s", (_name, drop) => {
+  const lines = [...openTimedOut];
+  if (drop === 4)
+    lines[4] = "Error: xcrun simctl install 27E1 exited with non-zero code: 1";
+  else lines.splice(drop, 1);
+  expect(onlyOpenFailed(lines.join("\n"))).toBe(false);
 });

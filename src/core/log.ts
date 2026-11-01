@@ -42,3 +42,16 @@ export function firstErrors(log: string, max = 5): string[] {
     found.length > 0 ? found : lines.slice(-max).map((l) => l.slice(0, maxLine))
   ).slice(0, max);
 }
+
+// True when `expo run:ios` compiled and installed the app and failed only in
+// its own open step: the build succeeded, the "Opening on" line (printed after
+// the install returned) is there, and the first error is `xcrun simctl openurl`.
+export function onlyOpenFailed(log: string): boolean {
+  const text = stripAnsi(log);
+  return (
+    text.includes("\u203a Build Succeeded") &&
+    /^\u203a Opening on /m.test(text) &&
+    /^Error: xcrun simctl openurl /m.test(text) &&
+    text.indexOf("\nError: ") === text.indexOf("\nError: xcrun simctl openurl ")
+  );
+}

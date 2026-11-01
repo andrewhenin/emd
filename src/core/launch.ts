@@ -8,7 +8,7 @@ import {
   pickPort,
   xcodebuildShim,
 } from "./isolate.js";
-import { firstErrors } from "./log.js";
+import { firstErrors, onlyOpenFailed } from "./log.js";
 import { startCapture, stopCaptures } from "./logs.js";
 import { confirm, reserve, worktreeKey } from "./owned.js";
 import { type LoggedProcess, startLogged } from "./process.js";
@@ -194,21 +194,34 @@ export async function launch(
   const buildLog = join(logDir, "build.log");
   const metroLog = join(logDir, "metro.log");
   const where = { device: { id: device.id, name: device.name }, logDir };
+  const sizes = async () => ({
+    derivedData: await diskMB(derivedData),
+    simulator: await diskMB(
+      join(homedir(), "Library/Developer/CoreSimulator/Devices", device.id),
+    ),
+  });
+  // A failure after the reservations still reports what they hold.
+  const stuck = async (reason: string, rest: Partial<LaunchResult> = {}) =>
+    failed(reason, {
+      ...where,
+      port,
+      derivedData,
+      diskMB: await sizes(),
+      ...rest,
+    });
 
   report("booting the simulator");
   try {
     await boot(device);
   } catch (error) {
-    return failed("The simulator did not boot.", {
-      ...where,
+    return stuck("The simulator did not boot.", {
       errors: String(error).split("\n").slice(0, 3),
     });
   }
 
   if (await metroRunning(port)) {
-    return failed(
+    return stuck(
       `Port ${port} already serves a dev server. Stop it and retry.`,
-      where,
     );
   }
   stopCaptures(root);
@@ -226,11 +239,11 @@ export async function launch(
   );
   if (metroState !== "ready") {
     metro.kill();
-    return failed(
+    return stuck(
       metroState === "exited"
         ? "The dev server exited before it was ready."
         : `The dev server was not ready after ${metroStartSeconds}s.`,
-      { ...where, errors: await logTail(metroLog) },
+      { errors: await logTail(metroLog) },
     );
   }
 
@@ -243,13 +256,19 @@ export async function launch(
   );
   if (outcome !== 0) {
     build.kill();
-    metro.kill();
-    return failed(
-      outcome === "timeout"
-        ? `The build did not finish in ${options.timeoutSeconds ?? defaultTimeoutSeconds}s.`
-        : `The build failed (exit ${outcome}).`,
-      { ...where, errors: await logTail(buildLog) },
-    );
+    const text = await readFile(buildLog, "utf8").catch(() => "");
+    // Expo's own open step timed out after the install; EMD opens the app next.
+    if (outcome === "timeout" || !onlyOpenFailed(text)) {
+      metro.kill();
+      return stuck(
+        outcome === "timeout"
+          ? `The build did not finish in ${options.timeoutSeconds ?? defaultTimeoutSeconds}s.`
+          : text.includes("\u203a Build Succeeded")
+            ? `The app compiled, but the install or open step failed (exit ${outcome}).`
+            : `The build failed (exit ${outcome}).`,
+        { errors: firstErrors(text) },
+      );
+    }
   }
 
   report("launching the app");
@@ -258,8 +277,7 @@ export async function launch(
     capture = await startCapture(device.id, appId, logDir);
   } catch (error) {
     metro.kill();
-    return failed("Built, but could not capture the app's log.", {
-      ...where,
+    return stuck("Built, but could not capture the app's log.", {
       errors: String(error).split("\n").slice(0, 3),
     });
   }
@@ -269,8 +287,7 @@ export async function launch(
   } catch (error) {
     capture.kill();
     metro.kill();
-    return failed(`Built, but launching ${appId} failed.`, {
-      ...where,
+    return stuck(`Built, but launching ${appId} failed.`, {
       errors: String(error).split("\n").slice(0, 3),
     });
   }
@@ -284,12 +301,7 @@ export async function launch(
     metro: { pid: metro.pid, port },
     logStream: { pid: capture.pid },
     derivedData,
-    diskMB: {
-      derivedData: await diskMB(derivedData),
-      simulator: await diskMB(
-        join(homedir(), "Library/Developer/CoreSimulator/Devices", device.id),
-      ),
-    },
+    diskMB: await sizes(),
     seconds: seconds(),
   };
 }
