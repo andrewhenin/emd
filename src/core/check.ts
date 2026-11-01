@@ -194,8 +194,14 @@ export async function check(
   const passed = [...logResults, ...elementResults].every((r) => r.found);
 
   report("taking a screenshot");
-  const shotPath = join(logDir, `check-${Date.now()}.png`);
+  const stamp = Date.now();
+  const shotPath = join(logDir, `check-${stamp}.png`);
   const shot = (await deps.screenshot(device, shotPath)) ? shotPath : undefined;
+  // What the screen reader got, next to the screenshot, for when they disagree.
+  if (screen) {
+    mkdirSync(logDir, { recursive: true });
+    writeFileSync(join(logDir, `screen-${stamp}.json`), JSON.stringify(nodes));
+  }
   const reading = options.agentReading;
   const secondOpinion =
     shot || reading

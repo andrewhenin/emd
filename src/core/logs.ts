@@ -95,7 +95,7 @@ export async function startCapture(
 ): Promise<LoggedProcess> {
   const exe = await appExecutable(device, appId);
   return startLogged(
-    `xcrun simctl spawn ${device} log stream --info --debug --style ndjson --predicate '${predicateFor(exe)}'`,
+    `xcrun simctl spawn ${device} log stream --info --style ndjson --predicate '${predicateFor(exe)}'`,
     { cwd: logDir, logPath: capturePath(logDir) },
   );
 }
