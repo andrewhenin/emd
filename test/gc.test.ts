@@ -25,7 +25,7 @@ beforeEach(() => {
 echo "$@" >> "${calls}"
 case "$*" in
   "simctl list devices --json") cat "${join(bin, "sims.json")}" ;;
-  *"$GC_FAIL"*) [ -n "$GC_FAIL" ] && { echo "boom" >&2; exit 1; } ;;
+  *"$GC_FAIL"*) [ -n "$GC_FAIL" ] && { echo "\${GC_FAIL_MESSAGE:-boom}" >&2; exit 1; } ;;
 esac
 exit 0
 `,
@@ -192,4 +192,16 @@ test("emd-* simulators no ledger mentions are listed and left alone", () => {
     { id: "UDID-orphan", name: "emd-orphan" },
   ]);
   expect(log()).toEqual(["simctl list devices --json"]);
+});
+
+test("a shutdown that finds the simulator already shut down still deletes it", () => {
+  worktree("aaa", join(state, "gone"));
+  sims([{ id: "UDID-aaa", name: "emd-aaa", state: "Booted" }]);
+  const { status, out } = gc(["--apply"], {
+    GC_FAIL: "shutdown",
+    GC_FAIL_MESSAGE: "current state: Shutdown",
+  });
+  expect(status).toBe(0);
+  expect(out.entries[0].status).toBe("removed");
+  expect(log()).toContain("simctl delete UDID-aaa");
 });

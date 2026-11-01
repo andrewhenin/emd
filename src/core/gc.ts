@@ -1,12 +1,10 @@
 import { execFile } from "node:child_process";
 import { existsSync, readdirSync, rmSync, statSync } from "node:fs";
-import { homedir } from "node:os";
 import { join, relative, sep } from "node:path";
 import { promisify } from "node:util";
 import { diskMB } from "./isolate.js";
 import { firstLine } from "./log.js";
 import { type KeyedLedger, listLedgers, removeLedger } from "./owned.js";
-import type { GcResult } from "./result.js";
 import {
   listSimulators,
   removeSimulator,
@@ -15,6 +13,28 @@ import {
 import { homeDir } from "./state.js";
 
 const run = promisify(execFile);
+
+export type GcResult = {
+  verdict: "dry-run" | "applied" | "failed";
+  reason?: string;
+  // One per ledger whose worktree root no longer exists.
+  entries: {
+    key: string;
+    root: string;
+    simulator?: string;
+    derivedData?: string;
+    // DerivedData and bin folders by `du`; simulator clones share blocks, so
+    // their size is left out and the real gain is `freedMB`.
+    mb: number;
+    status: "stale" | "removed" | "skipped" | "failed";
+    reason?: string;
+  }[];
+  // `emd-*` simulators no ledger mentions. Listed, never touched.
+  unreferencedSimulators: { id: string; name: string }[];
+  totalMB: number;
+  // Free disk after minus before, by `df`. Only when something was removed.
+  freedMB?: number;
+};
 
 type Entry = GcResult["entries"][number];
 
@@ -67,6 +87,7 @@ async function freeMB(path: string): Promise<number> {
   return Number(stdout.trim().split("\n")[1]?.split(/\s+/)[3]) / 1024;
 }
 
+// CLI only, no MCP tool: it deletes things, so a person runs it on purpose.
 // Removes what EMD made for worktrees that no longer exist (decision 0006).
 // Without `apply` it only reports. The ledger file goes last, and only when
 // every step before it worked, so a failure is retried on the next run.
@@ -151,8 +172,10 @@ export async function gc(options: { apply?: boolean } = {}): Promise<GcResult> {
     });
   }
 
-  const probe = existsSync(homeDir()) ? homeDir() : homedir();
-  const before = await freeMB(probe).catch(() => undefined);
+  if (!entries.some((e) => e.entry.status === "stale")) {
+    return result({ entries: done(), unreferencedSimulators, totalMB });
+  }
+  const before = await freeMB(homeDir()).catch(() => undefined);
   for (const { entry, ledger, sim } of entries) {
     if (entry.status !== "stale") continue;
     try {
@@ -175,7 +198,7 @@ export async function gc(options: { apply?: boolean } = {}): Promise<GcResult> {
       entry.reason = firstLine(error);
     }
   }
-  const after = await freeMB(probe).catch(() => undefined);
+  const after = await freeMB(homeDir()).catch(() => undefined);
   return result({
     entries: done(),
     unreferencedSimulators,
