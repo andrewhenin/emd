@@ -22,6 +22,8 @@ type Ledger = { root: string; resources: Entry[] };
 // A ledger with its file name, which is the key it was written under.
 export type KeyedLedger = Ledger & { key: string };
 
+const LEDGER_FILE = /^[0-9a-f]{12}\.json$/;
+
 const ownedDir = () => join(homeDir(), "owned");
 
 export function worktreeKey(root: string): string {
@@ -55,7 +57,7 @@ export function listLedgers(): KeyedLedger[] {
     );
   }
   return names
-    .filter((name) => name.endsWith(".json"))
+    .filter((name) => LEDGER_FILE.test(name))
     .flatMap((name) => {
       const ledger = readLedger(join(ownedDir(), name));
       return ledger ? [{ ...ledger, key: name.slice(0, -".json".length) }] : [];
