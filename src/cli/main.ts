@@ -188,7 +188,10 @@ export async function run(argv: string[]): Promise<number> {
       });
       const result = await gc({ apply: values.apply });
       console.log(JSON.stringify(result));
-      return result.verdict === "failed" ? 1 : 0;
+      const failed =
+        result.verdict === "failed" ||
+        result.entries.some((e) => e.status === "failed");
+      return failed ? 1 : 0;
     }
     default:
       console.error(`emd: unknown command "${command}". ${usage}`);

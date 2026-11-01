@@ -148,7 +148,7 @@ test("a failed step keeps the ledger and the check count, and says why", () => {
   worktree("aaa", join(state, "gone"));
   sims([{ id: "UDID-aaa", name: "emd-aaa" }]);
   const { status, out } = gc(["--apply"], { GC_FAIL: "delete" });
-  expect(status).toBe(0);
+  expect(status).toBe(1);
   expect(out.entries[0].status).toBe("failed");
   expect(out.entries[0].reason).toContain("simctl delete UDID-aaa");
   expect(has("owned", "aaa.json")).toBe(true);
