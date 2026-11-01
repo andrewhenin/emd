@@ -114,3 +114,28 @@ test("when no backend can read the screen, the error names each reason", async (
     "axe: axe is not installed; maestro: maestro is not installed",
   );
 });
+
+const empty = (id: BackendId): DeviceBackend => ({
+  id,
+  readScreen: async () => [],
+});
+
+test("an empty tree is a failed read: the next backend answers, and why is recorded", async () => {
+  const read = await readScreen("udid", env(), [
+    empty("axe"),
+    works("maestro"),
+  ]);
+  expect(read.backend).toBe("maestro");
+  expect(read.nodes).toEqual(nodesFrom("maestro"));
+  expect(read.fellBack).toEqual([
+    { backend: "axe", reason: "Error: returned an empty tree" },
+  ]);
+});
+
+test("when every backend reads nothing, the read fails and names each", async () => {
+  await expect(
+    readScreen("udid", env(), [empty("axe"), empty("maestro")]),
+  ).rejects.toThrow(
+    "no backend could read the screen (axe: Error: returned an empty tree; maestro: Error: returned an empty tree)",
+  );
+});

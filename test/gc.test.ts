@@ -94,96 +94,101 @@ const log = () =>
 const has = (...parts: string[]) => existsSync(join(state, ...parts));
 
 test("a dry run lists a stale entry and changes nothing", () => {
-  const derived = worktree("aaa", join(state, "gone"));
-  sims([{ id: "UDID-aaa", name: "emd-aaa" }]);
+  const derived = worktree("aaaaaaaaaaaa", join(state, "gone"));
+  sims([{ id: "UDID-aaaaaaaaaaaa", name: "emd-aaaaaaaaaaaa" }]);
   const { status, out } = gc();
   expect(status).toBe(0);
   expect(out.verdict).toBe("dry-run");
   expect(out.entries).toEqual([
     expect.objectContaining({
-      key: "aaa",
+      key: "aaaaaaaaaaaa",
       root: join(state, "gone"),
-      simulator: "UDID-aaa",
+      simulator: "UDID-aaaaaaaaaaaa",
       derivedData: derived,
       status: "stale",
     }),
   ]);
-  expect(has("owned", "aaa.json")).toBe(true);
-  expect(has("derived", "aaa")).toBe(true);
+  expect(has("owned", "aaaaaaaaaaaa.json")).toBe(true);
+  expect(has("derived", "aaaaaaaaaaaa")).toBe(true);
   expect(log()).toEqual(["simctl list devices --json"]);
 });
 
 test("an entry whose root exists is never touched", () => {
-  worktree("live", state);
+  worktree("bbbbbbbbbbbb", state);
   const { out } = gc(["--apply"]);
   expect(out.entries).toEqual([]);
-  expect(has("owned", "live.json")).toBe(true);
-  expect(has("derived", "live")).toBe(true);
+  expect(has("owned", "bbbbbbbbbbbb.json")).toBe(true);
+  expect(has("derived", "bbbbbbbbbbbb")).toBe(true);
   expect(log()).toEqual(["simctl list devices --json"]);
 });
 
 test("--apply removes the simulator, folders and check count, then the ledger", () => {
-  worktree("aaa", join(state, "gone"));
-  sims([{ id: "UDID-aaa", name: "emd-aaa", state: "Booted" }]);
+  worktree("aaaaaaaaaaaa", join(state, "gone"));
+  sims([
+    { id: "UDID-aaaaaaaaaaaa", name: "emd-aaaaaaaaaaaa", state: "Booted" },
+  ]);
   const { out } = gc(["--apply"]);
   expect(out.verdict).toBe("applied");
-  expect(out.entries[0]).toMatchObject({ key: "aaa", status: "removed" });
+  expect(out.entries[0]).toMatchObject({
+    key: "aaaaaaaaaaaa",
+    status: "removed",
+  });
   expect(typeof out.freedMB).toBe("number");
   expect(log()).toEqual([
     "simctl list devices --json",
-    "simctl shutdown UDID-aaa",
-    "simctl delete UDID-aaa",
+    "simctl shutdown UDID-aaaaaaaaaaaa",
+    "simctl delete UDID-aaaaaaaaaaaa",
   ]);
   for (const path of [
-    ["owned", "aaa.json"],
-    ["derived", "aaa"],
-    ["bin", "aaa"],
-    ["checks", "aaa.json"],
+    ["owned", "aaaaaaaaaaaa.json"],
+    ["derived", "aaaaaaaaaaaa"],
+    ["bin", "aaaaaaaaaaaa"],
+    ["checks", "aaaaaaaaaaaa.json"],
   ]) {
     expect(has(...path)).toBe(false);
   }
 });
 
 test("a failed step keeps the ledger and the check count, and says why", () => {
-  worktree("aaa", join(state, "gone"));
-  sims([{ id: "UDID-aaa", name: "emd-aaa" }]);
+  worktree("aaaaaaaaaaaa", join(state, "gone"));
+  sims([{ id: "UDID-aaaaaaaaaaaa", name: "emd-aaaaaaaaaaaa" }]);
   const { status, out } = gc(["--apply"], { GC_FAIL: "delete" });
   expect(status).toBe(1);
   expect(out.entries[0].status).toBe("failed");
-  expect(out.entries[0].reason).toContain("simctl delete UDID-aaa");
-  expect(has("owned", "aaa.json")).toBe(true);
-  expect(has("checks", "aaa.json")).toBe(true);
-  expect(has("derived", "aaa")).toBe(true);
+  expect(out.entries[0].reason).toContain("simctl delete UDID-aaaaaaaaaaaa");
+  expect(has("owned", "aaaaaaaaaaaa.json")).toBe(true);
+  expect(has("checks", "aaaaaaaaaaaa.json")).toBe(true);
+  expect(has("derived", "aaaaaaaaaaaa")).toBe(true);
 });
 
 test("an entry whose key folder holds anything else is skipped", () => {
-  const derived = worktree("aaa", join(state, "gone"));
+  const derived = worktree("aaaaaaaaaaaa", join(state, "gone"));
   writeFileSync(join(derived, "..", "stray.txt"), "mine");
-  sims([{ id: "UDID-aaa", name: "emd-aaa" }]);
+  sims([{ id: "UDID-aaaaaaaaaaaa", name: "emd-aaaaaaaaaaaa" }]);
   const { out } = gc(["--apply"]);
   expect(out.entries[0].status).toBe("skipped");
   expect(out.entries[0].reason).toContain("holds more");
-  expect(has("owned", "aaa.json")).toBe(true);
+  expect(has("owned", "aaaaaaaaaaaa.json")).toBe(true);
   expect(
-    has("derived", "aaa", "Developer/Xcode/DerivedData", "stray.txt"),
+    has("derived", "aaaaaaaaaaaa", "Developer/Xcode/DerivedData", "stray.txt"),
   ).toBe(true);
   expect(log()).toEqual(["simctl list devices --json"]);
 });
 
 test("a simulator not named emd-<key> is never deleted", () => {
-  worktree("aaa", join(state, "gone"));
-  sims([{ id: "UDID-aaa", name: "iPhone 17 Pro" }]);
+  worktree("aaaaaaaaaaaa", join(state, "gone"));
+  sims([{ id: "UDID-aaaaaaaaaaaa", name: "iPhone 17 Pro" }]);
   const { out } = gc(["--apply"]);
   expect(out.entries[0].status).toBe("skipped");
-  expect(out.entries[0].reason).toContain("not emd-aaa");
+  expect(out.entries[0].reason).toContain("not emd-aaaaaaaaaaaa");
   expect(log()).toEqual(["simctl list devices --json"]);
-  expect(has("owned", "aaa.json")).toBe(true);
+  expect(has("owned", "aaaaaaaaaaaa.json")).toBe(true);
 });
 
 test("emd-* simulators no ledger mentions are listed and left alone", () => {
-  worktree("live", state);
+  worktree("bbbbbbbbbbbb", state);
   sims([
-    { id: "UDID-live", name: "emd-live" },
+    { id: "UDID-bbbbbbbbbbbb", name: "emd-bbbbbbbbbbbb" },
     { id: "UDID-orphan", name: "emd-orphan" },
     { id: "UDID-other", name: "iPhone 17" },
   ]);
@@ -195,13 +200,15 @@ test("emd-* simulators no ledger mentions are listed and left alone", () => {
 });
 
 test("a shutdown that finds the simulator already shut down still deletes it", () => {
-  worktree("aaa", join(state, "gone"));
-  sims([{ id: "UDID-aaa", name: "emd-aaa", state: "Booted" }]);
+  worktree("aaaaaaaaaaaa", join(state, "gone"));
+  sims([
+    { id: "UDID-aaaaaaaaaaaa", name: "emd-aaaaaaaaaaaa", state: "Booted" },
+  ]);
   const { status, out } = gc(["--apply"], {
     GC_FAIL: "shutdown",
     GC_FAIL_MESSAGE: "current state: Shutdown",
   });
   expect(status).toBe(0);
   expect(out.entries[0].status).toBe("removed");
-  expect(log()).toContain("simctl delete UDID-aaa");
+  expect(log()).toContain("simctl delete UDID-aaaaaaaaaaaa");
 });

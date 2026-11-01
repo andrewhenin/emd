@@ -1,13 +1,11 @@
-import { execFile, execFileSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { promisify } from "node:util";
 import { readJobs } from "./jobstore.js";
 import { type LoggedProcess, startLogged } from "./process.js";
 import type { LaunchResult, LogsResult } from "./result.js";
 import { resolveRun } from "./run.js";
-
-const run = promisify(execFile);
+import { runTool } from "./tool.js";
 
 // A tagged line is any log message with `[EMD:<tag>]` in it. The app writes it
 // with console.log (or NSLog); the simulator keeps it in its unified log at
@@ -65,20 +63,25 @@ export function parseTagged(ndjson: string, tag?: string): TaggedLine[] {
 }
 
 async function appExecutable(device: string, appId: string): Promise<string> {
-  const { stdout } = await run("xcrun", [
-    "simctl",
-    "get_app_container",
-    device,
-    appId,
-  ]);
-  const { stdout: name } = await run("plutil", [
-    "-extract",
-    "CFBundleExecutable",
-    "raw",
-    "-o",
-    "-",
-    `${stdout.trim()}/Info.plist`,
-  ]);
+  const { stdout } = await runTool(
+    "simctl get_app_container",
+    "xcrun",
+    ["simctl", "get_app_container", device, appId],
+    60,
+  );
+  const { stdout: name } = await runTool(
+    "plutil",
+    "plutil",
+    [
+      "-extract",
+      "CFBundleExecutable",
+      "raw",
+      "-o",
+      "-",
+      `${stdout.trim()}/Info.plist`,
+    ],
+    30,
+  );
   return name.trim();
 }
 

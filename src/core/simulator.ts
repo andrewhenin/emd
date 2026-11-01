@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { runTool } from "./tool.js";
 
 const run = promisify(execFile);
 
@@ -19,13 +20,12 @@ type SimctlList = {
 };
 
 export async function listDevices(): Promise<Device[]> {
-  const { stdout } = await run("xcrun", [
-    "simctl",
-    "list",
-    "devices",
-    "available",
-    "--json",
-  ]);
+  const { stdout } = await runTool(
+    "simctl list",
+    "xcrun",
+    ["simctl", "list", "devices", "available", "--json"],
+    60,
+  );
   const { devices } = JSON.parse(stdout) as SimctlList;
   return Object.entries(devices).flatMap(([runtime, list]) => {
     const match = runtime.match(/\.iOS-([\d-]+)$/);
@@ -64,7 +64,7 @@ export function pickDevice(
 export async function boot(device: Device): Promise<void> {
   if (device.state !== "Booted") {
     try {
-      await run("xcrun", ["simctl", "boot", device.id]);
+      await runTool("simctl boot", "xcrun", ["simctl", "boot", device.id], 120);
     } catch (error) {
       // Booting a device that is already booted is not a failure.
       if (!/current state: Booted/i.test(String(error))) throw error;
@@ -80,7 +80,12 @@ export async function launchApp(
   device: Device,
   appId: string,
 ): Promise<number> {
-  const { stdout } = await run("xcrun", ["simctl", "launch", device.id, appId]);
+  const { stdout } = await runTool(
+    "simctl launch",
+    "xcrun",
+    ["simctl", "launch", device.id, appId],
+    120,
+  );
   const pid = Number(stdout.trim().split(":").pop());
   if (!Number.isInteger(pid)) throw new Error(`unexpected output: ${stdout}`);
   return pid;
