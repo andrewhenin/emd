@@ -3,7 +3,12 @@ import { createServer } from "node:net";
 import { join } from "node:path";
 import { beforeEach, expect, test } from "vitest";
 import { pickPort } from "../src/core/isolate.ts";
-import { confirm, reserve, worktreeKey } from "../src/core/owned.ts";
+import {
+  confirm,
+  listLedgers,
+  reserve,
+  worktreeKey,
+} from "../src/core/owned.ts";
 import { makeDir } from "./helpers.ts";
 
 // The ownership ledger (decision 0006) on a real temp state dir.
@@ -68,4 +73,14 @@ test("a worktree gets the same Metro port on relaunch, whoever allocated since",
   const again = await reserve("/work/app", "port", pickPort);
   expect(again.id).toBe(first.id);
   expect(await reserve("/work/other", "port", pickPort)).not.toEqual(first);
+});
+
+test("a stray file in owned/ is ignored", async () => {
+  await reserve("/work/app", "port", pickPort);
+  const dir = join(process.env.EMD_STATE_DIR ?? "", "owned");
+  writeFileSync(join(dir, "notes.json"), "{broken");
+  writeFileSync(join(dir, `${worktreeKey("/work/app")}.json.tmp`), "{broken");
+  expect(listLedgers().map((ledger) => ledger.key)).toEqual([
+    worktreeKey("/work/app"),
+  ]);
 });
