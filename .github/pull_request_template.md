@@ -19,7 +19,3 @@ Closes #
 ## Notes
 
 - [ ] Finding, decision or rule added per docs/logging.md, or none needed
-
-## Author readiness
-
-- [ ] Ready for review (human owner only; agents never tick this)

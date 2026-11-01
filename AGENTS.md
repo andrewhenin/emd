@@ -36,7 +36,6 @@ Notes, findings and decisions: follow [docs/logging.md](docs/logging.md) exactly
 - Optimize agent tokens per completed task first, then time, then CPU and memory.
 - Report only checks that actually ran. Say which ones did not.
 - Never mark a PR ready for review. Never claim a human reviewed anything.
-- Never tick the author-readiness checkbox in the PR template. Only the human owner does.
 - Never push to `main` and never force-push. Always work on a branch and open a draft PR.
 - To update a PR branch, merge main into it. Never force-push.
 - If scope changes during a PR, update the linked issue's acceptance criteria in the same PR.
