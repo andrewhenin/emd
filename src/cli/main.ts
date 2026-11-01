@@ -4,6 +4,7 @@ import {
   check,
   detect,
   evidence,
+  gc,
   jobStatus,
   launch,
   logs,
@@ -13,7 +14,7 @@ import {
 } from "../core/index.js";
 
 const usage =
-  "Commands: detect [dir], launch [dir] [--device X] [--timeout N], job status <id>, logs <jobId> [--tag T] [--limit N], check <jobId> [--log TAG[=TEXT]] [--element id=X|text=Y] [--name N] [--agent pass|fail], check reset [dir], evidence <jobId>, mcp";
+  "Commands: detect [dir], launch [dir] [--device X] [--timeout N], job status <id>, logs <jobId> [--tag T] [--limit N], check <jobId> [--log TAG[=TEXT]] [--element id=X|text=Y] [--name N] [--agent pass|fail], check reset [dir], evidence <jobId>, gc [--apply], mcp";
 
 // --log smoke   or   --log smoke=tapped
 const logSpec = (raw: string) => {
@@ -179,6 +180,18 @@ export async function run(argv: string[]): Promise<number> {
       const result = await evidence({ jobId });
       console.log(JSON.stringify(result));
       return result.verdict === "written" ? 0 : 1;
+    }
+    case "gc": {
+      const { values } = parseArgs({
+        args,
+        options: { apply: { type: "boolean" } },
+      });
+      const result = await gc({ apply: values.apply });
+      console.log(JSON.stringify(result));
+      const failed =
+        result.verdict === "failed" ||
+        result.entries.some((e) => e.status === "failed");
+      return failed ? 1 : 0;
     }
     default:
       console.error(`emd: unknown command "${command}". ${usage}`);
