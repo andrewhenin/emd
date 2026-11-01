@@ -47,6 +47,9 @@ export async function readScreen(
     }
     try {
       const nodes = await read(device, bin);
+      // Every good read includes the app's root node, so none means the read
+      // failed (AXe sometimes reads nothing right after a relaunch).
+      if (nodes.length === 0) throw new Error("returned an empty tree");
       return {
         nodes,
         backend: id,
