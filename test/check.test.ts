@@ -7,7 +7,7 @@ import {
   type Deps,
   resetChecks,
 } from "../src/core/check.ts";
-import type { ScreenRead } from "../src/core/device/backend.ts";
+import { readScreen, type ScreenRead } from "../src/core/device/backend.ts";
 import type { UiNode } from "../src/core/device/screen.ts";
 import type { LogsResult } from "../src/core/result.ts";
 import { cli, launchedJob, makeDir } from "./helpers.ts";
@@ -301,6 +301,25 @@ test("the count follows the project across relaunches", async () => {
   });
   const elsewhere = await launched("/work/other");
   expect((await run({ jobId: elsewhere, ...options }, deps)).attempt).toBe(1);
+});
+
+test("a screen that reads as empty on every backend is an error, not a missing element", async () => {
+  const jobId = await launched();
+  const options = { jobId, elements: [{ text: "Tapped" }] };
+  const empty = { id: "axe" as const, readScreen: async () => [] };
+  const { deps } = readers(tapped, {
+    screen: (device) =>
+      readScreen(device, { axe: "/bin/axe" }, [
+        empty,
+        { ...empty, id: "maestro" },
+      ]),
+  });
+  const result = await run(options, deps);
+  expect(result.verdict).toBe("error");
+  expect(result.reason).toContain("returned an empty tree");
+  expect(result.attempt).toBeUndefined();
+  const next = await run(options, readers({ nodes: [] }).deps);
+  expect(next).toMatchObject({ verdict: "failed", attempt: 1 });
 });
 
 test("a check that cannot run is an error and does not count", async () => {
