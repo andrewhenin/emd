@@ -30,13 +30,9 @@ export type LogsOptions = {
 
 // Only this app's process: `log` itself logs its own arguments, and those
 // contain the tag marker, so a message filter alone would match its own run.
-export function predicateFor(exe: string, tag?: string): string {
+export function predicateFor(exe: string): string {
   if (!executable.test(exe)) throw new Error(`unexpected executable "${exe}"`);
-  if (tag !== undefined && !tagPattern.test(tag)) {
-    throw new Error(`unexpected tag "${tag}"`);
-  }
-  const marker = tag ? `[EMD:${tag}]` : "[EMD:";
-  return `processImagePath ENDSWITH "/${exe}" AND eventMessage CONTAINS "${marker}"`;
+  return `processImagePath ENDSWITH "/${exe}" AND eventMessage CONTAINS "[EMD:"`;
 }
 
 function isoTime(stamp: string): string {
@@ -104,8 +100,10 @@ export async function startCapture(
   );
 }
 
-// A run lasts until the next launch in the same worktree. The pid is checked
-// before it is signalled, as the recorded one may belong to something else now.
+// A run lasts until the next launch in the same worktree, not until the app
+// exits: Maestro's launchApp restarts the app, so its pid changes mid-run. The
+// pid is checked before it is signalled, as the recorded one may belong to
+// something else now.
 export function stopCaptures(root: string): void {
   for (const job of readJobs()) {
     const result =

@@ -13,7 +13,8 @@ import { makeDir } from "./helpers.ts";
 
 process.env.EMD_STATE_DIR = makeDir();
 
-// Shapes copied from a real `simctl spawn <udid> log show --style ndjson` run.
+// Shapes copied from a real `simctl spawn <udid> log show --style ndjson` run;
+// `log stream --style ndjson` writes the same shape.
 const entry = (eventMessage: string, timestamp: string) =>
   JSON.stringify({ timestamp, eventMessage, messageType: "Info" });
 
@@ -69,20 +70,14 @@ test("the predicate names the app's process and the tag marker", () => {
   expect(predicateFor("emdsandbox")).toBe(
     'processImagePath ENDSWITH "/emdsandbox" AND eventMessage CONTAINS "[EMD:"',
   );
-  expect(predicateFor("emdsandbox", "smoke")).toContain(
-    'CONTAINS "[EMD:smoke]"',
-  );
 });
 
-test.each([
-  ['x" OR TRUEPREDICATE OR "', undefined],
-  ["app", 'a"b'],
-  ["app", "a b"],
-  ["app", "a]"],
-  ["", undefined],
-])("the predicate refuses unsafe input (%j, %j)", (exe, tag) => {
-  expect(() => predicateFor(exe, tag)).toThrow();
-});
+test.each(['x" OR TRUEPREDICATE OR "', ""])(
+  "the predicate refuses unsafe input (%j)",
+  (exe) => {
+    expect(() => predicateFor(exe)).toThrow();
+  },
+);
 
 test.each([
   ["a tag with a quote", { jobId: "deadbeef", tag: 'a"b' }, /A tag has/],
