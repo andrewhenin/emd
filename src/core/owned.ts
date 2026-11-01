@@ -5,6 +5,7 @@ import {
   readFileSync,
   realpathSync,
   renameSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
@@ -18,6 +19,8 @@ import { homeDir } from "./state.js";
 export type Kind = "simulator" | "derivedData" | "port";
 export type Entry = { kind: Kind; id: string; state: "creating" | "owned" };
 type Ledger = { root: string; resources: Entry[] };
+// A ledger with its file name, which is the key it was written under.
+export type KeyedLedger = Ledger & { key: string };
 
 const ownedDir = () => join(homeDir(), "owned");
 
@@ -41,7 +44,7 @@ function readLedger(path: string): Ledger | undefined {
   }
 }
 
-function readAll(): Ledger[] {
+export function listLedgers(): KeyedLedger[] {
   let names: string[];
   try {
     names = readdirSync(ownedDir());
@@ -53,8 +56,14 @@ function readAll(): Ledger[] {
   }
   return names
     .filter((name) => name.endsWith(".json"))
-    .flatMap((name) => readLedger(join(ownedDir(), name)) ?? []);
+    .flatMap((name) => {
+      const ledger = readLedger(join(ownedDir(), name));
+      return ledger ? [{ ...ledger, key: name.slice(0, -".json".length) }] : [];
+    });
 }
+
+export const removeLedger = (key: string): void =>
+  rmSync(join(ownedDir(), `${key}.json`), { force: true });
 
 function write(root: string, ledger: Ledger): void {
   const path = ledgerFile(root);
@@ -85,7 +94,7 @@ export const reserve = (
   pick: (taken: Set<string>) => Promise<string> | string,
 ): Promise<Entry> =>
   locked(async () => {
-    const all = readAll();
+    const all = listLedgers();
     const mine = readLedger(ledgerFile(root)) ?? { root, resources: [] };
     const existing = mine.resources.find((entry) => entry.kind === kind);
     if (existing) return existing;

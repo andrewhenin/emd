@@ -112,6 +112,34 @@ export const evidenceResultSchema = z.object({
 
 export type EvidenceResult = z.infer<typeof evidenceResultSchema>;
 
+export const gcResultSchema = z.object({
+  verdict: z.enum(["dry-run", "applied", "failed"]),
+  reason: z.string().optional(),
+  // One per ledger whose worktree root no longer exists.
+  entries: z.array(
+    z.object({
+      key: z.string(),
+      root: z.string(),
+      simulator: z.string().optional(),
+      derivedData: z.string().optional(),
+      // DerivedData and bin folders by `du`; simulator clones share blocks, so
+      // their size is left out and the real gain is `freedMB`.
+      mb: z.number(),
+      status: z.enum(["stale", "removed", "skipped", "failed"]),
+      reason: z.string().optional(),
+    }),
+  ),
+  // `emd-*` simulators no ledger mentions. Listed, never touched.
+  unreferencedSimulators: z.array(
+    z.object({ id: z.string(), name: z.string() }),
+  ),
+  totalMB: z.number(),
+  // Free disk after minus before, by `df`. Only when applied.
+  freedMB: z.number().optional(),
+});
+
+export type GcResult = z.infer<typeof gcResultSchema>;
+
 // What a caller sees of a job: enough to know where it is, small enough to
 // poll. `result` appears once the job has finished.
 export const jobViewSchema = z.object({

@@ -10,6 +10,7 @@ export type {
 export { check, resetChecks } from "./check.js";
 export { detect } from "./detect.js";
 export { evidence } from "./evidence.js";
+export { gc } from "./gc.js";
 export { jobStatus, runJob, startJob } from "./jobs.js";
 export { launch } from "./launch.js";
 export { logs } from "./logs.js";
@@ -21,6 +22,8 @@ export {
   detectResultSchema,
   type EvidenceResult,
   evidenceResultSchema,
+  type GcResult,
+  gcResultSchema,
   type JobView,
   jobViewSchema,
   type LaunchResult,
