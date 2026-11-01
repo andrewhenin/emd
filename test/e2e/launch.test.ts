@@ -1,4 +1,4 @@
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/client";
@@ -147,26 +147,40 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
 
     // Tagged logs. The sandbox's tap flow restarts the app (Maestro's
     // launchApp), so the app's pid changes: a run is read by app and time.
+    // Async, so vitest's worker keeps answering while Maestro runs for minutes.
     const tapFlow = () =>
-      spawnSync(
-        "maestro",
-        [
-          "--device",
-          final.result?.device.id ?? "",
-          "test",
-          ".maestro/smoke.yaml",
-        ],
-        {
-          cwd: sandbox,
-          encoding: "utf8",
-          env: {
-            ...process.env,
-            PATH: `${process.env.HOME}/.maestro/bin:${process.env.PATH}`,
-            JAVA_HOME: process.env.JAVA_HOME ?? "/opt/homebrew/opt/openjdk@17",
-            MAESTRO_DRIVER_STARTUP_TIMEOUT: "300000",
+      new Promise<{ status: number | null; output: string }>((resolve) => {
+        const child = spawn(
+          "maestro",
+          [
+            "--device",
+            final.result?.device.id ?? "",
+            "test",
+            ".maestro/smoke.yaml",
+          ],
+          {
+            cwd: sandbox,
+            env: {
+              ...process.env,
+              PATH: `${process.env.HOME}/.maestro/bin:${process.env.PATH}`,
+              JAVA_HOME:
+                process.env.JAVA_HOME ?? "/opt/homebrew/opt/openjdk@17",
+              MAESTRO_DRIVER_STARTUP_TIMEOUT: "300000",
+            },
           },
-        },
-      );
+        );
+        let output = "";
+        child.stdout.on("data", (chunk) => {
+          output += chunk;
+        });
+        child.stderr.on("data", (chunk) => {
+          output += chunk;
+        });
+        child.on("error", (error) =>
+          resolve({ status: null, output: `${output}\n${error}` }),
+        );
+        child.on("close", (status) => resolve({ status, output }));
+      });
     const readLogs = async (jobId: string, extra: object = {}) =>
       (await client.callTool({ name: "logs", arguments: { jobId, ...extra } }))
         .structuredContent as Logs;
@@ -174,10 +188,8 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
     test(
       "logs returns the tag the app wrote after a tap, from this run only",
       async () => {
-        const tap = tapFlow();
-        expect(tap.status, `${tap.stdout}\n${tap.stderr}\n${tap.error}`).toBe(
-          0,
-        );
+        const tap = await tapFlow();
+        expect(tap.status, tap.output).toBe(0);
         const result = await readLogs(first.jobId);
         expect(result.verdict).toBe("ok");
         expect(result.lines).toContainEqual({
@@ -314,10 +326,8 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
           expect(before.result?.fellBack).toBeUndefined();
         }
 
-        const tap = tapFlow();
-        expect(tap.status, `${tap.stdout}\n${tap.stderr}\n${tap.error}`).toBe(
-          0,
-        );
+        const tap = await tapFlow();
+        expect(tap.status, tap.output).toBe(0);
         const after = await runCheck({
           logs: tappedLog,
           elements: [{ id: "smoke-button" }, { text: "Tapped" }],
