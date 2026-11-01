@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.7.0](https://github.com/andrewhenin/emd/compare/emd-agents-v0.6.1...emd-agents-v0.7.0) (2026-11-01)
+
+
+### ⚠ BREAKING CHANGES
+
+* name a run by its launch job only ([#71](https://github.com/andrewhenin/emd/issues/71))
+
+### Features
+
+* emd gc removes resources of worktrees that no longer exist ([#79](https://github.com/andrewhenin/emd/issues/79)) ([fa0007e](https://github.com/andrewhenin/emd/commit/fa0007e614605de3c449dc9b4a17cf9e2e277656))
+* name a run by its launch job only ([#71](https://github.com/andrewhenin/emd/issues/71)) ([f8f062b](https://github.com/andrewhenin/emd/commit/f8f062b84036374b7887720171192fbef113f1bd))
+
+
+### Bug Fixes
+
+* capture the app's log lines during the run ([#81](https://github.com/andrewhenin/emd/issues/81)) ([8271811](https://github.com/andrewhenin/emd/commit/8271811a241be79dd24bfab54465d1b0947dec54))
+* run AXe and Maestro from the path where they were found ([#76](https://github.com/andrewhenin/emd/issues/76)) ([86edb59](https://github.com/andrewhenin/emd/commit/86edb59236c75099b9179feb4371d9ced7129988))
+
 ## [0.6.1](https://github.com/andrewhenin/emd/compare/emd-agents-v0.6.0...emd-agents-v0.6.1) (2026-10-29)
 
 
