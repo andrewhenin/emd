@@ -1,4 +1,10 @@
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import type { CheckOptions } from "./check.js";
 import type { LaunchOptions } from "./launch.js";
@@ -43,6 +49,17 @@ export function readJob(id: string): Job | undefined {
     return JSON.parse(readFileSync(fileOf(id), "utf8")) as Job;
   } catch {
     return undefined;
+  }
+}
+
+export function readJobs(): Job[] {
+  try {
+    return readdirSync(jobsDir())
+      .filter((name) => name.endsWith(".json"))
+      .map((name) => readJob(name.slice(0, -".json".length)))
+      .filter((job) => job !== undefined);
+  } catch {
+    return [];
   }
 }
 
