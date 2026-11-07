@@ -300,6 +300,17 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
         new Set(),
       )) as unknown as CheckView;
 
+    // The result names the backend that read the screen (decision 0004);
+    // if it is not AXe, it says why AXe was passed over. Each read picks its own.
+    const expectBackendNamed = (view: CheckView) => {
+      expect(["axe", "maestro"]).toContain(view.result?.backend);
+      if (view.result?.backend === "maestro") {
+        expect(view.result.fellBack?.[0]?.backend).toBe("axe");
+      } else {
+        expect(view.result?.fellBack).toBeUndefined();
+      }
+    };
+
     test(
       "a check fails before the tap and passes after it, from the real log and screen",
       async () => {
@@ -317,14 +328,7 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
         expect(existsSync(before.result?.secondOpinion?.screenshot ?? "")).toBe(
           true,
         );
-        // The result names the backend that read the screen (decision 0004);
-        // if it is not AXe, it says why AXe was passed over.
-        expect(["axe", "maestro"]).toContain(before.result?.backend);
-        if (before.result?.backend === "maestro") {
-          expect(before.result.fellBack?.[0]?.backend).toBe("axe");
-        } else {
-          expect(before.result?.fellBack).toBeUndefined();
-        }
+        expectBackendNamed(before);
 
         const tap = await tapFlow();
         expect(tap.status, tap.output).toBe(0);
@@ -335,7 +339,7 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
         expect(after.status).toBe("succeeded");
         expect(after.result).toMatchObject({ verdict: "passed" });
         expect(after.result?.attempt).toBeUndefined();
-        expect(after.result?.backend).toBe(before.result?.backend);
+        expectBackendNamed(after);
       },
       minutes(8),
     );
