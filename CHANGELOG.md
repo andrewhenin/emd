@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.7.1](https://github.com/andrewhenin/emd/compare/emd-agents-v0.7.0...emd-agents-v0.7.1) (2026-11-07)
+
+
+### Bug Fixes
+
+* an empty screen read is a failed read, not a missing element ([#88](https://github.com/andrewhenin/emd/issues/88)) ([9d9747b](https://github.com/andrewhenin/emd/commit/9d9747b8a10638021bc95666515ce2917d9582ff))
+* continue when only Expo's open step fails; report port, DerivedData and disk on failure ([#85](https://github.com/andrewhenin/emd/issues/85)) ([d438f45](https://github.com/andrewhenin/emd/commit/d438f451d87ff571645f48e52cf76001b9158429))
+* give every call to an outside tool a timeout ([#70](https://github.com/andrewhenin/emd/issues/70)) ([a45436e](https://github.com/andrewhenin/emd/commit/a45436e2aefe1c8b8fa7274e9cc7d85988e760c9))
+* read only ledger files named like keys ([#83](https://github.com/andrewhenin/emd/issues/83)) ([717ac59](https://github.com/andrewhenin/emd/commit/717ac5985758e1fca12447a3ebb636f3c06561ef))
+
 ## [0.7.0](https://github.com/andrewhenin/emd/compare/emd-agents-v0.6.1...emd-agents-v0.7.0) (2026-11-01)
 
 
