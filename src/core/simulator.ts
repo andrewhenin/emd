@@ -1,8 +1,4 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import { runTool } from "./tool.js";
-
-const run = promisify(execFile);
 
 export type Device = {
   id: string;
@@ -70,9 +66,12 @@ export async function boot(device: Device): Promise<void> {
       if (!/current state: Booted/i.test(String(error))) throw error;
     }
   }
-  await run("xcrun", ["simctl", "bootstatus", device.id, "-b"], {
-    timeout: 300_000,
-  });
+  await runTool(
+    "simctl bootstatus",
+    "xcrun",
+    ["simctl", "bootstatus", device.id, "-b"],
+    300,
+  );
 }
 
 // Returns the app's pid. Brings the app forward if it is already running.
@@ -94,9 +93,12 @@ export async function launchApp(
 // A new simulator with the same type and runtime as `base`; returns its UDID.
 // The base must be shut down.
 export async function cloneDevice(base: Device, name: string): Promise<string> {
-  const { stdout } = await run("xcrun", ["simctl", "clone", base.id, name], {
-    timeout: 300_000,
-  });
+  const { stdout } = await runTool(
+    "simctl clone",
+    "xcrun",
+    ["simctl", "clone", base.id, name],
+    300,
+  );
   return stdout.trim();
 }
 
@@ -104,10 +106,11 @@ export type Simulator = { id: string; name: string; state: string };
 
 // Every simulator on the machine, available or not.
 export async function listSimulators(): Promise<Simulator[]> {
-  const { stdout } = await run(
+  const { stdout } = await runTool(
+    "simctl list",
     "xcrun",
     ["simctl", "list", "devices", "--json"],
-    { timeout: 60_000 },
+    60,
   );
   const { devices } = JSON.parse(stdout) as SimctlList;
   return Object.values(devices).flatMap((list) =>
@@ -115,15 +118,22 @@ export async function listSimulators(): Promise<Simulator[]> {
   );
 }
 
-// Shuts a simulator down if it is booted, then deletes it.
+// Shuts a simulator down if it is booted, then deletes it. Each step names the
+// simulator, so a failure says which one.
 export async function removeSimulator(device: Simulator): Promise<void> {
-  const timeout = 120_000;
+  const simctl = (action: string) =>
+    runTool(
+      `simctl ${action} ${device.id}`,
+      "xcrun",
+      ["simctl", action, device.id],
+      120,
+    );
   if (device.state === "Booted") {
     try {
-      await run("xcrun", ["simctl", "shutdown", device.id], { timeout });
+      await simctl("shutdown");
     } catch (error) {
       if (!/current state: Shutdown/i.test(String(error))) throw error;
     }
   }
-  await run("xcrun", ["simctl", "delete", device.id], { timeout });
+  await simctl("delete");
 }

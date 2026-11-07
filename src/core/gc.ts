@@ -1,7 +1,5 @@
-import { execFile } from "node:child_process";
 import { existsSync, readdirSync, rmSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
-import { promisify } from "node:util";
 import { diskMB } from "./isolate.js";
 import { firstLine } from "./log.js";
 import { type KeyedLedger, listLedgers, removeLedger } from "./owned.js";
@@ -11,8 +9,7 @@ import {
   type Simulator,
 } from "./simulator.js";
 import { homeDir } from "./state.js";
-
-const run = promisify(execFile);
+import { runTool } from "./tool.js";
 
 export type GcResult = {
   verdict: "dry-run" | "applied" | "failed";
@@ -83,7 +80,7 @@ function problem(
 
 // Free disk in MB at `path`, by `df`.
 async function freeMB(path: string): Promise<number> {
-  const { stdout } = await run("df", ["-k", path], { timeout: 60_000 });
+  const { stdout } = await runTool("df", "df", ["-k", path], 60);
   return Number(stdout.trim().split("\n")[1]?.split(/\s+/)[3]) / 1024;
 }
 

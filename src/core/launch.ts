@@ -224,7 +224,7 @@ export async function launch(
       `Port ${port} already serves a dev server. Stop it and retry.`,
     );
   }
-  stopCaptures(root);
+  await stopCaptures(root);
   report("starting the dev server");
   const env = {
     CI: "1",

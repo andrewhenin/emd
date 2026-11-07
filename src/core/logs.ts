@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { readJobs } from "./jobstore.js";
@@ -107,17 +106,20 @@ export async function startCapture(
 // exits: Maestro's launchApp restarts the app, so its pid changes mid-run. The
 // pid is checked before it is signalled, as the recorded one may belong to
 // something else now.
-export function stopCaptures(root: string): void {
+export async function stopCaptures(root: string): Promise<void> {
   for (const job of readJobs()) {
     const result =
       job.kind === "launch" ? (job.result as LaunchResult) : undefined;
     const pid = result?.logStream?.pid;
     if (result?.root !== root || !pid) continue;
     try {
-      const command = execFileSync("ps", ["-o", "command=", "-p", `${pid}`], {
-        encoding: "utf8",
-      });
-      if (command.includes("log stream")) process.kill(-pid, "SIGTERM");
+      const { stdout } = await runTool(
+        "ps",
+        "ps",
+        ["-o", "command=", "-p", `${pid}`],
+        60,
+      );
+      if (stdout.includes("log stream")) process.kill(-pid, "SIGTERM");
     } catch {}
   }
 }

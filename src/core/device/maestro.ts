@@ -1,9 +1,6 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import { runTool } from "../tool.js";
 import type { DeviceBackend } from "./backend.js";
 import type { UiNode } from "./screen.js";
-
-const run = promisify(execFile);
 
 type RawNode = { attributes?: Record<string, unknown>; children?: RawNode[] };
 
@@ -41,16 +38,17 @@ export function parseMaestro(output: string): UiNode[] {
 // and about 50 s for the first call after an app launch.
 async function readScreen(device: string, bin: string): Promise<UiNode[]> {
   const env = {
-    ...process.env,
     MAESTRO_DRIVER_STARTUP_TIMEOUT:
       process.env.MAESTRO_DRIVER_STARTUP_TIMEOUT ?? "300000",
   };
   try {
-    const { stdout } = await run(bin, ["--device", device, "hierarchy"], {
-      env,
-      maxBuffer: 64 * 1024 * 1024,
-      timeout: 240_000,
-    });
+    const { stdout } = await runTool(
+      "maestro hierarchy",
+      bin,
+      ["--device", device, "hierarchy"],
+      240,
+      { env },
+    );
     return parseMaestro(stdout);
   } catch (error) {
     // Maestro can print the tree and still exit badly while shutting its

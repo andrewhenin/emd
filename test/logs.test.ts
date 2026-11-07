@@ -162,7 +162,7 @@ test("the next launch in a worktree stops its earlier capture, and only that", a
   launched("bbbbbbb2", "/elsewhere", "", elsewhere);
   launched("bbbbbbb3", "/mine", "", unrelated);
   try {
-    stopCaptures("/mine");
+    await stopCaptures("/mine");
     await new Promise((resolve) => setTimeout(resolve, 300));
     expect(alive(mine)).toBe(false);
     expect(alive(elsewhere)).toBe(true);

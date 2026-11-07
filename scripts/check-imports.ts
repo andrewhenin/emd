@@ -4,9 +4,17 @@ import ts from "typescript";
 
 // Import boundaries from decision 0001. Usage: check-imports.ts [root]
 // src/bin.ts is the composition root: it may import cli and mcp, nothing imports it.
+// Outside tools run through runTool (core/tool.ts), so a timeout ends the whole
+// tool; only it and the long-lived process starters may import child_process.
 const root = process.argv[2] ?? process.cwd();
 const src = join(root, "src");
 const failures: string[] = [];
+const childProcess = /^(node:)?child_process$/;
+const startsProcesses = new Set([
+  "core/tool.ts",
+  "core/process.ts",
+  "core/jobs.ts",
+]);
 
 type Layer = "core" | "cli" | "mcp" | "entry" | `adapter:${string}`;
 type Import = { spec: string; dynamic: boolean };
@@ -67,6 +75,11 @@ for (const file of listFiles(src)) {
   const fileRel = relToSrc(file);
   const from = layerOf(fileRel);
   for (const { spec, dynamic } of importsOf(file)) {
+    if (childProcess.test(spec) && !startsProcesses.has(fileRel)) {
+      failures.push(
+        `src/${fileRel}: imports "${spec}"; run outside tools with runTool from core/tool.ts`,
+      );
+    }
     if (!spec.startsWith(".")) continue;
     const targetRel = relToSrc(
       resolve(dirname(file), spec.replace(/\.(js|ts)$/, "")),
