@@ -52,18 +52,13 @@ async function readScreen(device: string, bin: string): Promise<UiNode[]> {
 const notFound =
   /Warning: No accessibility element matched .* No tap performed\.$/m;
 
-// Taps the one element with this testID (AXUniqueId) or exact label (AXLabel),
-// waiting up to 10 s for it to appear (--wait-timeout needs AXe 1.6.0).
+// Taps the one element with this testID (AXUniqueId) or exact label (AXLabel)
+// at once: the step has already waited for it to be on screen.
 async function tap(target: Target, { device }: App, bin: string) {
   const selector =
     "id" in target ? ["--id", target.id] : ["--label", target.text];
   try {
-    await runTool(
-      "axe tap",
-      bin,
-      ["tap", ...selector, "--wait-timeout", "10", "--udid", device],
-      60,
-    );
+    await runTool("axe tap", bin, ["tap", ...selector, "--udid", device], 60);
   } catch (error) {
     if (notFound.test(String(error))) {
       throw new DidNotAct((error as Error).message);

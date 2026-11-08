@@ -2,8 +2,21 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { axeBackend } from "./device/axe.js";
-import { detectEnvironment, type Tap, tap } from "./device/backend.js";
+import {
+  detectEnvironment,
+  readScreen,
+  type Tap,
+  tap,
+} from "./device/backend.js";
 import { maestroBackend } from "./device/maestro.js";
+import { hasElement } from "./device/screen.js";
+import {
+  type Clock,
+  type Read,
+  type ScreenState,
+  waitForSettle,
+  waitForStill,
+} from "./device/settle.js";
 import {
   maestroFlow,
   type Step,
@@ -18,18 +31,25 @@ import { screenshot } from "./simulator.js";
 
 export type StepsOptions = RunRef & { steps: Step[] };
 
-// After each step, before its screenshot: time for the app to react. After
-// the last step: time for the log stream to write the step's lines. Both are
-// guesses; e2e logs the real delay (decision 0008).
-const settleMs = 1000;
-const flushMs = 1000;
+// After the last step: time for the log stream to write the lines the app
+// wrote before it settled. One e2e run measured 0.7 s (decision 0008).
+const deliveryMs = 2000;
 const newestLines = 5;
 
-type Ran = Tap & { step: Step; start: number; end: number; shot?: string };
+const clock: Clock = { now: Date.now, sleep };
 
-// Runs the steps in order on a launched run's app. Each step gets a
-// screenshot and the tagged lines the app wrote from its start to the next
-// step's start. The first failed step ends the run.
+type Ran = Tap & {
+  step: Step;
+  start: number;
+  settled: number;
+  screen?: ScreenState;
+  shot?: string;
+};
+
+// Runs the steps in order on a launched run's app. Around each action it
+// waits for the app (decision 0008), then takes a screenshot. A step's tagged
+// lines run from its action to the next step's action; the last step's, to
+// its settle plus the delivery wait. The first failed step ends the run.
 export async function steps(
   options: StepsOptions,
   report: (step: string) => void = () => {},
@@ -51,21 +71,43 @@ export async function steps(
   writeFileSync(join(dir, "flow.yaml"), maestroFlow(appId, asked));
 
   const env = await detectEnvironment();
+  // Only AXe reads fast enough to wait with (a Maestro read takes ~30 s).
+  const read: Read | undefined = env.axe
+    ? async () => {
+        try {
+          return (await readScreen(device, env, [axeBackend])).nodes;
+        } catch {
+          return undefined;
+        }
+      }
+    : undefined;
   const ran: Ran[] = [];
+  let last: Awaited<ReturnType<Read>>;
   for (const [i, step] of asked.entries()) {
     report(`step ${i + 1} of ${asked.length}`);
+    const target = targetOf(step);
+    const before = await waitForStill(
+      read,
+      (nodes) => hasElement(nodes, target),
+      clock,
+      last,
+    );
     const start = Date.now();
-    const done = await tap(targetOf(step), { device, appId }, env, [
+    const done = await tap(target, { device, appId }, env, [
       axeBackend,
       maestroBackend,
     ]);
-    await sleep(settleMs);
+    const after = done.error
+      ? undefined
+      : await waitForSettle(read, before, clock);
+    last = after?.last;
+    const settled = Date.now();
     const file = `${String(i + 1).padStart(2, "0")}.png`;
     const shot = (await screenshot(device, join(dir, file))) ? file : undefined;
-    ran.push({ ...done, step, start, end: Date.now(), shot });
+    ran.push({ ...done, step, start, settled, screen: after?.screen, shot });
     if (done.error) break;
   }
-  await sleep(flushMs);
+  await sleep(deliveryMs);
 
   const all = (await allLines({ jobId: options.jobId })).lines ?? [];
   const end = Date.now();
@@ -82,10 +124,10 @@ export async function steps(
     JSON.stringify(
       {
         run: { jobId: options.jobId, device, appId },
-        steps: ran.map(({ shot, start, end: stop, ...r }, i) => ({
+        steps: ran.map(({ shot, start, settled, ...r }, i) => ({
           ...r,
           start: iso(start),
-          end: iso(stop),
+          settled: iso(settled),
           screenshot: shot,
           lines: windows[i],
         })),
@@ -96,13 +138,14 @@ export async function steps(
   );
 
   const results = ran.map(
-    ({ step, backend, fellBack, error, start, end: stop, shot }, i) => {
+    ({ step, backend, fellBack, error, start, settled, screen, shot }, i) => {
       const lines = windows[i] ?? [];
       return {
         step,
         ...(backend ? { backend } : {}),
         ...(fellBack ? { fellBack } : {}),
-        seconds: Math.round((stop - start) / 100) / 10,
+        seconds: Math.round((settled - start) / 100) / 10,
+        ...(screen ? { screen } : {}),
         ...(shot ? { screenshot: shot } : {}),
         total: lines.length,
         lines: lines.slice(-newestLines),

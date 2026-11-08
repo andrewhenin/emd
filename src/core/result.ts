@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { packageManagers, platforms, stackIds } from "./adapter.js";
 import { backendIds } from "./device/backend.js";
+import { screenStates } from "./device/settle.js";
 import { stepSchema } from "./device/step.js";
 
 const perPlatform = z.object({
@@ -143,11 +144,15 @@ const stepsResultSchema = z.object({
         // The backend that tapped, or that failed (decision 0008).
         backend: z.enum(backendIds).optional(),
         fellBack: fellBackSchema,
+        // From the action until the screen settled (or the wait's cap).
         seconds: z.number(),
-        // Taken after the step, a file in `dir`.
+        // What the wait after the action saw (decision 0008): changed, then
+        // still; unchanged, unstable or unread until the 10 s cap.
+        screen: z.enum(screenStates).optional(),
+        // Taken once the screen settled, a file in `dir`.
         screenshot: z.string().optional(),
-        // Tagged lines from this step's start to the next step's start: how
-        // many, and the newest 5.
+        // Tagged lines from this step's action to the next step's action:
+        // how many, and the newest 5.
         total: z.number(),
         lines: z.array(taggedLineSchema),
         // Why this step failed.

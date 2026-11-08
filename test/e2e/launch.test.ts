@@ -305,6 +305,7 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
         steps: {
           backend?: string;
           fellBack?: { backend: string; reason: string }[];
+          screen?: string;
           screenshot?: string;
           total: number;
           lines: { tag: string; message: string }[];
@@ -320,8 +321,12 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
     const measureCapture = async () => {
       const saved = JSON.parse(
         readFileSync(join(stepsDir ?? "", "steps.json"), "utf8"),
-      ) as { steps: { start: string }[] };
+      ) as { steps: { start: string; settled: string }[] };
       const start = Date.parse(saved.steps[0]?.start ?? "");
+      const settled = Date.parse(saved.steps[0]?.settled ?? "");
+      console.log(
+        `[e2e] step settled at +${settled - start} ms from step start`,
+      );
       const capture = join(again?.result?.logDir ?? "", "app.ndjson");
       let count = -1;
       let seen = false;
@@ -397,6 +402,7 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
         expect(result?.verdict).toBe("ran");
         const [step] = result?.steps ?? [];
         expect(["axe", "maestro"]).toContain(step?.backend);
+        expect(step?.screen).toBe("changed");
         if (step?.backend === "maestro") {
           expect(step.fellBack?.[0]?.backend).toBe("axe");
         }
