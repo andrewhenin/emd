@@ -13,7 +13,7 @@ test.each([
   "fix(core): handle a missing directory",
   "docs: log iOS smoke-test findings",
   "chore!: drop the emd-mcp bin",
-  // Real Dependabot titles: one per title shape.
+  // Real Dependabot titles: a group, a group across directories, one package.
   "chore(deps): Bump the github-actions group with 5 updates",
   "chore(deps-dev): Bump @commitlint/cli from 19.8.1 to 21.2.4",
   "chore(deps-dev): Bump the development-dependencies group across 1 directory with 2 updates",
