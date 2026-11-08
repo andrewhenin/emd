@@ -135,7 +135,7 @@ function buildServer(): McpServer {
     "check",
     {
       description:
-        "Check a run against what you expect, from signals a machine can read, not your own judgment: tagged log events the app wrote ([EMD:<tag>] lines) and elements on the simulator's screen (by testID or by text). Starts a job and returns it within seconds; poll job_status until it finishes, which can take a minute. The result's verdict is passed, failed (fix the cause and check again), stopped (the retry limit is reached: stop and report what is missing) or error (the check could not run; not counted). Your reading of the returned screenshot may be passed as agentReading; it is recorded as a second opinion and never changes the verdict.",
+        "Check a run against what you expect, from signals a machine can read, not your own judgment: tagged log events the app wrote ([EMD:<tag>] lines) and elements on the simulator's screen (by testID or by text). EMD does not tap or type: do that through MobileBuildMCP on the launched simulator, then check. Starts a job and returns it within seconds; poll job_status until it finishes, which can take a minute. The result's verdict is passed, failed (fix the cause and check again), stopped (the retry limit is reached: stop and report what is missing) or error (the check could not run; not counted). Your reading of the returned screenshot may be passed as agentReading; it is recorded as a second opinion and never changes the verdict.",
       inputSchema: z.object({
         jobId: z.string().describe("The launch job whose run to check."),
         logs: z
