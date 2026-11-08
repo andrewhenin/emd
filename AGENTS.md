@@ -35,8 +35,8 @@ Notes, findings and decisions: follow [docs/logging.md](docs/logging.md) exactly
 
 - Optimize agent tokens per completed task first, then time, then CPU and memory.
 - Report only checks that actually ran. Say which ones did not.
-- Never mark a PR ready for review. Never claim a human reviewed anything.
-- Never push to `main` and never force-push. Always work on a branch and open a draft PR.
+- Never claim a human reviewed anything.
+- Never push to `main` and never force-push. Always work on a branch and open a PR.
 - To update a PR branch, merge main into it. Never force-push.
 - If scope changes during a PR, update the linked issue's acceptance criteria in the same PR.
 - Write the smallest change that meets the acceptance criteria; no code for out-of-scope items; add abstractions only when they remove complexity you've actually seen.
@@ -62,4 +62,4 @@ Flag code that can be deleted or simplified while still meeting the linked issue
 1. `npm run lint`, `npm run typecheck`, `npm test` and `npm run check:sizes` pass locally.
 2. Mobile behavior changes include evidence: steps, screenshots, matching log lines.
 3. Notes updated in the same PR per docs/logging.md (finding, decision or rule), or the PR says nothing needed one.
-4. PR opened as a draft, linked to its issue, with the PR template filled in honestly.
+4. PR opened ready for review, linked to its issue, with the PR template filled in honestly.
