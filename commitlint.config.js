@@ -1,6 +1,9 @@
+// Dependabot titles start with a capital "Bump", which fails subject-case.
+// Skip the rules only when the first line is one of its two title shapes.
+const dependabot =
+  /^chore\(deps(-dev)?\): Bump (\S+ from \S+ to \S+|the \S+ group with \d+ updates?)$/;
+
 export default {
   extends: ["@commitlint/config-conventional"],
-  // Dependabot titles start with a capital "Bump", which fails subject-case.
-  // Skip the rules for those titles only.
-  ignores: [(message) => /^chore\(deps(-dev)?\): Bump /.test(message)],
+  ignores: [(message) => dependabot.test(message.split("\n")[0])],
 };
