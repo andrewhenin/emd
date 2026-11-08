@@ -2,8 +2,10 @@ import { expect, test } from "vitest";
 import {
   type BackendId,
   type DeviceBackend,
+  DidNotAct,
   type Environment,
   readScreen,
+  tap,
 } from "../src/core/device/backend.ts";
 import type { UiNode } from "../src/core/device/screen.ts";
 
@@ -26,12 +28,19 @@ const works = (id: BackendId, calls: BackendId[] = []): DeviceBackend => ({
     calls.push(id);
     return nodesFrom(id);
   },
+  tap: async () => {
+    calls.push(id);
+  },
 });
 
 const breaks = (id: BackendId, message: string, calls: BackendId[] = []) =>
   ({
     id,
     readScreen: async () => {
+      calls.push(id);
+      throw new Error(message);
+    },
+    tap: async () => {
       calls.push(id);
       throw new Error(message);
     },
@@ -45,6 +54,7 @@ test("hands each backend the path it was found at", async () => {
       paths.push(bin);
       throw new Error("next");
     },
+    tap: async () => {},
   });
   await readScreen(
     "udid",
@@ -118,6 +128,7 @@ test("when no backend can read the screen, the error names each reason", async (
 const empty = (id: BackendId): DeviceBackend => ({
   id,
   readScreen: async () => [],
+  tap: async () => {},
 });
 
 test("an empty tree is a failed read: the next backend answers, and why is recorded", async () => {
@@ -137,5 +148,83 @@ test("when every backend reads nothing, the read fails and names each", async ()
     readScreen("udid", env(), [empty("axe"), empty("maestro")]),
   ).rejects.toThrow(
     "no backend could read the screen (axe: Error: returned an empty tree; maestro: Error: returned an empty tree)",
+  );
+});
+
+// Decision 0008: a tap is not safe to repeat, so it passes to the next backend
+// only when this one is not installed or proves it did not tap.
+const app = { device: "udid", appId: "com.emd.sandbox" };
+const button = { id: "smoke-button" };
+
+const notFound = (calls: BackendId[]): DeviceBackend => ({
+  ...works("axe"),
+  tap: async () => {
+    calls.push("axe");
+    throw new DidNotAct(
+      "axe tap failed (exit 1): Warning: No accessibility element matched",
+    );
+  },
+});
+
+test("a tap uses AXe when it is installed, and says so", async () => {
+  const calls: BackendId[] = [];
+  expect(
+    await tap(button, app, env(), [
+      works("axe", calls),
+      works("maestro", calls),
+    ]),
+  ).toEqual({ backend: "axe" });
+  expect(calls).toEqual(["axe"]);
+});
+
+test("a tap falls back to Maestro when AXe is not installed", async () => {
+  expect(
+    await tap(button, app, env({ axe: false }), [
+      works("axe"),
+      works("maestro"),
+    ]),
+  ).toEqual({
+    backend: "maestro",
+    fellBack: [{ backend: "axe", reason: "axe is not installed" }],
+  });
+});
+
+test("a tap falls back to Maestro when AXe proves it did not tap", async () => {
+  const calls: BackendId[] = [];
+  const done = await tap(button, app, env(), [
+    notFound(calls),
+    works("maestro", calls),
+  ]);
+  expect(done.backend).toBe("maestro");
+  expect(done.fellBack?.[0]?.reason).toContain(
+    "No accessibility element matched",
+  );
+  expect(calls).toEqual(["axe", "maestro"]);
+});
+
+test.each([
+  "axe tap timed out after 60s",
+  "Timed out creating the simulator remote automation session",
+])(
+  "a tap that fails with %j does not fall back: it names the backend and the error",
+  async (message) => {
+    const calls: BackendId[] = [];
+    const done = await tap(button, app, env(), [
+      breaks("axe", message, calls),
+      works("maestro", calls),
+    ]);
+    expect(done).toEqual({ backend: "axe", error: `Error: ${message}` });
+    expect(calls).toEqual(["axe"]);
+  },
+);
+
+test("when no backend can tap, the error names each reason", async () => {
+  const done = await tap(button, app, env({ maestro: false }), [
+    notFound([]),
+    works("maestro"),
+  ]);
+  expect(done.backend).toBeUndefined();
+  expect(done.error).toMatch(
+    /^no backend could tap \(axe: Error: axe tap failed .*; maestro: maestro is not installed\)$/,
   );
 });

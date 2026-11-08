@@ -13,7 +13,13 @@ import {
 } from "./jobstore.js";
 import { type LaunchOptions, launch } from "./launch.js";
 import { firstLine } from "./log.js";
-import type { CheckResult, JobView, LaunchResult } from "./result.js";
+import type {
+  CheckResult,
+  JobView,
+  LaunchResult,
+  StepsResult,
+} from "./result.js";
+import { type StepsOptions, steps } from "./steps.js";
 
 // A job is one long-running piece of work, recorded as a JSON file in the
 // shared state dir and run by a detached worker process (`emd job run <id>`).
@@ -22,15 +28,19 @@ import type { CheckResult, JobView, LaunchResult } from "./result.js";
 
 export type { JobKind } from "./jobstore.js";
 
-type Inputs = { launch: LaunchOptions; check: CheckOptions };
-type Results = { launch: LaunchResult; check: CheckResult };
+type Inputs = {
+  launch: LaunchOptions;
+  check: CheckOptions;
+  steps: StepsOptions;
+};
+type Results = { launch: LaunchResult; check: CheckResult; steps: StepsResult };
 
 type Report = (step: string) => void;
 export type Handlers = {
   [K in JobKind]: (input: Inputs[K], report: Report) => Promise<Results[K]>;
 };
 
-const handlers: Handlers = { launch, check };
+const handlers: Handlers = { launch, check, steps };
 
 const workerGraceMs = 30_000;
 const defaultWorker = fileURLToPath(new URL("../bin.js", import.meta.url));
@@ -108,14 +118,22 @@ export function startJob<K extends JobKind>(
   return view(job);
 }
 
-const execute = (
+function execute(
   job: Job,
   run: Handlers,
   report: Report,
-): Promise<LaunchResult | CheckResult> =>
-  job.kind === "launch"
-    ? run.launch(job.input as LaunchOptions, report)
-    : run.check(job.input as CheckOptions, report);
+): Promise<LaunchResult | CheckResult | StepsResult> {
+  switch (job.kind) {
+    case "launch":
+      return run.launch(job.input as LaunchOptions, report);
+    case "check":
+      return run.check(job.input as CheckOptions, report);
+    case "steps":
+      return run.steps(job.input as StepsOptions, report);
+  }
+}
+
+const succeeded = new Set(["launched", "passed", "ran"]);
 
 // What the worker process runs.
 export async function runJob(
@@ -128,10 +146,7 @@ export async function runJob(
   try {
     const result = await execute(job, run, (step) => update(id, { step }));
     update(id, {
-      status:
-        result.verdict === "launched" || result.verdict === "passed"
-          ? "succeeded"
-          : "failed",
+      status: succeeded.has(result.verdict) ? "succeeded" : "failed",
       step: undefined,
       finishedAt: now(),
       result,

@@ -84,7 +84,7 @@ async function appExecutable(device: string, appId: string): Promise<string> {
   return name.trim();
 }
 
-const capturePath = (logDir: string) => join(logDir, "app.ndjson");
+export const capturePath = (logDir: string) => join(logDir, "app.ndjson");
 
 // Info lines live only in the simulator's memory buffers and are purged as
 // they fill, so reading them after the fact can miss lines the app wrote

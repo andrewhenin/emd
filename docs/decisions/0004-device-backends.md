@@ -1,6 +1,6 @@
 # 0004: Device actions go through backends, chosen per machine
 
-Status: Superseded by 0005 (the Xcode 27 rule only; the rest stands)
+Status: Superseded by 0005 (the Xcode 27 rule only) and 0008 (fallback for actions that change the app); the rest stands
 
 ## Context
 

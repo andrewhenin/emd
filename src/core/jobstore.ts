@@ -8,24 +8,30 @@ import {
 import { join } from "node:path";
 import type { CheckOptions } from "./check.js";
 import type { LaunchOptions } from "./launch.js";
-import type { CheckResult, JobView, LaunchResult } from "./result.js";
+import type {
+  CheckResult,
+  JobView,
+  LaunchResult,
+  StepsResult,
+} from "./result.js";
 import { stateDir } from "./state.js";
+import type { StepsOptions } from "./steps.js";
 
 // Jobs as JSON files in the shared state dir: any process can read one.
 
-export type JobKind = "launch" | "check";
+export type JobKind = "launch" | "check" | "steps";
 
 export type Job = {
   id: string;
   kind: JobKind;
-  input: LaunchOptions | CheckOptions;
+  input: LaunchOptions | CheckOptions | StepsOptions;
   status: JobView["status"];
   step?: string;
   createdAt: string;
   startedAt?: string;
   finishedAt?: string;
   pid?: number;
-  result?: LaunchResult | CheckResult;
+  result?: LaunchResult | CheckResult | StepsResult;
 };
 
 // The id comes from callers, so it is checked before it touches a path.

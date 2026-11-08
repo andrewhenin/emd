@@ -1,11 +1,23 @@
 import { z } from "zod";
 import { packageManagers, platforms, stackIds } from "./adapter.js";
 import { backendIds } from "./device/backend.js";
+import { stepSchema } from "./device/step.js";
 
 const perPlatform = z.object({
   ios: z.string().optional(),
   android: z.string().optional(),
 });
+
+const taggedLineSchema = z.object({
+  time: z.string(),
+  tag: z.string(),
+  message: z.string(),
+});
+
+// The backends passed over before the one named in `backend`, each with why.
+const fellBackSchema = z
+  .array(z.object({ backend: z.enum(backendIds), reason: z.string() }))
+  .optional();
 
 // One schema for the result: the CLI prints it, the MCP tool declares it.
 export const detectResultSchema = z.object({
@@ -84,9 +96,7 @@ export const checkResultSchema = z.object({
   // Which backend read the screen (decision 0004), and the backends it passed
   // over first, each with why. Absent when no element was checked.
   backend: z.enum(backendIds).optional(),
-  fellBack: z
-    .array(z.object({ backend: z.enum(backendIds), reason: z.string() }))
-    .optional(),
+  fellBack: fellBackSchema,
   secondOpinion: z
     .object({
       // A screenshot of the screen as it was checked.
@@ -117,18 +127,52 @@ export const evidenceResultSchema = z.object({
 
 export type EvidenceResult = z.infer<typeof evidenceResultSchema>;
 
+// Small by default (decision 0008): per step, a screenshot file name in `dir`
+// and the newest tagged lines. `dir` holds every line (steps.json) and the
+// steps as a Maestro flow (flow.yaml).
+const stepsResultSchema = z.object({
+  // ran: every step ran. failed: a step failed, and the steps after it did
+  // not run. error: no step ran (bad input, no launched app).
+  verdict: z.enum(["ran", "failed", "error"]),
+  reason: z.string().optional(),
+  dir: z.string().optional(),
+  steps: z
+    .array(
+      z.object({
+        step: stepSchema,
+        // The backend that tapped, or that failed (decision 0008).
+        backend: z.enum(backendIds).optional(),
+        fellBack: fellBackSchema,
+        seconds: z.number(),
+        // Taken after the step, a file in `dir`.
+        screenshot: z.string().optional(),
+        // Tagged lines from this step's start to the next step's start: how
+        // many, and the newest 5.
+        total: z.number(),
+        lines: z.array(taggedLineSchema),
+        // Why this step failed.
+        error: z.string().optional(),
+      }),
+    )
+    .optional(),
+});
+
+export type StepsResult = z.infer<typeof stepsResultSchema>;
+
 // What a caller sees of a job: enough to know where it is, small enough to
 // poll. `result` appears once the job has finished.
 export const jobViewSchema = z.object({
   jobId: z.string(),
-  kind: z.enum(["launch", "check"]),
+  kind: z.enum(["launch", "check", "steps"]),
   status: z.enum(["queued", "running", "succeeded", "failed"]),
   // What the job is doing now, while it runs.
   step: z.string().optional(),
   // Since the job started (since it was created while still queued).
   seconds: z.number(),
-  // A launch result or a check result, by `kind`.
-  result: z.union([launchResultSchema, checkResultSchema]).optional(),
+  // A launch, check or steps result, by `kind`.
+  result: z
+    .union([launchResultSchema, checkResultSchema, stepsResultSchema])
+    .optional(),
 });
 
 export type JobView = z.infer<typeof jobViewSchema>;
@@ -141,9 +185,7 @@ export const logsResultSchema = z.object({
   since: z.string().optional(),
   // How many tagged lines matched; `lines` holds only the most recent ones.
   total: z.number().optional(),
-  lines: z
-    .array(z.object({ time: z.string(), tag: z.string(), message: z.string() }))
-    .optional(),
+  lines: z.array(taggedLineSchema).optional(),
 });
 
 export type LogsResult = z.infer<typeof logsResultSchema>;

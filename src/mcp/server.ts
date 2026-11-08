@@ -11,6 +11,7 @@ import {
   logs,
   logsResultSchema,
   startJob,
+  stepsSchema,
   version,
 } from "../core/index.js";
 
@@ -80,7 +81,7 @@ function buildServer(): McpServer {
     "job_status",
     {
       description:
-        "Where a job is: queued, running (with the current step and seconds), succeeded or failed. When finished, includes the result. For launch: the device, app ID and log directory, or on failure the reason and the first relevant error lines, not the log. For check: the verdict, which expectations were found, and a screenshot path.",
+        "Where a job is: queued, running (with the current step and seconds), succeeded or failed. When finished, includes the result. For launch: the device, app ID and log directory, or on failure the reason and the first relevant error lines, not the log. For check: the verdict, which expectations were found, and a screenshot path. For steps: per step, the backend that tapped, a screenshot file and the step's tagged log lines.",
       inputSchema: z.object({
         jobId: z.string().describe("The jobId a tool such as launch returned."),
       }),
@@ -181,6 +182,28 @@ function buildServer(): McpServer {
     },
     async (input) => {
       const job = startJob("check", input);
+      return {
+        content: [{ type: "text", text: JSON.stringify(job) }],
+        structuredContent: job,
+      };
+    },
+  );
+
+  server.registerTool(
+    "steps",
+    {
+      description:
+        "Run steps on the app of a launch job, in order: tap an element by testID or by its exact visible text or label. Each step is a Maestro command in JSON form. After each step EMD waits a second and takes a screenshot; each step also gets the tagged log lines ([EMD:<tag>]) the app wrote from its start to the next step's start. Starts a job and returns it within seconds; poll job_status until it finishes. The result has, per step, the backend that tapped, the screenshot file name in `dir`, the newest 5 lines and their total. A failed step stops the run (verdict failed). `dir` also holds flow.yaml (the steps as a Maestro flow: maestro test flow.yaml) and steps.json (every line). Steps only act; use check to judge the result.",
+      inputSchema: z.object({
+        jobId: z.string().describe("The launch job whose app to act on."),
+        steps: stepsSchema.describe(
+          'Steps in order, e.g. [{"tapOn":{"id":"smoke-button"}}] or [{"tapOn":"Tap me"}].',
+        ),
+      }),
+      outputSchema: jobViewSchema,
+    },
+    async (input) => {
+      const job = startJob("steps", input);
       return {
         content: [{ type: "text", text: JSON.stringify(job) }],
         structuredContent: job,

@@ -19,8 +19,8 @@ import {
 import { worktreeKey } from "./owned.js";
 import type { CheckResult, LogsResult } from "./result.js";
 import { type RunRef, resolveRun } from "./run.js";
+import { screenshot } from "./simulator.js";
 import { homeDir } from "./state.js";
-import { runTool } from "./tool.js";
 
 // A tagged log event the run must have produced: the tag, and optionally text
 // its message must contain.
@@ -46,20 +46,7 @@ const realDeps: Deps = {
   logs: allLines,
   screen: async (device) =>
     readScreen(device, await detectEnvironment(), [axeBackend, maestroBackend]),
-  screenshot: async (device, path) => {
-    try {
-      mkdirSync(dirname(path), { recursive: true });
-      await runTool(
-        "simctl screenshot",
-        "xcrun",
-        ["simctl", "io", device, "screenshot", path],
-        60,
-      );
-      return true;
-    } catch {
-      return false;
-    }
-  },
+  screenshot,
 };
 
 const defaultRetryLimit = 3;

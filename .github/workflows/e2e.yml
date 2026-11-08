@@ -34,7 +34,7 @@ jobs:
           EVENT: ${{ github.event_name }}
           LABELLED: ${{ contains(github.event.pull_request.labels.*.name, 'e2e') }}
         run: |
-          paths='^(src/core/(simulator|launch|isolate|jobs|process|logs|tool)\.ts|src/core/device/|src/adapters/|test/e2e/|fixtures/|package(-lock)?\.json|\.github/workflows/e2e\.yml)'
+          paths='^(src/core/(simulator|launch|isolate|jobs|process|logs|tool|steps)\.ts|src/core/device/|src/adapters/|test/e2e/|fixtures/|package(-lock)?\.json|\.github/workflows/e2e\.yml)'
           if [ "$EVENT" != pull_request ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           elif [ "$LABELLED" = true ]; then

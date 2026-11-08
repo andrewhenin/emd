@@ -10,11 +10,12 @@ import {
   logs,
   resetChecks,
   runJob,
+  steps,
   version,
 } from "../core/index.js";
 
 const usage =
-  "Commands: detect [dir], launch [dir] [--device X] [--timeout N], job status <id>, logs <jobId> [--tag T] [--limit N], check <jobId> [--log TAG[=TEXT]] [--element id=X|text=Y] [--name N] [--agent pass|fail], check reset [dir], evidence <jobId>, gc [--apply], mcp";
+  "Commands: detect [dir], launch [dir] [--device X] [--timeout N], job status <id>, logs <jobId> [--tag T] [--limit N], check <jobId> [--log TAG[=TEXT]] [--element id=X|text=Y] [--name N] [--agent pass|fail], check reset [dir], steps <jobId> --step JSON..., evidence <jobId>, gc [--apply], mcp";
 
 // --log smoke   or   --log smoke=tapped
 const logSpec = (raw: string) => {
@@ -170,6 +171,34 @@ export async function run(argv: string[]): Promise<number> {
       });
       console.log(JSON.stringify(result));
       return result.verdict === "passed" ? 0 : 1;
+    }
+    case "steps": {
+      // --step '{"tapOn":{"id":"smoke-button"}}' --step '{"tapOn":"Tap me"}'
+      const { values, positionals } = parseArgs({
+        args,
+        allowPositionals: true,
+        options: { step: { type: "string", multiple: true } },
+      });
+      const jobId = positionals[0];
+      if (!jobId) {
+        console.error(`emd: usage: steps <jobId> --step JSON. ${usage}`);
+        return 2;
+      }
+      let asked: unknown[];
+      try {
+        asked = (values.step ?? []).map((raw) => JSON.parse(raw));
+      } catch {
+        console.error(
+          `emd: each --step is a Maestro command as JSON. ${usage}`,
+        );
+        return 2;
+      }
+      const result = await steps({
+        jobId,
+        steps: asked as Parameters<typeof steps>[0]["steps"],
+      });
+      console.log(JSON.stringify(result));
+      return result.verdict === "ran" ? 0 : 1;
     }
     case "evidence": {
       const jobId = args[0];

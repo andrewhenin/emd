@@ -306,7 +306,11 @@ test("the count follows the project across relaunches", async () => {
 test("a screen that reads as empty on every backend is an error, not a missing element", async () => {
   const jobId = await launched();
   const options = { jobId, elements: [{ text: "Tapped" }] };
-  const empty = { id: "axe" as const, readScreen: async () => [] };
+  const empty = {
+    id: "axe" as const,
+    readScreen: async () => [],
+    tap: async () => {},
+  };
   const { deps } = readers(tapped, {
     screen: (device) =>
       readScreen(device, { axe: "/bin/axe" }, [

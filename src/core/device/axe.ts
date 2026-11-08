@@ -1,6 +1,7 @@
 import { runTool } from "../tool.js";
-import type { DeviceBackend } from "./backend.js";
+import { type App, type DeviceBackend, DidNotAct } from "./backend.js";
 import type { UiNode } from "./screen.js";
+import type { Target } from "./step.js";
 
 type RawNode = Record<string, unknown> & { children?: unknown };
 
@@ -45,4 +46,30 @@ async function readScreen(device: string, bin: string): Promise<UiNode[]> {
   return parseAxe(stdout);
 }
 
-export const axeBackend: DeviceBackend = { id: "axe", readScreen };
+// AXe prints this line, then exits, when no element matches; it has not
+// tapped. Source: Sources/AXe/Commands/Tap.swift and
+// Utilities/AccessibilityTargetResolver.swift, AXe v1.5.0 to v1.8.0.
+const notFound =
+  /Warning: No accessibility element matched .* No tap performed\.$/m;
+
+// Taps the one element with this testID (AXUniqueId) or exact label (AXLabel),
+// waiting up to 10 s for it to appear (--wait-timeout needs AXe 1.6.0).
+async function tap(target: Target, { device }: App, bin: string) {
+  const selector =
+    "id" in target ? ["--id", target.id] : ["--label", target.text];
+  try {
+    await runTool(
+      "axe tap",
+      bin,
+      ["tap", ...selector, "--wait-timeout", "10", "--udid", device],
+      60,
+    );
+  } catch (error) {
+    if (notFound.test(String(error))) {
+      throw new DidNotAct((error as Error).message);
+    }
+    throw error;
+  }
+}
+
+export const axeBackend: DeviceBackend = { id: "axe", readScreen, tap };

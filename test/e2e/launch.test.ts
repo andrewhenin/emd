@@ -148,16 +148,11 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
     // Tagged logs. The sandbox's tap flow restarts the app (Maestro's
     // launchApp), so the app's pid changes: a run is read by app and time.
     // Async, so vitest's worker keeps answering while Maestro runs for minutes.
-    const tapFlow = () =>
+    const maestroTest = (flow: string, device = final.result?.device.id) =>
       new Promise<{ status: number | null; output: string }>((resolve) => {
         const child = spawn(
           "maestro",
-          [
-            "--device",
-            final.result?.device.id ?? "",
-            "test",
-            ".maestro/smoke.yaml",
-          ],
+          ["--device", device ?? "", "test", flow],
           {
             cwd: sandbox,
             env: {
@@ -181,6 +176,7 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
         );
         child.on("close", (status) => resolve({ status, output }));
       });
+    const tapFlow = () => maestroTest(".maestro/smoke.yaml");
     const readLogs = async (jobId: string, extra: object = {}) =>
       (await client.callTool({ name: "logs", arguments: { jobId, ...extra } }))
         .structuredContent as Logs;
@@ -300,6 +296,24 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
         new Set(),
       )) as unknown as CheckView;
 
+    // Steps (decision 0008): EMD taps, through the backend it picks.
+    type StepsView = {
+      status: string;
+      result?: {
+        verdict: string;
+        dir: string;
+        steps: {
+          backend?: string;
+          fellBack?: { backend: string; reason: string }[];
+          screenshot?: string;
+          total: number;
+          lines: { tag: string; message: string }[];
+          error?: string;
+        }[];
+      };
+    };
+    let stepsDir: string | undefined;
+
     // The result names the backend that read the screen (decision 0004);
     // if it is not AXe, it says why AXe was passed over. Each read picks its own.
     const expectBackendNamed = (view: CheckView) => {
@@ -330,8 +344,43 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
         );
         expectBackendNamed(before);
 
-        const tap = await tapFlow();
-        expect(tap.status, tap.output).toBe(0);
+        const tapped = (await finish(
+          await call("steps", {
+            jobId: again?.jobId,
+            steps: [{ tapOn: { id: "smoke-button" } }],
+          }),
+          new Set(),
+        )) as unknown as StepsView;
+        expect(tapped.status, JSON.stringify(tapped.result)).toBe("succeeded");
+        const result = tapped.result;
+        stepsDir = result?.dir;
+        expect(result?.verdict).toBe("ran");
+        const [step] = result?.steps ?? [];
+        expect(["axe", "maestro"]).toContain(step?.backend);
+        if (step?.backend === "maestro") {
+          expect(step.fellBack?.[0]?.backend).toBe("axe");
+        }
+        expect(step?.lines).toContainEqual(
+          expect.objectContaining({ tag: "smoke", message: "tapped" }),
+        );
+        expect(existsSync(join(stepsDir ?? "", step?.screenshot ?? "-"))).toBe(
+          true,
+        );
+        expect(JSON.stringify(result).length).toBeLessThan(1000);
+        // Data for the 1 s waits: from each step's start to its first line.
+        const saved = JSON.parse(
+          readFileSync(join(stepsDir ?? "", "steps.json"), "utf8"),
+        ) as { steps: { start: string; lines: { time: string }[] }[] };
+        saved.steps.forEach((s, i) => {
+          const first = s.lines[0]?.time;
+          const delay = first
+            ? Date.parse(first) - Date.parse(s.start)
+            : "none";
+          console.log(
+            `[e2e] step ${i + 1}: first tagged line after ${delay} ms`,
+          );
+        });
+
         const after = await runCheck({
           logs: tappedLog,
           elements: [{ id: "smoke-button" }, { text: "Tapped" }],
@@ -376,6 +425,20 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
         expect(fixed.result).toMatchObject({ verdict: "passed" });
       },
       minutes(4),
+    );
+
+    // Last, so a Maestro flake (#94) fails only this test.
+    test(
+      "the saved steps replay as a Maestro flow",
+      async () => {
+        const flow = join(stepsDir ?? "", "flow.yaml");
+        expect(readFileSync(flow, "utf8")).toBe(
+          'appId: com.emd.sandbox\n---\n- tapOn:\n    id: "smoke-button"\n',
+        );
+        const replay = await maestroTest(flow, again?.result?.device.id);
+        expect(replay.status, replay.output).toBe(0);
+      },
+      minutes(5),
     );
   },
 );

@@ -9,6 +9,7 @@ export type {
 } from "./adapter.js";
 export { check, resetChecks } from "./check.js";
 export { detect } from "./detect.js";
+export { stepsSchema } from "./device/step.js";
 export { evidence } from "./evidence.js";
 export { type GcResult, gc } from "./gc.js";
 export { jobStatus, runJob, startJob } from "./jobs.js";
@@ -29,4 +30,5 @@ export {
   launchResultSchema,
   logsResultSchema,
 } from "./result.js";
+export { steps } from "./steps.js";
 export { version } from "./version.js";

@@ -43,6 +43,7 @@ export async function launchedJob(
       logDir: join(state, "runs", job.id),
     }),
     check: async () => ({ verdict: "error" }),
+    steps: async () => ({ verdict: "error" }),
   });
   return job.id;
 }

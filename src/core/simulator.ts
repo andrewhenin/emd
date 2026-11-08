@@ -1,3 +1,5 @@
+import { mkdirSync } from "node:fs";
+import { dirname } from "node:path";
 import { runTool } from "./tool.js";
 
 export type Device = {
@@ -88,6 +90,25 @@ export async function launchApp(
   const pid = Number(stdout.trim().split(":").pop());
   if (!Number.isInteger(pid)) throw new Error(`unexpected output: ${stdout}`);
   return pid;
+}
+
+// A PNG of the simulator's screen at `path`. False when it could not be taken.
+export async function screenshot(
+  device: string,
+  path: string,
+): Promise<boolean> {
+  try {
+    mkdirSync(dirname(path), { recursive: true });
+    await runTool(
+      "simctl screenshot",
+      "xcrun",
+      ["simctl", "io", device, "screenshot", path],
+      60,
+    );
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // A new simulator with the same type and runtime as `base`; returns its UDID.

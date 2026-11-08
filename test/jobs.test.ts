@@ -37,6 +37,7 @@ const handlers = (
 ): Handlers => ({
   launch: (_input, report) => run(id(), report),
   check: async () => ({ verdict: "error", reason: "not used here" }),
+  steps: async () => ({ verdict: "error", reason: "not used here" }),
 });
 
 const checkHandlers = (
@@ -44,6 +45,7 @@ const checkHandlers = (
 ): Handlers => ({
   launch: async () => ({ verdict: "failed", root: "/x" }),
   check: (_input, report) => run(report),
+  steps: async () => ({ verdict: "error" }),
 });
 
 test("a created job is queued until a worker runs it", () => {
@@ -165,6 +167,26 @@ test("a check job succeeds only when the check passed", async () => {
     expect(jobStatus(job.id)).toMatchObject({
       kind: "check",
       status: "failed",
+      result: { verdict },
+    });
+  }
+});
+
+test("a steps job succeeds only when every step ran", async () => {
+  for (const [verdict, status] of [
+    ["ran", "succeeded"],
+    ["failed", "failed"],
+    ["error", "failed"],
+  ] as const) {
+    const job = createJob("steps", { jobId: "deadbeef", steps: [] });
+    await runJob(job.id, {
+      launch: async () => ({ verdict: "failed", root: "/x" }),
+      check: async () => ({ verdict: "error" }),
+      steps: async () => ({ verdict }),
+    });
+    expect(jobStatus(job.id)).toMatchObject({
+      kind: "steps",
+      status,
       result: { verdict },
     });
   }
