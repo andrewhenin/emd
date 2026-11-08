@@ -26,6 +26,62 @@ test("a failed call keeps the tool's own error text", async () => {
   ).rejects.toThrow("failer failed (exit 3): boom");
 });
 
+test("a failed or timed-out call still hands back what the tool printed", async () => {
+  await expect(
+    runTool("printer", "sh", ["-c", "echo tree; exit 2"], 5),
+  ).rejects.toMatchObject({ stdout: "tree\n" });
+  await expect(
+    runTool("printer", "sh", ["-c", "echo tree; sleep 300"], 0.5),
+  ).rejects.toMatchObject({
+    message: "printer timed out after 0.5s",
+    stdout: "tree\n",
+  });
+});
+
+test("extra env reaches the tool, on top of the inherited env", async () => {
+  const { stdout } = await runTool(
+    "env",
+    "sh",
+    ["-c", 'printf "%s %s" "$EMD_EXTRA" "$HOME"'],
+    5,
+    { env: { EMD_EXTRA: "on" } },
+  );
+  expect(stdout).toBe(`on ${process.env.HOME}`);
+});
+
+test("a character split between two pipe reads stays whole", async () => {
+  // One ASCII byte first, so two-byte characters cross the read boundaries.
+  const { stdout } = await runTool(
+    "printer",
+    process.execPath,
+    ["-e", "process.stdout.write('a' + 'é'.repeat(200000))"],
+    10,
+  );
+  expect(stdout).toBe(`a${"é".repeat(200000)}`);
+});
+
+test("a timeout settles even when a child left the group and holds stdout", async () => {
+  // detached makes the child call setsid, so the group kill misses it.
+  const holder =
+    "require('node:child_process').spawn('sleep', ['31339'], { detached: true, stdio: 'inherit' })";
+  const started = Date.now();
+  try {
+    await expect(
+      runTool("holder", process.execPath, ["-e", holder], 0.5),
+    ).rejects.toThrow("holder timed out after 0.5s");
+    expect(Date.now() - started).toBeLessThan(3000);
+  } finally {
+    try {
+      const pids = execFileSync("pgrep", ["-f", "sleep 31339"], {
+        encoding: "utf8",
+      });
+      for (const pid of pids.split("\n").filter(Boolean)) {
+        process.kill(Number(pid), "SIGKILL");
+      }
+    } catch {}
+  }
+});
+
 test("a tool that cannot start rejects with ENOENT", async () => {
   await expect(runTool("ghost", "emd-no-such-binary", [], 5)).rejects.toThrow(
     "ENOENT",

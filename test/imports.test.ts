@@ -40,6 +40,15 @@ test("a clean layout passes", () => {
   expect(result.status).toBe(0);
 });
 
+test("the tool runner and the process starters may import child_process", () => {
+  const result = check({
+    "core/tool.ts": 'import { spawn } from "node:child_process";',
+    "core/process.ts": 'import { spawn } from "node:child_process";',
+    "core/jobs.ts": 'import { spawn } from "node:child_process";',
+  });
+  expect(result.status).toBe(0);
+});
+
 test.each([
   [
     "core imports cli",
@@ -127,6 +136,16 @@ test.each([
     "entry bypasses core's public entry",
     { "bin.ts": 'import "./core/detect.js";', "core/detect.ts": "" },
     "public entry",
+  ],
+  [
+    "core runs a tool without runTool",
+    { "core/a.ts": 'import { execFile } from "node:child_process";' },
+    "run outside tools with runTool from core/tool.ts",
+  ],
+  [
+    "cli imports child_process without the node: prefix",
+    { "cli/main.ts": 'import "child_process";' },
+    "runTool",
   ],
   [
     "entry statically imports an adapter",

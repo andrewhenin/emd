@@ -1,9 +1,6 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import { runTool } from "../tool.js";
 import type { DeviceBackend } from "./backend.js";
 import type { UiNode } from "./screen.js";
-
-const run = promisify(execFile);
 
 type RawNode = Record<string, unknown> & { children?: unknown };
 
@@ -39,10 +36,12 @@ export function parseAxe(output: string): UiNode[] {
 // The accessibility tree of what is on the simulator's screen now. AXe talks to
 // the simulator directly, with no driver to start.
 async function readScreen(device: string, bin: string): Promise<UiNode[]> {
-  const { stdout } = await run(bin, ["describe-ui", "--udid", device], {
-    maxBuffer: 64 * 1024 * 1024,
-    timeout: 120_000,
-  });
+  const { stdout } = await runTool(
+    "axe describe-ui",
+    bin,
+    ["describe-ui", "--udid", device],
+    120,
+  );
   return parseAxe(stdout);
 }
 

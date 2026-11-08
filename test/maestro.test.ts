@@ -1,6 +1,9 @@
+import { chmodSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { expect, test } from "vitest";
-import { parseMaestro } from "../src/core/device/maestro.ts";
+import { maestroBackend, parseMaestro } from "../src/core/device/maestro.ts";
 import { hasElement } from "../src/core/device/screen.ts";
+import { makeDir } from "./helpers.ts";
 
 // The node shape is copied from a real `maestro hierarchy` run on the sandbox.
 const node = (attributes: Record<string, string>, children: object[] = []) => ({
@@ -46,6 +49,33 @@ test("flattens the tree to the nodes that have an id or some text", () => {
 
 test("ignores anything before the JSON, such as a banner", () => {
   expect(parseMaestro(`Starting driver...\n${tree}`)).toHaveLength(5);
+});
+
+test("a tree printed before a bad exit is the answer, and the driver gets its startup timeout", async () => {
+  // A stand-in for maestro: it needs the driver timeout, prints a tree, then
+  // exits 1 the way Maestro can while it shuts its driver down.
+  const bin = join(makeDir(), "maestro");
+  writeFileSync(
+    bin,
+    `#!/bin/sh
+[ "$MAESTRO_DRIVER_STARTUP_TIMEOUT" = 300000 ] || { echo "no driver timeout" >&2; exit 2; }
+cat <<'TREE'
+${tree}
+TREE
+exit 1
+`,
+  );
+  chmodSync(bin, 0o755);
+  const before = process.env.MAESTRO_DRIVER_STARTUP_TIMEOUT;
+  delete process.env.MAESTRO_DRIVER_STARTUP_TIMEOUT;
+  try {
+    expect(await maestroBackend.readScreen("udid", bin)).toEqual(
+      parseMaestro(tree),
+    );
+  } finally {
+    if (before !== undefined)
+      process.env.MAESTRO_DRIVER_STARTUP_TIMEOUT = before;
+  }
 });
 
 test("a tree that is not JSON is an error, not an empty screen", () => {
