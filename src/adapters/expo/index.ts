@@ -1,6 +1,6 @@
-import { readFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { join } from "node:path";
-import type { Platform, StackAdapter } from "../../core/index.js";
+import { type Platform, runTool, type StackAdapter } from "../../core/index.js";
 
 type ExpoConfig = {
   platforms?: unknown;
@@ -8,11 +8,21 @@ type ExpoConfig = {
   android?: { package?: unknown };
 };
 
-// Static app.json only. Dynamic config (app.config.js/ts) is not evaluated.
+// The config as Expo resolves it (app.json, app.config.js or app.config.ts),
+// from the project's installed Expo CLI. Node's resolution finds a hoisted
+// install and never downloads one, as `npx expo` would.
 async function readExpoConfig(dir: string): Promise<ExpoConfig> {
   try {
-    const parsed = JSON.parse(await readFile(join(dir, "app.json"), "utf8"));
-    return parsed?.expo ?? {};
+    const cli = createRequire(join(dir, "package.json")).resolve(
+      "expo/bin/cli",
+    );
+    const { stdout } = await runTool(
+      "expo config",
+      process.execPath,
+      [cli, "config", dir, "--json"],
+      60,
+    );
+    return JSON.parse(stdout) ?? {};
   } catch {
     return {};
   }

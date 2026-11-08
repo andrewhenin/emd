@@ -1,18 +1,18 @@
 import { beforeEach, expect, test, vi } from "vitest";
-import { appJson, expoProject, makeDir } from "./helpers.ts";
+import { expoConfig, expoProject, makeDir } from "./helpers.ts";
 
 beforeEach(() => vi.resetModules());
 
 const loadCore = () => import("../src/core/index.ts");
 
-const sandbox = appJson({
+const sandbox = expoConfig({
   ios: { bundleIdentifier: "com.emd.sandbox" },
   android: { package: "com.emd.sandbox" },
 });
 
 test("detects an Expo project with what launching it needs", async () => {
   const { detect } = await loadCore();
-  const dir = expoProject({ "app.json": sandbox });
+  const dir = expoProject(sandbox);
   expect(await detect(dir)).toEqual({
     verdict: "detected",
     root: dir,
@@ -29,15 +29,15 @@ test("detects an Expo project with what launching it needs", async () => {
   });
 });
 
-test("platforms come from app.json when it declares them", async () => {
+test("platforms come from the app config when it declares them", async () => {
   const { detect } = await loadCore();
-  const dir = expoProject({
-    "app.json": appJson({
+  const dir = expoProject(
+    expoConfig({
       platforms: ["ios", "web"],
       ios: { bundleIdentifier: "com.emd.sandbox" },
       android: { package: "com.emd.sandbox" },
     }),
-  });
+  );
   const result = await detect(dir);
   expect(result.platforms).toEqual(["ios"]);
   expect(result.appIds).toEqual({ ios: "com.emd.sandbox" });
@@ -45,10 +45,12 @@ test("platforms come from app.json when it declares them", async () => {
 });
 
 test.each([
-  ["no app.json", {}],
-  ["dynamic config only", { "app.config.js": "module.exports = {};" }],
-  ["an app.json that is not JSON", { "app.json": "{ nope" }],
-  ["an app.json without app IDs", { "app.json": appJson({ name: "x" }) }],
+  ["no Expo CLI installed", {}],
+  [
+    "an Expo CLI that fails",
+    { "node_modules/expo/bin/cli": "process.exit(1);" },
+  ],
+  ["a config without app IDs", expoConfig({ name: "x" })],
 ])("is still detected with %s, without app IDs", async (_name, files) => {
   const { detect } = await loadCore();
   const result = await detect(expoProject(files));

@@ -114,7 +114,7 @@ export async function launch(
   const appId = detected.appIds?.ios;
   if (!appId) {
     return unsupported(
-      "No iOS app ID found; set expo.ios.bundleIdentifier in app.json.",
+      "No iOS app ID found; install the app's dependencies and set ios.bundleIdentifier in the app config.",
     );
   }
   if (process.platform !== "darwin") {
