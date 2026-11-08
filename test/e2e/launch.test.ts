@@ -145,42 +145,79 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
       minutes(2),
     );
 
+    // Async, so vitest's worker keeps answering while a tool runs for minutes.
+    const run = (
+      command: string,
+      args: string[],
+      options: { cwd?: string; env?: NodeJS.ProcessEnv } = {},
+    ) =>
+      new Promise<{ status: number | null; stdout: string; output: string }>(
+        (resolve) => {
+          const child = spawn(command, args, options);
+          let stdout = "";
+          let output = "";
+          child.stdout.on("data", (chunk) => {
+            stdout += chunk;
+            output += chunk;
+          });
+          child.stderr.on("data", (chunk) => {
+            output += chunk;
+          });
+          child.on("error", (error) =>
+            resolve({ status: null, stdout, output: `${output}\n${error}` }),
+          );
+          child.on("close", (status) => resolve({ status, stdout, output }));
+        },
+      );
+
     // Tagged logs. The sandbox's tap flow restarts the app (Maestro's
     // launchApp), so the app's pid changes: a run is read by app and time.
-    // Async, so vitest's worker keeps answering while Maestro runs for minutes.
     const tapFlow = () =>
-      new Promise<{ status: number | null; output: string }>((resolve) => {
-        const child = spawn(
-          "maestro",
-          [
-            "--device",
-            final.result?.device.id ?? "",
-            "test",
-            ".maestro/smoke.yaml",
-          ],
-          {
-            cwd: sandbox,
-            env: {
-              ...process.env,
-              PATH: `${process.env.HOME}/.maestro/bin:${process.env.PATH}`,
-              JAVA_HOME:
-                process.env.JAVA_HOME ?? "/opt/homebrew/opt/openjdk@17",
-              MAESTRO_DRIVER_STARTUP_TIMEOUT: "300000",
-            },
+      run(
+        "maestro",
+        [
+          "--device",
+          final.result?.device.id ?? "",
+          "test",
+          ".maestro/smoke.yaml",
+        ],
+        {
+          cwd: sandbox,
+          env: {
+            ...process.env,
+            PATH: `${process.env.HOME}/.maestro/bin:${process.env.PATH}`,
+            JAVA_HOME: process.env.JAVA_HOME ?? "/opt/homebrew/opt/openjdk@17",
+            MAESTRO_DRIVER_STARTUP_TIMEOUT: "300000",
           },
-        );
-        let output = "";
-        child.stdout.on("data", (chunk) => {
-          output += chunk;
-        });
-        child.stderr.on("data", (chunk) => {
-          output += chunk;
-        });
-        child.on("error", (error) =>
-          resolve({ status: null, output: `${output}\n${error}` }),
-        );
-        child.on("close", (status) => resolve({ status, output }));
-      });
+        },
+      );
+
+    // An agent taps through MobileBuildMCP, not EMD (decision 0008), at the
+    // version e2e tests. It reads the screen's element refs, then taps the
+    // ref whose identifier is the testID. A row is ref|action|role|label|value|id.
+    const mobileBuildMcp = "mobilebuildmcp@2.7.1";
+    const tapById = async (device: string, id: string) => {
+      const ui = (tool: string, args: object) =>
+        run("npx", [
+          "-y",
+          mobileBuildMcp,
+          "ui-automation",
+          tool,
+          "--json",
+          JSON.stringify({ simulatorId: device, ...args }),
+          "--output",
+          "json",
+        ]);
+      const snapshot = await ui("snapshot-ui", {});
+      expect(snapshot.status, snapshot.output).toBe(0);
+      const targets: string[] = JSON.parse(snapshot.stdout).data.capture
+        .targets;
+      const ref = targets
+        .map((row) => row.split("|"))
+        .find((row) => row[1] === "tap" && row[5] === id)?.[0];
+      expect(ref, targets.join("\n")).toBeDefined();
+      return ui("tap", { elementRef: ref });
+    };
     const readLogs = async (jobId: string, extra: object = {}) =>
       (await client.callTool({ name: "logs", arguments: { jobId, ...extra } }))
         .structuredContent as Logs;
@@ -330,7 +367,10 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
         );
         expectBackendNamed(before);
 
-        const tap = await tapFlow();
+        const tap = await tapById(
+          again?.result?.device.id ?? "",
+          "smoke-button",
+        );
         expect(tap.status, tap.output).toBe(0);
         const after = await runCheck({
           logs: tappedLog,

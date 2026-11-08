@@ -60,6 +60,8 @@ Register `emd mcp` with your agent. Run these lines in the `emd` folder, so that
 - Codex ([docs](https://developers.openai.com/codex/mcp)): `codex mcp add emd -- node "$PWD/dist/bin.js" mcp`. This writes `[mcp_servers.emd]` in `~/.codex/config.toml`. Check with `/mcp` in Codex.
 - Cursor ([docs](https://cursor.com/docs/mcp)): add `{ "mcpServers": { "emd": { "command": "node", "args": ["/full/path/to/emd/dist/bin.js", "mcp"] } } }` to `~/.cursor/mcp.json`, with the full path of your `emd` folder. Check under Output > MCP Logs.
 
+EMD does not tap or type. For that, also register [MobileBuildMCP](https://github.com/getsentry/MobileBuildMCP) with your agent; its README has the steps. EMD's e2e tests one version of it, pinned in `test/e2e/launch.test.ts`.
+
 ## First run
 
 1. In your app, log an event with a tag, for example `console.log("[EMD:ready] home shown")`. Give a testID to each element that you want to check.
@@ -71,9 +73,10 @@ The agent then runs this loop:
 
 1. `launch`, with `dir` set to your app. It returns a `jobId` at once.
 2. `job_status` every 5 to 10 seconds, until `succeeded` or `failed`. A first build takes minutes. A failed launch gives the reason and the first error lines.
-3. `logs`, to read the tagged lines.
-4. `check`, with the expected log events and elements, then `job_status` until it ends. The verdict is `passed`, `failed` (fix and check again), `stopped` (3 failed checks: stop and report) or `error` (the check could not run).
-5. `evidence`, to write the evidence folder.
+3. To tap, type or swipe: MobileBuildMCP's `snapshot_ui`, then `tap` (or `type_text`, `swipe`), on the simulator from the launch result (`device.id`).
+4. `logs`, to read the tagged lines.
+5. `check`, with the expected log events and elements, then `job_status` until it ends. The verdict is `passed`, `failed` (fix and check again), `stopped` (3 failed checks: stop and report) or `error` (the check could not run).
+6. `evidence`, to write the evidence folder.
 
 Output stays on your Mac:
 
@@ -96,7 +99,6 @@ node dist/bin.js gc --apply  # removes it
 ## Limits today
 
 - Expo apps on the iOS simulator only. No native iOS or Android projects, no Android launch, no physical devices.
-- EMD does not tap or type yet. Use your own Maestro flow, or tap in the simulator.
 - `launch` leaves the dev server running. A second `launch` of the same folder fails ("Port N already serves a dev server") until you stop it: `kill -- -<pid>`, with `metro.pid` from `$TMPDIR/emd/jobs/<jobId>.json` (the launch result).
 - After 3 failed checks in one app folder, `check` returns `stopped`. Only a person can start over: `node dist/bin.js check reset /path/to/my-app` at a terminal. `EMD_RETRY_LIMIT` (1 to 10) changes the limit.
 - A build can take 900 seconds by default (`timeoutSeconds`, or `--timeout` in the CLI). Two cold builds at the same time can take longer.
