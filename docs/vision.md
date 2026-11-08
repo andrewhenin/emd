@@ -29,7 +29,7 @@ Several agents can run this loop at the same time, each on its own PR or feature
 ## Principles
 
 - **Adapt to what's there.** Detect the stack, and use the project's existing instruction files (AGENTS.md, CLAUDE.md), decision logs and notes folders. Never impose a new structure. Existing tests and Maestro flows are the spec: they must keep passing.
-- **Integrate, don't rebuild.** Use the agent tool's own worktree, PR and CI-fix features where they exist. Also use maintained mobile tools, for example XcodeBuildMCP for device actions, when they meet the four conditions in decision 0008. EMD owns only the gaps and the glue.
+- **Integrate, don't rebuild.** Use the agent tool's own worktree, PR and CI-fix features where they exist. Also use maintained mobile tools when they meet the four conditions in decision 0008. EMD owns only the gaps and the glue.
 - **Evidence over claims.** "Done" means screenshots plus matching log lines, not the agent saying it works.
 - **Independent checks.** The agent doesn't grade its own work. Pass or fail comes from machine-checkable signals (expected log events, on-screen elements in the accessibility tree). The agent's reading of a screenshot is a second opinion.
 - **No weakened checks.** Flag any change that deletes a log tag, loosens an assertion, or skips a test or Maestro step, and list it in the PR.

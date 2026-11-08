@@ -5,10 +5,9 @@ Date: 2026-11-08
 
 ## Context
 
-PR #106 built EMD's own tap step runner (about 1,400 lines).
-[XcodeBuildMCP](https://github.com/getsentry/XcodeBuildMCP) already taps by
-accessibility id or label, types, swipes, takes screenshots and captures
-simulator logs. EMD closed PRs #106, #110 and #111 and rescoped issue #11.
+[XcodeBuildMCP](https://github.com/getsentry/XcodeBuildMCP) (MIT, Sentry)
+already taps by accessibility id or label, types, swipes, takes screenshots
+and captures simulator logs: the device actions EMD began to build in #106.
 
 ## Options
 
@@ -30,8 +29,9 @@ B. Use a maintained tool when all four conditions are true:
 When one condition is false, EMD writes the code. EMD's own code covers only
 the gaps and the glue: setup, version pins and agent instructions.
 
+No tool meets condition 4 yet. #11 adds the first e2e test, for XcodeBuildMCP.
+
 ## Consequences
 
 - EMD has less code to keep.
 - Each tool's breaking changes become ours. Version pins and e2e find them.
-- A feature audit decides which EMD parts move to a maintained tool.
