@@ -40,6 +40,7 @@ Notes, findings and decisions: follow [docs/logging.md](docs/logging.md) exactly
 - To update a PR branch, merge main into it. Never force-push.
 - If scope changes during a PR, update the linked issue's acceptance criteria in the same PR.
 - Write the smallest change that meets the acceptance criteria; no code for out-of-scope items; add abstractions only when they remove complexity you've actually seen.
+- Glue first: before you write a feature, check whether a maintained tool does it (decision 0008).
 - Fix problems where they originate. Remove replaced code in the same change.
 - Prefer tests through the real CLI and MCP tools over mocks.
 - Don't run `npm run test:e2e` unless the user asks; the e2e workflow runs it. It is slow and starts real simulators. Write "e2e: left to CI" in the PR.
