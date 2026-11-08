@@ -107,7 +107,7 @@ node dist/bin.js gc --apply  # removes it
 Open an [issue](https://github.com/andrewhenin/emd/issues) with:
 
 - What you asked the agent, and the tool or command that failed, with its JSON result.
-- Versions: `node dist/bin.js` (EMD), `sw_vers` (macOS), `xcodebuild -version`, `node --version`, and `axe --version` or `maestro --version` if you use them.
+- Versions: `node dist/bin.js` and `git rev-parse --short HEAD` in the `emd` folder (EMD), `sw_vers` (macOS), `xcodebuild -version`, `node --version`, and `axe --version` or `maestro --version` if you use them.
 - The output of `node dist/bin.js detect /path/to/my-app`.
 - From the run folder: `build.log` and `metro.log`, or the lines near the error.
 - Before you attach logs or screenshots, remove private details: names, tokens, keys, internal URLs and user data.
