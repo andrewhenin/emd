@@ -3,6 +3,7 @@ import {
   copyFileSync,
   existsSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -12,6 +13,7 @@ import { type LogsOptions, logs as readLogs } from "./logs.js";
 import { inspectProject } from "./project.js";
 import type { CheckResult, EvidenceResult, LogsResult } from "./result.js";
 import { type RunRef, resolveRun } from "./run.js";
+import type { SavedSteps } from "./steps.js";
 
 // Every check that ran against a run is appended here, in the run's folder, so
 // the bundle lists what was checked and nothing else.
@@ -40,13 +42,35 @@ function recordedChecks(logDir: string): Recorded[] {
   }
 }
 
+// Each `steps` call writes a steps-<ms> folder in the run's folder (steps.ts).
+// Oldest first, by that number. A folder without a readable steps.json is
+// still running, or its run stopped before the end, so it is left out.
+function savedSteps(logDir: string): { name: string; saved: SavedSteps }[] {
+  const found: { ms: number; name: string; saved: SavedSteps }[] = [];
+  for (const name of readdirSync(logDir)) {
+    const ms = /^steps-(\d+)$/.exec(name)?.[1];
+    if (!ms) continue;
+    let saved: SavedSteps;
+    try {
+      const file = join(logDir, name, "steps.json");
+      saved = JSON.parse(readFileSync(file, "utf8")) as SavedSteps;
+    } catch {
+      continue;
+    }
+    found.push({ ms: Number(ms), name, saved });
+  }
+  return found.sort((a, b) => a.ms - b.ms);
+}
+
 // The layout is part of the tool result, so no agent has to look it up.
 const layout = {
   "manifest.json":
-    "The run, every check that ran with its result, and the files below.",
+    "The run, every check that ran with its result, every step that ran with its result, and the files below.",
   "logs.json": "Tagged log lines the app wrote during the run, oldest first.",
   "screenshots/": "The screenshot each check took, named as in the manifest.",
   "flows/": "The project's Maestro flow files, copied as they are.",
+  "steps/":
+    "One folder per steps call, oldest first, copied as it is: flow.yaml (replays the steps), a screenshot per step, steps.json (every log line per step).",
 };
 
 type Deps = {
@@ -100,6 +124,30 @@ export async function evidence(
     flows.push(`flows/${basename(flow)}`);
   }
 
+  // Each step points into its folder's copy; its lines stay in steps.json.
+  const steps = savedSteps(logDir).map(({ name, saved }) => {
+    const folder = `steps/${name}`;
+    mkdirSync(join(dir, folder), { recursive: true });
+    for (const file of readdirSync(join(logDir, name))) {
+      copyFileSync(join(logDir, name, file), join(dir, folder, file));
+    }
+    return {
+      dir: folder,
+      // Unset fields (backend, fellBack, screenshot, error) drop out of the JSON.
+      steps: saved.steps.map((s) => ({
+        step: s.step,
+        result: s.error ? "failed" : "ran",
+        backend: s.backend,
+        fellBack: s.fellBack,
+        start: s.start,
+        end: s.end,
+        screenshot: s.screenshot && `${folder}/${s.screenshot}`,
+        total: s.lines.length,
+        error: s.error,
+      })),
+    };
+  });
+
   const logLines = lines.lines ?? [];
   writeFileSync(join(dir, "logs.json"), JSON.stringify(logLines, null, 2));
   const manifest = {
@@ -114,6 +162,7 @@ export async function evidence(
     logs: { file: "logs.json", total: lines.total ?? logLines.length },
     screenshots,
     flows,
+    steps,
   };
   writeFileSync(join(dir, "manifest.json"), JSON.stringify(manifest, null, 2));
 
@@ -125,5 +174,6 @@ export async function evidence(
     logLines: logLines.length,
     screenshots: screenshots.length,
     flows: flows.length,
+    steps: steps.flatMap((s) => s.steps).length,
   };
 }

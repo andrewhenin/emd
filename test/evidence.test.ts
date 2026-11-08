@@ -3,6 +3,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
@@ -11,6 +12,7 @@ import { type Deps as CheckDeps, check } from "../src/core/check.ts";
 import { evidence } from "../src/core/evidence.ts";
 import { createJob } from "../src/core/jobs.ts";
 import type { LogsResult } from "../src/core/result.ts";
+import type { SavedSteps } from "../src/core/steps.ts";
 import { expoProject, launchedJob, makeDir } from "./helpers.ts";
 
 // The bundle from real run folders, job files and project files in a temp
@@ -53,6 +55,39 @@ const smoke = { logs: [{ tag: "smoke" }] };
 const read = (dir: string | undefined, file: string) =>
   JSON.parse(readFileSync(join(dir ?? "", file), "utf8"));
 
+// A steps folder as the step runner writes it (src/core/steps.ts), with a
+// screenshot per step. Real steps folders are test/e2e/launch.test.ts.
+const stepsFolder = (
+  jobId: string,
+  name: string,
+  steps: SavedSteps["steps"],
+) => {
+  const folder = join(state, "runs", jobId, name);
+  mkdirSync(folder, { recursive: true });
+  writeFileSync(join(folder, "flow.yaml"), `appId: com.emd.sandbox\n# ${name}`);
+  const saved: SavedSteps = {
+    run: { jobId, device: "sim", appId: "com.emd.sandbox" },
+    steps,
+  };
+  writeFileSync(join(folder, "steps.json"), JSON.stringify(saved, null, 2));
+  for (const { screenshot } of steps) {
+    if (screenshot) writeFileSync(join(folder, screenshot), screenshot);
+  }
+  return folder;
+};
+const tapped = (
+  n: number,
+  extra: Partial<SavedSteps["steps"][number]> = {},
+) => ({
+  step: { tapOn: { id: "smoke-button" } },
+  backend: "axe" as const,
+  start: `2026-10-24T18:00:0${n}.000Z`,
+  end: `2026-10-24T18:00:0${n}.900Z`,
+  screenshot: `0${n}.png`,
+  lines: taps,
+  ...extra,
+});
+
 test("the bundle holds the checks that ran, the log lines, screenshots and flows", async () => {
   const jobId = await launchedJob(state, sandbox());
   const miss = await check({ jobId, ...smoke }, undefined, readers(false));
@@ -72,6 +107,7 @@ test("the bundle holds the checks that ran, the log lines, screenshots and flows
     "logs.json",
     "screenshots/",
     "flows/",
+    "steps/",
   ]);
 
   const manifest = read(result.dir, "manifest.json");
@@ -109,20 +145,97 @@ test("only checks that ran are listed: not invalid ones, not ones refused for th
   expect(read(result.dir, "manifest.json").checks).toHaveLength(1);
 });
 
-test("a run with no checks still gets a bundle", async () => {
+test("a run with no checks or steps still gets a bundle", async () => {
   const jobId = await launchedJob(state, sandbox());
   const result = await evidence({ jobId }, deps);
   expect(result).toMatchObject({
     verdict: "written",
     checks: 0,
     screenshots: 0,
+    steps: 0,
   });
-  expect(read(result.dir, "manifest.json").checks).toEqual([]);
+  const manifest = read(result.dir, "manifest.json");
+  expect(manifest.checks).toEqual([]);
+  expect(manifest.steps).toEqual([]);
+});
+
+test("the bundle copies each steps folder and lists its steps in order, with their result", async () => {
+  const jobId = await launchedJob(state, sandbox());
+  // By the number in the name, not by name: 200 comes before 1000.
+  const later = stepsFolder(jobId, "steps-1000", [
+    tapped(1),
+    tapped(2, {
+      backend: "maestro",
+      fellBack: [{ backend: "axe", reason: "No accessibility element." }],
+      error: "Element not found: Id matching regex: gone",
+      lines: [],
+    }),
+  ]);
+  const earlier = stepsFolder(jobId, "steps-200", [tapped(1)]);
+
+  const result = await evidence({ jobId }, deps);
+  expect(result).toMatchObject({ verdict: "written", steps: 3 });
+  const manifest = read(result.dir, "manifest.json");
+  expect(manifest.steps).toEqual([
+    {
+      dir: "steps/steps-200",
+      steps: [
+        {
+          step: { tapOn: { id: "smoke-button" } },
+          result: "ran",
+          backend: "axe",
+          start: "2026-10-24T18:00:01.000Z",
+          end: "2026-10-24T18:00:01.900Z",
+          screenshot: "steps/steps-200/01.png",
+          total: 1,
+        },
+      ],
+    },
+    {
+      dir: "steps/steps-1000",
+      steps: [
+        expect.objectContaining({ result: "ran" }),
+        {
+          step: { tapOn: { id: "smoke-button" } },
+          result: "failed",
+          backend: "maestro",
+          fellBack: [{ backend: "axe", reason: "No accessibility element." }],
+          start: "2026-10-24T18:00:02.000Z",
+          end: "2026-10-24T18:00:02.900Z",
+          screenshot: "steps/steps-1000/02.png",
+          total: 0,
+          error: "Element not found: Id matching regex: gone",
+        },
+      ],
+    },
+  ]);
+  // Every file, byte for byte, under the folder's own name.
+  for (const [source, copy] of [
+    [earlier, "steps/steps-200"],
+    [later, "steps/steps-1000"],
+  ] as const) {
+    for (const file of readdirSync(source)) {
+      expect(readFileSync(join(result.dir ?? "", copy, file))).toEqual(
+        readFileSync(join(source, file)),
+      );
+    }
+  }
+});
+
+test("a steps folder with no steps.json yet is left out", async () => {
+  const jobId = await launchedJob(state, sandbox());
+  const running = stepsFolder(jobId, "steps-300", [tapped(1)]);
+  rmSync(join(running, "steps.json"));
+  const result = await evidence({ jobId }, deps);
+  expect(result.steps).toBe(0);
+  expect(read(result.dir, "manifest.json").steps).toEqual([]);
+  expect(existsSync(join(result.dir ?? "", "steps"))).toBe(false);
 });
 
 test("the same run gives the same bundle", async () => {
   const jobId = await launchedJob(state, sandbox());
   await check({ jobId, ...smoke }, undefined, readers(true));
+  stepsFolder(jobId, "steps-1762588860000", [tapped(1)]);
   const bundle = async () => {
     const { dir } = await evidence({ jobId }, deps);
     return readdirSync(dir ?? "", { recursive: true, withFileTypes: true })
@@ -133,7 +246,8 @@ test("the same run gives the same bundle", async () => {
   };
   const once = await bundle();
   expect(await bundle()).toEqual(once);
-  expect(once).toHaveLength(4);
+  // manifest, logs, a check screenshot, a flow, and a steps folder's 3 files.
+  expect(once).toHaveLength(7);
 });
 
 test("a job that does not exist is refused in one line", async () => {

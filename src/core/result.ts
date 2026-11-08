@@ -118,11 +118,12 @@ export const evidenceResultSchema = z.object({
   // The bundle folder, and what each file in it is.
   dir: z.string().optional(),
   layout: z.record(z.string(), z.string()).optional(),
-  // How much went in. Checks are only those that ran.
+  // How much went in. Checks and steps are only those that ran.
   checks: z.number().optional(),
   logLines: z.number().optional(),
   screenshots: z.number().optional(),
   flows: z.number().optional(),
+  steps: z.number().optional(),
 });
 
 export type EvidenceResult = z.infer<typeof evidenceResultSchema>;

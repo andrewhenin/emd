@@ -1,6 +1,6 @@
 import { execFileSync, spawn } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { Client } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
@@ -207,6 +207,25 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
       minutes(5),
     );
 
+    // The evidence bundle for a run, and every file in it with its content.
+    const gather = async (jobId = first.jobId) =>
+      (await client.callTool({ name: "evidence", arguments: { jobId } }))
+        .structuredContent as {
+        verdict: string;
+        dir: string;
+        checks: number;
+        logLines: number;
+        screenshots: number;
+        flows: number;
+        steps: number;
+      };
+    const files = (dir: string) =>
+      readdirSync(dir, { recursive: true, withFileTypes: true })
+        .filter((entry) => entry.isFile())
+        .map((entry) => join(entry.parentPath, entry.name))
+        .sort()
+        .map((path) => [path, readFileSync(path, "utf8")]);
+
     test(
       "evidence gathers the run's check, log line, screenshot and flow, the same each time",
       async () => {
@@ -220,26 +239,6 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
           new Set(),
         );
         expect(checked.result?.verdict).toBe("passed");
-        const gather = async () =>
-          (
-            await client.callTool({
-              name: "evidence",
-              arguments: { jobId: first.jobId },
-            })
-          ).structuredContent as {
-            verdict: string;
-            dir: string;
-            checks: number;
-            logLines: number;
-            screenshots: number;
-            flows: number;
-          };
-        const files = (dir: string) =>
-          readdirSync(dir, { recursive: true, withFileTypes: true })
-            .filter((entry) => entry.isFile())
-            .map((entry) => join(entry.parentPath, entry.name))
-            .sort()
-            .map((path) => [path, readFileSync(path, "utf8")]);
         const once = await gather();
         expect(once).toMatchObject({
           verdict: "written",
@@ -391,6 +390,41 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
         expectBackendNamed(after);
       },
       minutes(8),
+    );
+
+    test(
+      "evidence copies the run's steps folder and lists the tap with its result, the same each time",
+      async () => {
+        const source = stepsDir ?? "";
+        const once = await gather(again?.jobId);
+        expect(once).toMatchObject({ verdict: "written", steps: 1 });
+        const folder = `steps/${basename(source)}`;
+        const manifest = JSON.parse(
+          readFileSync(join(once.dir, "manifest.json"), "utf8"),
+        );
+        expect(manifest.steps).toEqual([
+          {
+            dir: folder,
+            steps: [
+              expect.objectContaining({
+                step: { tapOn: { id: "smoke-button" } },
+                result: "ran",
+                screenshot: `${folder}/01.png`,
+                total: expect.any(Number),
+              }),
+            ],
+          },
+        ]);
+        for (const file of readdirSync(source)) {
+          expect(readFileSync(join(once.dir, folder, file))).toEqual(
+            readFileSync(join(source, file)),
+          );
+        }
+        expect(files((await gather(again?.jobId)).dir)).toEqual(
+          files(once.dir),
+        );
+      },
+      minutes(2),
     );
 
     test(

@@ -27,6 +27,19 @@ const newestLines = 5;
 
 type Ran = Tap & { step: Step; start: number; end: number; shot?: string };
 
+// What steps.json holds: every step that ran, with all its lines. `evidence`
+// reads it with this type.
+export type SavedSteps = {
+  run: { jobId: string; device: string; appId: string };
+  steps: (Tap & {
+    step: Step;
+    start: string;
+    end: string;
+    screenshot?: string;
+    lines: TaggedLine[];
+  })[];
+};
+
 // Runs the steps in order on a launched run's app. Each step gets a
 // screenshot and the tagged lines the app wrote from its start to the next
 // step's start. The first failed step ends the run.
@@ -77,23 +90,17 @@ export async function steps(
   const windows = ran.map((r, i) => during(r.start, ran[i + 1]?.start ?? end));
 
   const iso = (ms: number) => new Date(ms).toISOString();
-  writeFileSync(
-    join(dir, "steps.json"),
-    JSON.stringify(
-      {
-        run: { jobId: options.jobId, device, appId },
-        steps: ran.map(({ shot, start, end: stop, ...r }, i) => ({
-          ...r,
-          start: iso(start),
-          end: iso(stop),
-          screenshot: shot,
-          lines: windows[i],
-        })),
-      },
-      null,
-      2,
-    ),
-  );
+  const saved: SavedSteps = {
+    run: { jobId: options.jobId, device, appId },
+    steps: ran.map(({ shot, start, end: stop, ...r }, i) => ({
+      ...r,
+      start: iso(start),
+      end: iso(stop),
+      screenshot: shot,
+      lines: windows[i] ?? [],
+    })),
+  };
+  writeFileSync(join(dir, "steps.json"), JSON.stringify(saved, null, 2));
 
   const results = ran.map(
     ({ step, backend, fellBack, error, start, end: stop, shot }, i) => {
