@@ -1,5 +1,11 @@
 import { expect, test } from "vitest";
-import { appJson, cli, expoProject, makeDir, mcpSession } from "./helpers.ts";
+import {
+  cli,
+  expoConfig,
+  expoProject,
+  makeDir,
+  mcpSession,
+} from "./helpers.ts";
 
 // The paths that need no simulator, through the real CLI and the real MCP
 // server (which starts a real worker process per job), so they run on any OS.
@@ -8,14 +14,14 @@ const state = makeDir();
 process.env.EMD_STATE_DIR = state;
 const { client, call, finished } = mcpSession(state);
 
-const noAppId = () => expoProject({ "app.json": appJson({ name: "x" }) });
+const noAppId = () => expoProject(expoConfig({ name: "x" }));
 const androidOnly = () =>
-  expoProject({
-    "app.json": appJson({
+  expoProject(
+    expoConfig({
       platforms: ["android"],
       android: { package: "com.emd.sandbox" },
     }),
-  });
+  );
 
 test("MCP server exposes launch and job_status", async () => {
   const { tools } = await client.listTools();

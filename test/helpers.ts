@@ -24,7 +24,20 @@ export const expoProject = (files: Record<string, string> = {}) =>
     ...files,
   });
 
-export const appJson = (expo: object) => JSON.stringify({ expo });
+// The project's installed Expo CLI, stubbed: `expo config <dir> --json` prints
+// the resolved config. The defaults are what Expo 58 adds on fixtures/expo.
+export const expoConfig = (config: object) => ({
+  "node_modules/expo/bin/cli": [
+    'if (process.argv[2] !== "config" || process.argv[4] !== "--json") process.exit(1);',
+    `process.stdout.write(${JSON.stringify(
+      JSON.stringify({
+        sdkVersion: "58.0.0",
+        platforms: ["ios", "android", "web"],
+        ...config,
+      }),
+    )});`,
+  ].join("\n"),
+});
 
 const device = "829564DA-13EC-4DE7-95B0-1E3EFF6FE713";
 

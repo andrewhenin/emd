@@ -2,7 +2,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { Client } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import { afterAll, beforeAll, expect, test } from "vitest";
-import { appJson, expoProject, makeDir } from "./helpers.ts";
+import { expoConfig, expoProject, makeDir } from "./helpers.ts";
 
 // Real CLI and real MCP server (`emd mcp`), built into dist/ by `npm test`. No mocks.
 const client = new Client({ name: "emd-test", version: "0.0.0" });
@@ -32,7 +32,7 @@ test("MCP server exposes the detect tool", async () => {
 
 const sandbox = () =>
   expoProject({
-    "app.json": appJson({
+    ...expoConfig({
       ios: { bundleIdentifier: "com.emd.sandbox" },
       android: { package: "com.emd.sandbox" },
     }),

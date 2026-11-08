@@ -29,4 +29,5 @@ export {
   launchResultSchema,
   logsResultSchema,
 } from "./result.js";
+export { runTool } from "./tool.js";
 export { version } from "./version.js";
