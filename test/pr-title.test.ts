@@ -16,6 +16,7 @@ test.each([
   // Real Dependabot titles: one per title shape.
   "chore(deps): Bump the github-actions group with 5 updates",
   "chore(deps-dev): Bump @commitlint/cli from 19.8.1 to 21.2.4",
+  "chore(deps-dev): Bump the development-dependencies group across 1 directory with 2 updates",
 ])("accepts the title %s", (title) => {
   expect(lint(title).status).toBe(0);
 });
