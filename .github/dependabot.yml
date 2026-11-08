@@ -1,0 +1,35 @@
+# Options: https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference
+# fixtures/expo is a test app. It gets no version updates, so it has no entry here.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    # Give a bad release time to be pulled before we take it.
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    # Major updates match no group, so each gets its own PR.
+    groups:
+      production-dependencies:
+        dependency-type: "production"
+        update-types: ["minor", "patch"]
+        patterns: ["*"]
+      development-dependencies:
+        dependency-type: "development"
+        update-types: ["minor", "patch"]
+        patterns: ["*"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      github-actions:
+        patterns: ["*"]
