@@ -309,7 +309,7 @@ test("a screen that reads as empty on every backend is an error, not a missing e
   const empty = {
     id: "axe" as const,
     readScreen: async () => [],
-    tap: async () => {},
+    act: async () => {},
   };
   const { deps } = readers(tapped, {
     screen: (device) =>

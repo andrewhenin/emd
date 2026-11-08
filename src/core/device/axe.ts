@@ -1,7 +1,7 @@
 import { runTool } from "../tool.js";
 import { type App, type DeviceBackend, DidNotAct } from "./backend.js";
 import type { UiNode } from "./screen.js";
-import type { Target } from "./step.js";
+import { type Step, targetOf } from "./step.js";
 
 type RawNode = Record<string, unknown> & { children?: unknown };
 
@@ -52,24 +52,54 @@ async function readScreen(device: string, bin: string): Promise<UiNode[]> {
 const notFound =
   /Warning: No accessibility element matched .* No tap performed\.$/m;
 
-// Taps the one element with this testID (AXUniqueId) or exact label (AXLabel),
-// waiting up to 10 s for it to appear (--wait-timeout needs AXe 1.6.0).
-async function tap(target: Target, { device }: App, bin: string) {
-  const selector =
-    "id" in target ? ["--id", target.id] : ["--label", target.text];
+// AXe checks the whole text before it sends a key, and exits with this when a
+// character is not on a US keyboard; it has not typed. Source:
+// Sources/AXe/Commands/Type.swift and Utilities/TextToHIDEvents.swift, AXe
+// v1.5.0 to v1.8.0.
+const cannotType = /Error: No keycode found for character: /;
+
+// Runs AXe; an error that matches `proof` means AXe did not act.
+async function axe(name: string, bin: string, args: string[], proof?: RegExp) {
   try {
-    await runTool(
-      "axe tap",
-      bin,
-      ["tap", ...selector, "--wait-timeout", "10", "--udid", device],
-      60,
-    );
+    await runTool(`axe ${name}`, bin, [name, ...args], 60);
   } catch (error) {
-    if (notFound.test(String(error))) {
+    if (proof?.test(String(error))) {
       throw new DidNotAct((error as Error).message);
     }
     throw error;
   }
 }
 
-export const axeBackend: DeviceBackend = { id: "axe", readScreen, tap };
+async function act(step: Step, { device }: App, bin: string) {
+  if (step === "scroll") {
+    // A 200 pt swipe up from the center of an assumed 390x844 screen, in
+    // 0.5 s (Sources/AXe/Commands/Gesture.swift). Maestro's scroll swipes from
+    // 50% to 10% of the screen height, so a Maestro replay of the saved flow
+    // can scroll further than AXe did. No AXe error proves it did not swipe.
+    return axe("gesture", bin, ["scroll-up", "--udid", device]);
+  }
+  if ("inputText" in step) {
+    // Types into the field that has focus. `--` keeps a text that starts with
+    // "-" from being read as an option.
+    return axe(
+      "type",
+      bin,
+      ["--udid", device, "--", step.inputText],
+      cannotType,
+    );
+  }
+  // Taps the one element with this testID (AXUniqueId) or exact label
+  // (AXLabel), waiting up to 10 s for it to appear (--wait-timeout needs
+  // AXe 1.6.0).
+  const target = targetOf(step);
+  const selector =
+    "id" in target ? ["--id", target.id] : ["--label", target.text];
+  return axe(
+    "tap",
+    bin,
+    [...selector, "--wait-timeout", "10", "--udid", device],
+    notFound,
+  );
+}
+
+export const axeBackend: DeviceBackend = { id: "axe", readScreen, act };

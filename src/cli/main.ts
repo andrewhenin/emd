@@ -173,7 +173,7 @@ export async function run(argv: string[]): Promise<number> {
       return result.verdict === "passed" ? 0 : 1;
     }
     case "steps": {
-      // --step '{"tapOn":{"id":"smoke-button"}}' --step '{"tapOn":"Tap me"}'
+      // --step '{"tapOn":{"id":"smoke-input"}}' --step '{"inputText":"hi"}' --step '"scroll"'
       const { values, positionals } = parseArgs({
         args,
         allowPositionals: true,

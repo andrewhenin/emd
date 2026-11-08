@@ -2,14 +2,13 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { axeBackend } from "./device/axe.js";
-import { detectEnvironment, type Tap, tap } from "./device/backend.js";
+import { type Act, act, detectEnvironment } from "./device/backend.js";
 import { maestroBackend } from "./device/maestro.js";
 import {
   maestroFlow,
   type Step,
   stepsHelp,
   stepsSchema,
-  targetOf,
 } from "./device/step.js";
 import { allLines, capturePath, type TaggedLine } from "./logs.js";
 import type { StepsResult } from "./result.js";
@@ -25,7 +24,7 @@ const settleMs = 1000;
 const flushMs = 1000;
 const newestLines = 5;
 
-type Ran = Tap & { step: Step; start: number; end: number; shot?: string };
+type Ran = Act & { step: Step; start: number; end: number; shot?: string };
 
 // Runs the steps in order on a launched run's app. Each step gets a
 // screenshot and the tagged lines the app wrote from its start to the next
@@ -55,7 +54,7 @@ export async function steps(
   for (const [i, step] of asked.entries()) {
     report(`step ${i + 1} of ${asked.length}`);
     const start = Date.now();
-    const done = await tap(targetOf(step), { device, appId }, env, [
+    const done = await act(step, { device, appId }, env, [
       axeBackend,
       maestroBackend,
     ]);

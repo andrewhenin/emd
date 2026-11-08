@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { runTool } from "../tool.js";
 import type { App, DeviceBackend } from "./backend.js";
 import type { UiNode } from "./screen.js";
-import { maestroFlow, type Target } from "./step.js";
+import { maestroFlow, type Step } from "./step.js";
 
 type RawNode = { attributes?: Record<string, unknown>; children?: RawNode[] };
 
@@ -68,12 +68,12 @@ async function readScreen(device: string, bin: string): Promise<UiNode[]> {
   }
 }
 
-// Taps through a one-step flow, the same form as the flow EMD saves. Maestro
-// waits for the element itself.
-async function tap(target: Target, { device, appId }: App, bin: string) {
-  const dir = mkdtempSync(join(tmpdir(), "emd-tap-"));
-  const flow = join(dir, "tap.yaml");
-  writeFileSync(flow, maestroFlow(appId, [{ tapOn: target }]));
+// Runs the step as a one-step flow, the same form as the flow EMD saves.
+// Maestro waits for a tap's element itself.
+async function act(step: Step, { device, appId }: App, bin: string) {
+  const dir = mkdtempSync(join(tmpdir(), "emd-step-"));
+  const flow = join(dir, "step.yaml");
+  writeFileSync(flow, maestroFlow(appId, [step]));
   try {
     await runTool(
       "maestro test",
@@ -92,5 +92,5 @@ async function tap(target: Target, { device, appId }: App, bin: string) {
 export const maestroBackend: DeviceBackend = {
   id: "maestro",
   readScreen,
-  tap,
+  act,
 };

@@ -27,7 +27,7 @@ C, for every action that changes the app. Screen reads keep 0004.
 Steps:
 - A step is the JSON form of a Maestro command, saved as a replayable
   `flow.yaml`. A new action adds a Maestro command, never new syntax.
-- An action ships only when e2e proves it on a real simulator (now: `tapOn`).
+- An action ships only when e2e proves it on a real simulator (now: `tapOn`, `inputText`, `scroll`).
 - A step's lines are the tagged lines from its start to the next step's start.
 - The first failed step ends the run.
 - Per step: a screenshot file name, the 5 newest lines, the total. All lines

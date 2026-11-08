@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 import { delimiter, join } from "node:path";
 import { firstLine } from "../log.js";
 import type { UiNode } from "./screen.js";
-import type { Target } from "./step.js";
+import type { Step } from "./step.js";
 
 // Decision 0004: device actions go through backends, and core picks the best
 // one that is available on this machine, falling back to the next. Decision
@@ -15,12 +15,12 @@ export type BackendId = (typeof backendIds)[number];
 // The app a step acts on.
 export type App = { device: string; appId: string };
 
-// A tool that can act on a simulator: read the screen, and tap.
+// A tool that can act on a simulator: read the screen, and run a step.
 export interface DeviceBackend {
   id: BackendId;
   readScreen(device: string, bin: string): Promise<UiNode[]>;
-  // Throws DidNotAct only when the tool's own error proves it did not tap.
-  tap(target: Target, app: App, bin: string): Promise<void>;
+  // Throws DidNotAct only when the tool's own error proves it did not act.
+  act(step: Step, app: App, bin: string): Promise<void>;
 }
 
 // An action's error that proves the device was not touched, so the next
@@ -110,35 +110,35 @@ export async function readScreen(
   return { nodes, ...rest };
 }
 
-// A tap, and which backend made it or failed at it. `error` is set when no
-// backend tapped.
-export type Tap = {
+// A step, and which backend ran it or failed at it. `error` is set when no
+// backend ran it.
+export type Act = {
   backend?: BackendId;
   fellBack?: Fallback[];
   error?: string;
 };
 
-// A tap is not safe to repeat (decision 0008): it passes to the next backend
-// only when this one is not installed or proves it did not tap.
-export async function tap(
-  target: Target,
+// A tap, typing or scroll is not safe to repeat (decision 0008): it passes to
+// the next backend only when this one is not installed or proves it did not act.
+export async function act(
+  step: Step,
   app: App,
   env: Environment,
   backends: DeviceBackend[],
-): Promise<Tap> {
+): Promise<Act> {
   const done = await firstThatWorks(
     env,
     backends,
-    (backend, bin) => backend.tap(target, app, bin),
+    (backend, bin) => backend.act(step, app, bin),
     (error) => error instanceof DidNotAct,
   );
   if ("value" in done) {
-    const { value, ...tapped } = done;
-    return tapped;
+    const { value, ...ran } = done;
+    return ran;
   }
   return done.backend
     ? done
-    : { ...done, error: `no backend could tap (${done.error})` };
+    : { ...done, error: `no backend could run the step (${done.error})` };
 }
 
 function findExecutable(name: string, extraDirs: string[]): string | undefined {

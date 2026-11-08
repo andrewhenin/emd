@@ -427,18 +427,86 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
       minutes(4),
     );
 
-    // Last, so a Maestro flake (#94) fails only this test.
+    // Scroll and type through `steps`. Scroll first, so the keyboard that
+    // typing opens cannot cover the swipe's start point.
+    let scrollDir: string | undefined;
+    let typeDir: string | undefined;
+    const runSteps = async (steps: unknown[]) => {
+      const view = (await finish(
+        await call("steps", { jobId: again?.jobId, steps }),
+        new Set(),
+      )) as unknown as StepsView;
+      expect(view.status, JSON.stringify(view.result)).toBe("succeeded");
+      expect(view.result?.verdict).toBe("ran");
+      expect(JSON.stringify(view.result).length).toBeLessThan(1000);
+      return view.result;
+    };
+    // The step names its backend, has a screenshot, and got the app's line.
+    const expectActed = (
+      result: StepsView["result"],
+      index: number,
+      line: { tag: string; message: string },
+    ) => {
+      const step = result?.steps[index];
+      expect(["axe", "maestro"]).toContain(step?.backend);
+      if (step?.backend === "maestro") {
+        expect(step.fellBack?.[0]?.backend).toBe("axe");
+      }
+      expect(step?.lines).toContainEqual(expect.objectContaining(line));
+      expect(existsSync(join(result?.dir ?? "", step?.screenshot ?? "-"))).toBe(
+        true,
+      );
+    };
+
     test(
-      "the saved steps replay as a Maestro flow",
+      "a scroll step scrolls the list, from the real log and screen",
       async () => {
-        const flow = join(stepsDir ?? "", "flow.yaml");
-        expect(readFileSync(flow, "utf8")).toBe(
-          'appId: com.emd.sandbox\n---\n- tapOn:\n    id: "smoke-button"\n',
-        );
-        const replay = await maestroTest(flow, again?.result?.device.id);
-        expect(replay.status, replay.output).toBe(0);
+        const result = await runSteps(["scroll"]);
+        scrollDir = result?.dir;
+        expectActed(result, 0, { tag: "scroll", message: "scrolled" });
+        const after = await runCheck({
+          elements: [{ id: "scroll-label", text: "Scrolled" }],
+        });
+        expect(after.result).toMatchObject({ verdict: "passed" });
       },
       minutes(5),
+    );
+
+    test(
+      "a type step types into the field a tap focused, from the real log and screen",
+      async () => {
+        const result = await runSteps([
+          { tapOn: { id: "smoke-input" } },
+          { inputText: "hello" },
+        ]);
+        typeDir = result?.dir;
+        expectActed(result, 1, { tag: "input", message: "hello" });
+        const after = await runCheck({
+          elements: [{ id: "smoke-input", text: "hello" }],
+        });
+        expect(after.result).toMatchObject({ verdict: "passed" });
+      },
+      minutes(5),
+    );
+
+    // Last, so a Maestro flake (#94) fails only this test.
+    test(
+      "the saved steps replay as Maestro flows",
+      async () => {
+        const app = "appId: com.emd.sandbox\n---\n";
+        const saved: [string | undefined, string][] = [
+          [stepsDir, '- tapOn:\n    id: "smoke-button"\n'],
+          [scrollDir, "- scroll\n"],
+          [typeDir, '- tapOn:\n    id: "smoke-input"\n- inputText: "hello"\n'],
+        ];
+        for (const [dir, steps] of saved) {
+          const flow = join(dir ?? "", "flow.yaml");
+          expect(readFileSync(flow, "utf8")).toBe(app + steps);
+          const replay = await maestroTest(flow, again?.result?.device.id);
+          expect(replay.status, replay.output).toBe(0);
+        }
+      },
+      minutes(12),
     );
   },
 );

@@ -140,7 +140,7 @@ const stepsResultSchema = z.object({
     .array(
       z.object({
         step: stepSchema,
-        // The backend that tapped, or that failed (decision 0008).
+        // The backend that ran the step, or that failed (decision 0008).
         backend: z.enum(backendIds).optional(),
         fellBack: fellBackSchema,
         seconds: z.number(),

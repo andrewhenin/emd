@@ -46,10 +46,32 @@ ${body}
   chmodSync(path, 0o755);
 };
 
-// AXe's own words when nothing matches (Sources/AXe/Commands/Tap.swift, v1.8.0).
+// AXe's own words when nothing matches (Sources/AXe/Commands/Tap.swift, v1.8.0)
+// and when a character is not on a US keyboard (TextToHIDEvents.swift). A
+// gesture fails while the file \`gestureFails\` exists.
+const gestureFails = join(state, "gesture-fails");
 standIn(
   "axe",
   `record();
+const stuck = () => {
+  console.error("Timed out creating the simulator remote automation session");
+  process.exit(1);
+};
+if (args[0] === "type") {
+  const text = args[args.length - 1];
+  if (text.includes("é")) {
+    console.error("Error: No keycode found for character: 'é'");
+    process.exit(1);
+  }
+  if (text === "stuck") stuck();
+  log("typed " + text);
+  process.exit(0);
+}
+if (args[0] === "gesture") {
+  if (fs.existsSync(${JSON.stringify(gestureFails)})) stuck();
+  log("scrolled");
+  process.exit(0);
+}
 const target = args[args.indexOf("tap") + 2];
 if (target.startsWith("missing")) {
   const tip = "Make sure the app is on the expected screen, then run \`axe describe-ui --udid <SIMULATOR_UDID>\` and prefer --id when available.";
@@ -57,10 +79,7 @@ if (target.startsWith("missing")) {
   console.error("Error: No accessibility element matched --id '" + target + "'. " + tip);
   process.exit(1);
 }
-if (target === "stuck") {
-  console.error("Timed out creating the simulator remote automation session");
-  process.exit(1);
-}
+if (target === "stuck") stuck();
 const times = target === "chatty" ? 7 : 1;
 for (let i = 1; i <= times; i++) log("tapped " + target + (times > 1 ? " " + i : ""));`,
 );
@@ -72,7 +91,7 @@ if (flow.includes("gone")) {
   console.error("Element not found: Id matching regex: gone");
   process.exit(1);
 }
-log("maestro tapped");`,
+log(flow.includes("inputText") ? "maestro typed" : "maestro tapped");`,
 );
 standIn(
   "xcrun",
@@ -97,7 +116,7 @@ type Result = {
 
 // One run, from a clean capture: a line written before the run must not
 // land in any step.
-const run = (...steps: object[]) => {
+const run = (...steps: unknown[]) => {
   writeFileSync(
     capture,
     `${JSON.stringify({ timestamp: "2020-01-01T00:00:00Z", eventMessage: "[EMD:smoke] before the run" })}\n`,
@@ -240,6 +259,62 @@ test("when Maestro fails after AXe found nothing, the step names Maestro and its
   expect(step?.error).toContain("Element not found");
 }, 20_000);
 
+test("AXe types into the field that has focus and scrolls; the flow replays them", async () => {
+  const { status, result } = run(
+    { tapOn: { id: "smoke-input" } },
+    { inputText: '-a "b"' },
+    "scroll",
+  );
+  expect(status).toBe(0);
+  expect(
+    called()
+      .filter((c) => c.tool === "axe")
+      .map((c) => c.args),
+  ).toEqual([
+    ["tap", "--id", "smoke-input", "--wait-timeout", "10", "--udid", device],
+    ["type", "--udid", device, "--", '-a "b"'],
+    ["gesture", "scroll-up", "--udid", device],
+  ]);
+  expect(result.steps?.map((s) => [s.backend, messages(s.lines)])).toEqual([
+    ["axe", ["tapped smoke-input"]],
+    ["axe", ['typed -a "b"']],
+    ["axe", ["scrolled"]],
+  ]);
+  expect(readFileSync(join(result.dir ?? "", "flow.yaml"), "utf8")).toBe(
+    'appId: com.emd.sandbox\n---\n- tapOn:\n    id: "smoke-input"\n- inputText: "-a \\"b\\""\n- scroll\n',
+  );
+}, 20_000);
+
+test("when AXe proves it did not type, Maestro types, and the result says why", async () => {
+  const { status, result } = run({ inputText: "café" });
+  expect(status).toBe(0);
+  const [step] = result.steps ?? [];
+  expect(step?.backend).toBe("maestro");
+  expect(step?.fellBack?.[0]).toEqual({
+    backend: "axe",
+    reason:
+      "Error: axe type failed (exit 1): Error: No keycode found for character: 'é'",
+  });
+  expect(messages(step?.lines ?? [])).toEqual(["maestro typed"]);
+  expect(called().find((c) => c.tool === "maestro")?.flow).toBe(
+    'appId: com.emd.sandbox\n---\n- inputText: "café"\n',
+  );
+}, 20_000);
+
+test("any other AXe error while typing or scrolling fails the step without a second try", async () => {
+  for (const step of [{ inputText: "stuck" }, "scroll"]) {
+    if (step === "scroll") writeFileSync(gestureFails, "");
+    const { status, result } = run(step);
+    rmSync(gestureFails, { force: true });
+    expect(status).toBe(1);
+    const [ran] = result.steps ?? [];
+    expect(ran).toMatchObject({ backend: "axe", screenshot: "01.png" });
+    expect(ran?.error).toContain("Timed out creating the simulator");
+    expect(ran?.fellBack).toBeUndefined();
+    expect(called().map((c) => c.tool)).toEqual(["axe", "xcrun"]);
+  }
+}, 20_000);
+
 test("a step returns its newest 5 lines and the total; steps.json keeps all", async () => {
   const { result } = run({ tapOn: { id: "chatty" } });
   const [step] = result.steps ?? [];
@@ -255,7 +330,11 @@ test("a step returns its newest 5 lines and the total; steps.json keeps all", as
 
 test.each([
   ["no step", []],
-  ["a command EMD does not run yet", [{ inputText: "hello" }]],
+  ["a command EMD does not run yet", [{ swipe: { direction: "UP" } }]],
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: Maestro's syntax, not a template.
+  ["text Maestro would run as JavaScript", [{ inputText: "a ${b}" }]],
+  ["empty text", [{ inputText: "" }]],
+  ["scroll as an object", [{ scroll: null }]],
   ["a tap with both id and text", [{ tapOn: { id: "a", text: "b" } }]],
   ["more than 20 steps", Array(21).fill({ tapOn: "a" })],
 ])("refuses %s before it touches the device", (_name, steps) => {
@@ -280,7 +359,7 @@ test("refuses bad JSON, a missing job, and on MCP a command outside the schema",
   expect(JSON.parse(unknown.stdout).reason).toMatch(/No job with id/);
   const refused = await client.callTool({
     name: "steps",
-    arguments: { jobId, steps: [{ inputText: "hello" }] },
+    arguments: { jobId, steps: [{ swipe: { direction: "UP" } }] },
   });
   expect(refused.isError).toBe(true);
 });
