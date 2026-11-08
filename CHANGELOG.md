@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.2](https://github.com/andrewhenin/emd/compare/emd-agents-v0.7.1...emd-agents-v0.7.2) (2026-11-08)
+
+
+### Bug Fixes
+
+* route every outside tool call through runTool ([#93](https://github.com/andrewhenin/emd/issues/93)) ([9f471d4](https://github.com/andrewhenin/emd/commit/9f471d4c6f631000273ce83170048f7c8876aa43))
+
 ## [0.7.1](https://github.com/andrewhenin/emd/compare/emd-agents-v0.7.0...emd-agents-v0.7.1) (2026-11-07)
 
 
