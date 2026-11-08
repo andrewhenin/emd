@@ -314,6 +314,44 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
     };
     let stepsDir: string | undefined;
 
+    // Measurement for the waits in steps (decision 0008): for 30 s from the
+    // step's start, when the tap's line can be read through `logs`, and each
+    // time app.ndjson grows (lines and bytes), to see single lines or batches.
+    const measureCapture = async () => {
+      const saved = JSON.parse(
+        readFileSync(join(stepsDir ?? "", "steps.json"), "utf8"),
+      ) as { steps: { start: string }[] };
+      const start = Date.parse(saved.steps[0]?.start ?? "");
+      const capture = join(again?.result?.logDir ?? "", "app.ndjson");
+      let count = -1;
+      let seen = false;
+      while (Date.now() - start < 30_000) {
+        const text = existsSync(capture) ? readFileSync(capture, "utf8") : "";
+        const lines = text.split("\n").filter(Boolean).length;
+        if (lines !== count) {
+          count = lines;
+          console.log(
+            `[e2e] app.ndjson: ${lines} lines, ${Buffer.byteLength(text)} bytes at +${Date.now() - start} ms from step start`,
+          );
+        }
+        if (!seen) {
+          const line = (
+            await readLogs(again?.jobId ?? "", { tag: "smoke" })
+          ).lines?.find(
+            (l) => l.message === "tapped" && Date.parse(l.time) >= start,
+          );
+          if (line) {
+            seen = true;
+            console.log(
+              `[e2e] tap line in app.ndjson after ${Date.now() - start} ms from step start (its log time: +${Date.parse(line.time) - start} ms)`,
+            );
+          }
+        }
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+      if (!seen) console.log("[e2e] tap line not in app.ndjson after 30 s");
+    };
+
     // The result names the backend that read the screen (decision 0004);
     // if it is not AXe, it says why AXe was passed over. Each read picks its own.
     const expectBackendNamed = (view: CheckView) => {
@@ -351,9 +389,11 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
           }),
           new Set(),
         )) as unknown as StepsView;
-        expect(tapped.status, JSON.stringify(tapped.result)).toBe("succeeded");
         const result = tapped.result;
         stepsDir = result?.dir;
+        console.log(`[e2e] steps result ${JSON.stringify(result)}`);
+        await measureCapture();
+        expect(tapped.status, JSON.stringify(tapped.result)).toBe("succeeded");
         expect(result?.verdict).toBe("ran");
         const [step] = result?.steps ?? [];
         expect(["axe", "maestro"]).toContain(step?.backend);
@@ -367,19 +407,6 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
           true,
         );
         expect(JSON.stringify(result).length).toBeLessThan(1000);
-        // Data for the 1 s waits: from each step's start to its first line.
-        const saved = JSON.parse(
-          readFileSync(join(stepsDir ?? "", "steps.json"), "utf8"),
-        ) as { steps: { start: string; lines: { time: string }[] }[] };
-        saved.steps.forEach((s, i) => {
-          const first = s.lines[0]?.time;
-          const delay = first
-            ? Date.parse(first) - Date.parse(s.start)
-            : "none";
-          console.log(
-            `[e2e] step ${i + 1}: first tagged line after ${delay} ms`,
-          );
-        });
 
         const after = await runCheck({
           logs: tappedLog,
