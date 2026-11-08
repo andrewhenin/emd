@@ -12,8 +12,20 @@ updates:
     commit-message:
       prefix: "chore"
       include: "scope"
-    # Major updates match no group, so each gets its own PR.
+    # @types/node must match Node 22, the lowest Node in engines.
+    # TypeScript 7 is a new compiler. Move to it as a planned task.
+    ignore:
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+    # A dependency goes to the first group it matches. Other major updates
+    # match no group, so each gets its own PR.
     groups:
+      # The commitlint packages must move together, majors included.
+      commitlint:
+        patterns: ["@commitlint/*"]
+        update-types: ["major", "minor", "patch"]
       production-dependencies:
         dependency-type: "production"
         update-types: ["minor", "patch"]
