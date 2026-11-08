@@ -5,8 +5,8 @@ Date: 2026-11-08
 
 ## Context
 
-[XcodeBuildMCP](https://github.com/getsentry/XcodeBuildMCP) (MIT, Sentry)
-already taps by accessibility id or label, types, swipes, takes screenshots
+[MobileBuildMCP](https://github.com/getsentry/XcodeBuildMCP) (formerly XcodeBuildMCP;
+MIT, Sentry) already taps by accessibility id or label, types, swipes, takes screenshots
 and captures simulator logs: the device actions EMD began to build in #106.
 
 ## Options
@@ -29,7 +29,7 @@ B. Use a maintained tool when all four conditions are true:
 When one condition is false, EMD writes the code. EMD's own code covers only
 the gaps and the glue: setup, version pins and agent instructions.
 
-No tool meets condition 4 yet. #11 adds the first e2e test, for XcodeBuildMCP.
+No tool meets condition 4 yet. #11 adds the first e2e test, for MobileBuildMCP.
 
 ## Consequences
 
