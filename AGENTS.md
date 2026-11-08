@@ -35,7 +35,7 @@ Notes, findings and decisions: follow [docs/logging.md](docs/logging.md) exactly
 
 - Optimize agent tokens per completed task first, then time, then CPU and memory.
 - Report only checks that actually ran. Say which ones did not.
-- Open PRs ready for review, not as drafts. Never claim a human reviewed anything.
+- Never claim a human reviewed anything.
 - Never push to `main` and never force-push. Always work on a branch and open a PR.
 - To update a PR branch, merge main into it. Never force-push.
 - If scope changes during a PR, update the linked issue's acceptance criteria in the same PR.

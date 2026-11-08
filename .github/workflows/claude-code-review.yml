@@ -47,8 +47,7 @@ jobs:
             a problem to fix, with file:line and why. Look for:
             1. What can be deleted or simplified while still meeting the acceptance criteria?
             2. Which changed files weren't named in the PR's plan?
-            3. Any AGENTS.md rule broken? Skip draft status and whether checks ran
-            locally: the owner sets draft status before this review runs, and the
+            3. Any AGENTS.md rule broken? Skip whether checks ran locally: the
             required `check` job reruns lint, typecheck, test and check:sizes.
             Do not report what you checked and found fine. If there are no findings,
             comment only "Nothing to cut." Don't suggest new features.
