@@ -2,6 +2,8 @@ import { mkdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import { detect } from "./detect.js";
+import { axeBackend } from "./device/axe.js";
+import { detectEnvironment, untilReadable } from "./device/backend.js";
 import {
   derivedDataPath,
   diskMB,
@@ -29,6 +31,9 @@ import { runTool } from "./tool.js";
 
 const metroStartSeconds = 120;
 const stopSeconds = 10;
+// AXe could not read the screen for about 3 minutes after a relaunch on CI
+// (#131), so wait up to 5.
+const readableSeconds = 300;
 const defaultTimeoutSeconds = 900;
 
 export type LaunchOptions = {
@@ -339,6 +344,21 @@ export async function launch(
     });
   }
 
+  // A launched app is one the next screen read can see (#131). Only AXe has a
+  // dead time after a launch; a Maestro read takes about 50 s, so without AXe
+  // there is no wait.
+  const tools = await detectEnvironment();
+  let screen: LaunchResult["screen"];
+  if (tools.axe) {
+    report("waiting until the screen can be read");
+    screen = await untilReadable(
+      device.id,
+      tools,
+      [axeBackend],
+      readableSeconds,
+    );
+  }
+
   return {
     verdict: "launched",
     root,
@@ -349,6 +369,7 @@ export async function launch(
     logStream: { pid: capture.pid },
     derivedData,
     diskMB: await sizes(),
+    ...(screen && { screen }),
     seconds: seconds(),
   };
 }

@@ -45,6 +45,11 @@ export const launchResultSchema = z.object({
   diskMB: z
     .object({ derivedData: z.number(), simulator: z.number() })
     .optional(),
+  // How long launch waited until AXe could read the screen. `error` when it
+  // ran out: the app runs, but screen reads can fail for a while.
+  screen: z
+    .object({ waited: z.number(), error: z.string().optional() })
+    .optional(),
   // Full build and server logs live here; read them only when needed.
   logDir: z.string().optional(),
   seconds: z.number().optional(),

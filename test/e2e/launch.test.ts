@@ -24,6 +24,7 @@ type View = {
     appId: string;
     appPid: number;
     metro: { pid: number; port: number };
+    screen?: { waited: number; error?: string };
     logDir: string;
   };
 };
@@ -290,6 +291,12 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
         again = await finish(await call("launch", { dir: sandbox }), new Set());
         expect(again.status, again.result?.reason).toBe("succeeded");
         expect(again.result?.metro.port).toBe(left?.port);
+        // #131: launch returns once AXe can read the screen. Logged to measure
+        // the wait.
+        expect(again.result?.screen?.error).toBeUndefined();
+        console.log(
+          `relaunch: screen readable after ${again.result?.screen?.waited} s`,
+        );
         expect(() => process.kill(-(left?.pid ?? 0), 0)).toThrow();
         const later = await readLogs(again.jobId, { tag: "smoke" });
         expect(later).toMatchObject({ verdict: "ok", total: 0, lines: [] });

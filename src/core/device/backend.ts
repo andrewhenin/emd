@@ -64,6 +64,29 @@ export async function readScreen(
   );
 }
 
+// Reads the screen until a read works or `limit` seconds pass, and says how
+// long that took. `error` is the last failure when the time ran out.
+export async function untilReadable(
+  device: string,
+  env: Environment,
+  backends: DeviceBackend[],
+  limit: number,
+): Promise<{ waited: number; error?: string }> {
+  const start = Date.now();
+  const waited = () => Math.round((Date.now() - start) / 1000);
+  for (;;) {
+    try {
+      await readScreen(device, env, backends);
+      return { waited: waited() };
+    } catch (error) {
+      if (Date.now() - start >= limit * 1000) {
+        return { waited: waited(), error: firstLine(error) };
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+}
+
 function findExecutable(name: string, extraDirs: string[]): string | undefined {
   const dirs = [
     ...(process.env.PATH ?? "").split(delimiter),
