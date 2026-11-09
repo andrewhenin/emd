@@ -132,19 +132,6 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
       expect(existsSync(join(dir, "metro.log"))).toBe(true);
     });
 
-    test(
-      "a second launch ends failed, clearly, while the dev server is up",
-      async () => {
-        const second = await finish(
-          await call("launch", { dir: sandbox }),
-          new Set(),
-        );
-        expect(second.status).toBe("failed");
-        expect(second.result?.reason).toContain("already serves a dev server");
-      },
-      minutes(2),
-    );
-
     // Async, so vitest's worker keeps answering while a tool runs for minutes.
     const run = (
       command: string,
@@ -295,13 +282,15 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
       minutes(5),
     );
 
+    // The first launch's dev server is still up (#121).
     test(
-      "a later run does not see an earlier run's lines",
+      "a later launch stops the dev server the earlier one left, and its run does not see the earlier run's lines",
       async () => {
-        if (final.result) process.kill(-final.result.metro.pid, "SIGTERM");
-        await new Promise((resolve) => setTimeout(resolve, 3000));
+        const left = final.result?.metro;
         again = await finish(await call("launch", { dir: sandbox }), new Set());
-        expect(again.status).toBe("succeeded");
+        expect(again.status, again.result?.reason).toBe("succeeded");
+        expect(again.result?.metro.port).toBe(left?.port);
+        expect(() => process.kill(-(left?.pid ?? 0), 0)).toThrow();
         const later = await readLogs(again.jobId, { tag: "smoke" });
         expect(later).toMatchObject({ verdict: "ok", total: 0, lines: [] });
         const earlier = await readLogs(first.jobId, { tag: "smoke" });
@@ -416,6 +405,50 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
         expect(fixed.result).toMatchObject({ verdict: "passed" });
       },
       minutes(4),
+    );
+
+    // Last: it stops this run's dev server.
+    const answers = (port: number | undefined) =>
+      fetch(`http://localhost:${port}/status`)
+        .then(async (r) => (await r.text()).includes("packager-status:running"))
+        .catch(() => false);
+    const until = async (done: () => Promise<boolean>) => {
+      for (let i = 0; i < 40 && !(await done()); i++) {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+    };
+
+    test(
+      "a dev server EMD did not start still blocks launch, and is left running",
+      async () => {
+        const left = again?.result?.metro;
+        expect(left).toBeDefined();
+        if (left) process.kill(-left.pid, "SIGTERM");
+        await until(async () => !(await answers(left?.port)));
+        const foreign = spawn(
+          "node",
+          [
+            "-e",
+            `require("http").createServer((q, s) => s.end("packager-status:running")).listen(${left?.port})`,
+          ],
+          { stdio: "ignore" },
+        );
+        try {
+          await until(() => answers(left?.port));
+          const blocked = await finish(
+            await call("launch", { dir: sandbox }),
+            new Set(),
+          );
+          expect(blocked.status).toBe("failed");
+          expect(blocked.result?.reason).toContain(
+            "already serves a dev server",
+          );
+          expect(await answers(left?.port)).toBe(true);
+        } finally {
+          foreign.kill();
+        }
+      },
+      minutes(3),
     );
   },
 );

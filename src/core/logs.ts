@@ -1,8 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { readJobs } from "./jobstore.js";
+import { launchesIn } from "./jobstore.js";
 import { type LoggedProcess, startLogged } from "./process.js";
-import type { LaunchResult, LogsResult } from "./result.js";
+import type { LogsResult } from "./result.js";
 import { resolveRun } from "./run.js";
 import { runTool } from "./tool.js";
 
@@ -107,11 +107,9 @@ export async function startCapture(
 // pid is checked before it is signalled, as the recorded one may belong to
 // something else now.
 export async function stopCaptures(root: string): Promise<void> {
-  for (const job of readJobs()) {
-    const result =
-      job.kind === "launch" ? (job.result as LaunchResult) : undefined;
-    const pid = result?.logStream?.pid;
-    if (result?.root !== root || !pid) continue;
+  for (const result of launchesIn(root)) {
+    const pid = result.logStream?.pid;
+    if (!pid) continue;
     try {
       const { stdout } = await runTool(
         "ps",
