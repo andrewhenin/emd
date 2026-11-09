@@ -60,7 +60,13 @@ Register `emd mcp` with your agent. Run these lines in the `emd` folder, so that
 - Codex ([docs](https://developers.openai.com/codex/mcp)): `codex mcp add emd -- node "$PWD/dist/bin.js" mcp`. This writes `[mcp_servers.emd]` in `~/.codex/config.toml`. Check with `/mcp` in Codex.
 - Cursor ([docs](https://cursor.com/docs/mcp)): add `{ "mcpServers": { "emd": { "command": "node", "args": ["/full/path/to/emd/dist/bin.js", "mcp"] } } }` to `~/.cursor/mcp.json`, with the full path of your `emd` folder. Check under Output > MCP Logs.
 
-EMD does not tap or type. For that, also register [MobileBuildMCP](https://github.com/getsentry/MobileBuildMCP) with your agent; its README has the steps. EMD's e2e tests one version of it, pinned in `test/e2e/launch.test.ts`.
+EMD does not tap or type. For that, also register [MobileBuildMCP](https://github.com/getsentry/MobileBuildMCP) with its UI tools turned on. In MCP mode it turns on only its `simulator` and `session-management` tools; `tap` is in `ui-automation`. For Claude Code:
+
+```sh
+claude mcp add --scope user mobilebuildmcp -e MOBILEBUILDMCP_ENABLED_WORKFLOWS=simulator,ui-automation -- npx -y mobilebuildmcp@2.7.1 mcp
+```
+
+Put the server name before `-e`, because `-e` takes every word after it. EMD's e2e tests this version, pinned in `test/e2e/launch.test.ts`.
 
 ## First run
 
@@ -73,7 +79,7 @@ The agent then runs this loop:
 
 1. `launch`, with `dir` set to your app. It returns a `jobId` at once.
 2. `job_status` every 5 to 10 seconds, until `succeeded` or `failed`. A first build takes minutes. A failed launch gives the reason and the first error lines.
-3. To tap, type or swipe: MobileBuildMCP's `snapshot_ui`, then `tap` (or `type_text`, `swipe`), on the simulator from the launch result (`device.id`).
+3. To tap, type or swipe, with MobileBuildMCP: `session_set_defaults` with `simulatorId` set to `device.id` from the launch result, then `snapshot_ui`, then `tap` (or `type_text`, `swipe`). Judge a tap by the next `check`, not by the tap's result: a `tap` can report success and change nothing. If nothing changed, try `touch` (down, then up).
 4. `logs`, to read the tagged lines.
 5. `check`, with the expected log events and elements, then `job_status` until it ends. The verdict is `passed`, `failed` (fix and check again), `stopped` (3 failed checks: stop and report) or `error` (the check could not run).
 6. `evidence`, to write the evidence folder.
