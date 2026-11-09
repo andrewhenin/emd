@@ -20,7 +20,15 @@ concurrency:
 jobs:
   e2e:
     if: github.event.pull_request.draft != true
-    runs-on: macos-26
+    # PRs run on Xcode 26 only; the nightly and manual runs also run on Xcode 27
+    # (#124). Xcode 27 is advisory until it has passed: its failure does not
+    # fail the run.
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: ${{ fromJSON(github.event_name == 'pull_request' && '["macos-26"]' || '["macos-26","xcode-27"]') }}
+    runs-on: ${{ matrix.runner }}
+    continue-on-error: ${{ matrix.runner == 'xcode-27' }}
     timeout-minutes: 60
     # The tool versions e2e tests (decision 0008, condition 4).
     # To bump AXe, change the version and the archive's SHA-256 together.
@@ -86,6 +94,7 @@ jobs:
         shell: bash
         run: |
           xcodebuild -version
+          echo "iOS simulator SDK $(xcrun --sdk iphonesimulator --show-sdk-version)"
           xcrun simctl list runtimes
           java -version
           node --version
@@ -104,7 +113,7 @@ jobs:
         if: always() && steps.gate.outputs.run == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-${{ github.run_id }}
+          name: e2e-${{ github.run_id }}-${{ matrix.runner }}
           path: |
             e2e-output.txt
             ${{ runner.temp }}/emd-state/runs
