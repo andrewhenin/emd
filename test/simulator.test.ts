@@ -1,5 +1,10 @@
 import { expect, test } from "vitest";
-import { type Device, pickDevice } from "../src/core/simulator.ts";
+import {
+  type Device,
+  newerThan,
+  parseSdkVersion,
+  pickDevice,
+} from "../src/core/simulator.ts";
 
 const device = (
   id: string,
@@ -35,4 +40,29 @@ test("returns nothing when no device matches", () => {
   expect(pickDevice(devices, "iPhone 99")).toBeUndefined();
   expect(pickDevice([device("c", "iPad", [26, 5])])).toBeUndefined();
   expect(pickDevice([])).toBeUndefined();
+});
+
+// #122: Xcode 26.6 with an iOS 27.1 runtime installed picked 27.1, and the
+// build failed. With no device named, the pick stays within the SDK.
+test("with no device named, skips runtimes newer than the Xcode SDK", () => {
+  const withNewer = [
+    ...devices.filter((d) => d.state !== "Booted"),
+    device("f", "iPhone 18", [27, 1]),
+    device("g", "iPhone 18 Pro", [27, 1], "Booted"),
+  ];
+  expect(pickDevice(withNewer)?.id).toBe("g");
+  expect(pickDevice(withNewer, undefined, [26, 6])?.name).toBe("iPhone 17");
+  expect(pickDevice(withNewer, "iPhone 18", [26, 6])?.id).toBe("f");
+});
+
+test("a runtime is newer than the SDK by major and minor only", () => {
+  expect(newerThan(device("x", "iPhone", [27, 1]), [26, 6])).toBe(true);
+  expect(newerThan(device("x", "iPhone", [26, 6, 1]), [26, 6])).toBe(false);
+  expect(newerThan(device("x", "iPhone", [18, 3]), [27, 2])).toBe(false);
+});
+
+test("reads the SDK version that xcrun prints", () => {
+  expect(parseSdkVersion("26.6\n")).toEqual([26, 6]);
+  expect(parseSdkVersion("27.2.1\n")).toEqual([27, 2]);
+  expect(parseSdkVersion("xcrun: error: SDK not found\n")).toBeUndefined();
 });
