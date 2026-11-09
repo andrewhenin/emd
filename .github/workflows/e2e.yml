@@ -71,14 +71,15 @@ jobs:
         run: |
           npm ci
           npm ci --prefix fixtures/expo
-          curl -fsSL -o "$RUNNER_TEMP/axe.tar.gz" \
+          # Retries: release downloads returned 504 three times on Nov 9.
+          curl -fsSL --retry 3 --retry-all-errors --retry-delay 10 -o "$RUNNER_TEMP/axe.tar.gz" \
             "https://github.com/cameroncooke/AXe/releases/download/v$AXE_VERSION/AXe-macOS-v$AXE_VERSION-universal.tar.gz"
           echo "$AXE_SHA256  $RUNNER_TEMP/axe.tar.gz" | shasum -a 256 -c -
           mkdir -p "$RUNNER_TEMP/axe"
           tar -xzf "$RUNNER_TEMP/axe.tar.gz" -C "$RUNNER_TEMP/axe"
           echo "$RUNNER_TEMP/axe" >> "$GITHUB_PATH"
           # The script installs MAESTRO_VERSION from the job env.
-          curl -fsSL "https://get.maestro.mobile.dev" | bash
+          curl -fsSL --retry 3 --retry-all-errors --retry-delay 10 "https://get.maestro.mobile.dev" | bash
           echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
 
       - name: Print versions
