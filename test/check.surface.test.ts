@@ -1,5 +1,8 @@
+import { spawn } from "node:child_process";
+import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { expect, test } from "vitest";
-import { makeDir, mcpSession, cli as run } from "./helpers.ts";
+import { launchedJob, makeDir, mcpSession, cli as run } from "./helpers.ts";
 
 // The `check` paths that need no simulator, through the real CLI and the real
 // MCP server (which runs each check as a job in a real worker process), so
@@ -87,3 +90,35 @@ test("neither the CLI nor the MCP tool lets the agent set the limit or reset the
     "agentReading",
   ]);
 });
+
+// #140: a log line that reaches the capture a moment after the check starts.
+test("a check through the CLI passes on a line that arrives late", async () => {
+  const jobId = await launchedJob(state);
+  const logDir = join(state, "runs", jobId);
+  mkdirSync(logDir, { recursive: true });
+  writeFileSync(join(logDir, "app.ndjson"), "");
+  const child = spawn(
+    "node",
+    ["dist/bin.js", "check", jobId, "--log", "smoke=tapped"],
+    { env: process.env },
+  );
+  let stdout = "";
+  child.stdout.on("data", (chunk) => {
+    stdout += chunk;
+  });
+  const exited = new Promise((resolve) => child.on("close", resolve));
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+  // The shape `log stream --style ndjson` writes (test/logs.test.ts).
+  const timestamp = new Date()
+    .toISOString()
+    .replace("T", " ")
+    .replace("Z", "+0000");
+  appendFileSync(
+    join(logDir, "app.ndjson"),
+    `${JSON.stringify({ timestamp, eventMessage: "[EMD:smoke] tapped", messageType: "Info" })}\n`,
+  );
+  await exited;
+  const result = JSON.parse(stdout);
+  expect(result).toMatchObject({ verdict: "passed" });
+  expect(result.waited).toBeGreaterThanOrEqual(1);
+}, 15_000);

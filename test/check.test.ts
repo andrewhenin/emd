@@ -30,6 +30,7 @@ type Calls = { logs: number; screen: number; screenshot: number };
 function readers(screen: Screen = {}, overrides: Partial<Deps> = {}) {
   const calls: Calls = { logs: 0, screen: 0, screenshot: 0 };
   const deps: Deps = {
+    recheckSeconds: 0,
     logs: async ({ tag }): Promise<LogsResult> => {
       calls.logs++;
       const messages = screen.logs?.[tag ?? ""] ?? [];
@@ -91,6 +92,49 @@ test("passes when every log event and element is found", async () => {
   expect(existsSync(shot)).toBe(true);
   const screen = shot.replace(/check-(\d+)\.png$/, "screen-$1.json");
   expect(JSON.parse(readFileSync(screen, "utf8"))).toEqual(tapped.nodes);
+});
+
+// #140: a line that reaches the capture after the first read still counts.
+test("reads again what is missing until the limit, and says how long", async () => {
+  const jobId = await launched();
+  let reads = 0;
+  const late = readers(
+    {},
+    {
+      recheckSeconds: 3,
+      logs: async ({ tag }) => {
+        reads++;
+        const lines =
+          reads < 2
+            ? []
+            : [
+                {
+                  time: "2026-10-24T18:00:00.000Z",
+                  tag: tag ?? "",
+                  message: "tapped",
+                },
+              ];
+        return { verdict: "ok", lines, total: lines.length };
+      },
+    },
+  );
+  const result = await run(
+    { jobId, logs: [{ tag: "smoke", message: "tapped" }] },
+    late.deps,
+  );
+  expect(result).toMatchObject({ verdict: "passed", waited: 1 });
+  expect(reads).toBe(2);
+  expect(late.calls.screen).toBe(0);
+});
+
+test("fails after the limit, as one attempt", async () => {
+  const jobId = await launched();
+  const { deps, calls } = readers(tapped, { recheckSeconds: 2 });
+  const result = await run({ jobId, elements: [{ text: "Nope" }] }, deps);
+  expect(result).toMatchObject({ verdict: "failed", attempt: 1 });
+  expect(result.waited).toBeGreaterThanOrEqual(2);
+  expect(calls.screen).toBeGreaterThanOrEqual(2);
+  expect(calls.logs).toBe(0);
 });
 
 test("a check that expects no element reads no screen and writes no screen file", async () => {

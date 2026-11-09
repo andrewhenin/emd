@@ -306,6 +306,7 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
       status: string;
       seconds: number;
       result?: {
+        waited?: number;
         verdict: string;
         reason?: string;
         attempt?: number;
@@ -365,6 +366,10 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
           logs: tappedLog,
           elements: [{ id: "smoke-button" }, { text: "Tapped" }],
         });
+        // #140: logged to measure how long a check reads again after a tap.
+        console.log(
+          `after the tap: the check waited ${after.result?.waited ?? 0} s`,
+        );
         expect(after.status).toBe("succeeded");
         expect(after.result).toMatchObject({ verdict: "passed" });
         expect(after.result?.attempt).toBeUndefined();

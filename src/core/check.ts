@@ -40,9 +40,13 @@ export type Deps = {
   logs: (options: Omit<LogsOptions, "limit">) => Promise<LogsResult>;
   screen: (device: string) => Promise<ScreenRead>;
   screenshot: (device: string, path: string) => Promise<boolean>;
+  // How long a check reads again before it fails (#140).
+  recheckSeconds: number;
 };
 
 const realDeps: Deps = {
+  // A first value: the result's `waited` and the e2e log measure it.
+  recheckSeconds: 5,
   logs: allLines,
   screen: async (device) =>
     readScreen(device, await detectEnvironment(), [axeBackend, maestroBackend]),
@@ -159,40 +163,63 @@ export async function check(
   }
 
   const byTag = new Map<string, TaggedLine[]>();
-  if (logSpecs.length > 0) {
-    report("reading the logs");
+  const readLogs = async (): Promise<string | undefined> => {
     for (const tag of new Set(logSpecs.map((spec) => spec.tag))) {
       const got = await deps.logs({ jobId: options.jobId, tag });
-      if (got.verdict !== "ok") {
-        return error(got.reason ?? "Could not read the logs.");
-      }
+      if (got.verdict !== "ok") return got.reason ?? "Could not read the logs.";
       byTag.set(tag, got.lines ?? []);
     }
-  }
+  };
   let screen: ScreenRead | undefined;
-  if (elementSpecs.length > 0) {
-    report("reading the screen");
+  const readTheScreen = async (): Promise<string | undefined> => {
     try {
       screen = await deps.screen(device);
     } catch (failure) {
-      return error(`Could not read the screen: ${firstLine(failure)}`);
+      return `Could not read the screen: ${firstLine(failure)}`;
     }
-  }
-  const nodes = screen?.nodes ?? [];
+  };
+  const judge = () => {
+    const logs = logSpecs.map((spec) => ({
+      tag: spec.tag,
+      ...(spec.message === undefined ? {} : { message: spec.message }),
+      found: (byTag.get(spec.tag) ?? []).some(
+        (line) =>
+          spec.message === undefined || line.message.includes(spec.message),
+      ),
+    }));
+    const elements = elementSpecs.map((spec) => ({
+      ...(spec.id === undefined ? {} : { id: spec.id }),
+      ...(spec.text === undefined ? {} : { text: spec.text }),
+      found: hasElement(screen?.nodes ?? [], spec),
+    }));
+    return { logs, elements };
+  };
 
-  const logResults = logSpecs.map((spec) => ({
-    tag: spec.tag,
-    ...(spec.message === undefined ? {} : { message: spec.message }),
-    found: (byTag.get(spec.tag) ?? []).some(
-      (line) =>
-        spec.message === undefined || line.message.includes(spec.message),
-    ),
-  }));
-  const elementResults = elementSpecs.map((spec) => ({
-    ...(spec.id === undefined ? {} : { id: spec.id }),
-    ...(spec.text === undefined ? {} : { text: spec.text }),
-    found: hasElement(nodes, spec),
-  }));
+  // Read, then read again what is still missing until the limit, so a check
+  // run a moment after an action doesn't fail on a line still on its way.
+  const started = Date.now();
+  let logResults: ReturnType<typeof judge>["logs"] = [];
+  let elementResults: ReturnType<typeof judge>["elements"] = [];
+  for (let first = true; ; first = false) {
+    const logsMissing = first || logResults.some((r) => !r.found);
+    const screenMissing = first || elementResults.some((r) => !r.found);
+    if (logSpecs.length > 0 && logsMissing) {
+      report(first ? "reading the logs" : "reading the logs again");
+      const failure = await readLogs();
+      if (failure) return error(failure);
+    }
+    if (elementSpecs.length > 0 && screenMissing) {
+      report(first ? "reading the screen" : "reading the screen again");
+      const failure = await readTheScreen();
+      if (failure) return error(failure);
+    }
+    ({ logs: logResults, elements: elementResults } = judge());
+    const missing = [...logResults, ...elementResults].some((r) => !r.found);
+    if (!missing || Date.now() - started >= deps.recheckSeconds * 1000) break;
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  const waited = Math.round((Date.now() - started) / 1000);
+  const nodes = screen?.nodes ?? [];
   const passed = [...logResults, ...elementResults].every((r) => r.found);
 
   report("taking a screenshot");
@@ -215,6 +242,7 @@ export async function check(
         }
       : undefined;
   const evidence = {
+    ...(waited > 0 ? { waited } : {}),
     logs: logResults.length > 0 ? logResults : undefined,
     elements: elementResults.length > 0 ? elementResults : undefined,
     // Which backend read the screen, and any it passed over (decision 0004).
