@@ -22,6 +22,7 @@ import {
   boot,
   cloneDevice,
   type Device,
+  enableAccessibility,
   launchApp,
   listDevices,
   pickDevice,
@@ -31,9 +32,9 @@ import { runTool } from "./tool.js";
 
 const metroStartSeconds = 120;
 const stopSeconds = 10;
-// AXe could not read the screen for about 3 minutes after a relaunch on CI
-// (#131), so wait up to 5.
-const readableSeconds = 300;
+// With accessibility on, the wait covers only the app's first render. Without
+// it, AXe read an empty tree for the whole 300 s after a relaunch on CI (#131).
+const readableSeconds = 60;
 const defaultTimeoutSeconds = 900;
 
 export type LaunchOptions = {
@@ -269,6 +270,8 @@ export async function launch(
       errors: String(error).split("\n").slice(0, 3),
     });
   }
+  // A failure here is not fatal: the wait for a readable screen reports it.
+  await enableAccessibility(device).catch(() => {});
 
   await stopEarlierServer(root, port);
   if (await metroRunning(port)) {

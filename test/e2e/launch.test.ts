@@ -126,6 +126,15 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
       expect(await response.text()).toContain("packager-status:running");
     });
 
+    // #131: on a new clone, launch turns accessibility on and returns once AXe
+    // can read the screen. Logged to measure the wait.
+    test("returns once AXe can read the screen", () => {
+      expect(final.result?.screen?.error).toBeUndefined();
+      console.log(
+        `launch: screen readable after ${final.result?.screen?.waited} s`,
+      );
+    });
+
     test("the answer stays small and the logs stay on disk", () => {
       expect(JSON.stringify(final).length).toBeLessThan(900);
       const dir = final.result?.logDir ?? "";

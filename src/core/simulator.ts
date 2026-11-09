@@ -90,6 +90,33 @@ export async function launchApp(
   return pid;
 }
 
+// New iOS 26 simulators ship with accessibility off, so AXe reads an empty
+// tree (https://github.com/getsentry/XcodeBuildMCP/issues/290). The setting
+// stays on the device until it is erased. Booted devices only.
+export async function enableAccessibility(device: Device): Promise<void> {
+  for (const key of [
+    "AccessibilityEnabled",
+    "ApplicationAccessibilityEnabled",
+  ]) {
+    await runTool(
+      `simctl defaults write ${key}`,
+      "xcrun",
+      [
+        "simctl",
+        "spawn",
+        device.id,
+        "defaults",
+        "write",
+        "com.apple.Accessibility",
+        key,
+        "-bool",
+        "true",
+      ],
+      60,
+    );
+  }
+}
+
 // A new simulator with the same type and runtime as `base`; returns its UDID.
 // The base must be shut down.
 export async function cloneDevice(base: Device, name: string): Promise<string> {
