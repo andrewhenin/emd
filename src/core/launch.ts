@@ -87,9 +87,7 @@ export async function stopEarlierServer(
   if (recorded.size === 0) return;
   const ours = async () =>
     (await listeningGroups(port)).filter((group) => recorded.has(group));
-  const found = await ours();
-  if (found.length === 0) return;
-  for (const group of found) {
+  for (const group of await ours()) {
     try {
       process.kill(-group, "SIGTERM");
     } catch {}

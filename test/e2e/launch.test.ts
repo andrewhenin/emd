@@ -406,5 +406,49 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
       },
       minutes(4),
     );
+
+    // Last: it stops this run's dev server.
+    const answers = (port: number | undefined) =>
+      fetch(`http://localhost:${port}/status`)
+        .then(async (r) => (await r.text()).includes("packager-status:running"))
+        .catch(() => false);
+    const until = async (done: () => Promise<boolean>) => {
+      for (let i = 0; i < 40 && !(await done()); i++) {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+    };
+
+    test(
+      "a dev server EMD did not start still blocks launch, and is left running",
+      async () => {
+        const left = again?.result?.metro;
+        expect(left).toBeDefined();
+        if (left) process.kill(-left.pid, "SIGTERM");
+        await until(async () => !(await answers(left?.port)));
+        const foreign = spawn(
+          "node",
+          [
+            "-e",
+            `require("http").createServer((q, s) => s.end("packager-status:running")).listen(${left?.port})`,
+          ],
+          { stdio: "ignore" },
+        );
+        try {
+          await until(() => answers(left?.port));
+          const blocked = await finish(
+            await call("launch", { dir: sandbox }),
+            new Set(),
+          );
+          expect(blocked.status).toBe("failed");
+          expect(blocked.result?.reason).toContain(
+            "already serves a dev server",
+          );
+          expect(await answers(left?.port)).toBe(true);
+        } finally {
+          foreign.kill();
+        }
+      },
+      minutes(3),
+    );
   },
 );
