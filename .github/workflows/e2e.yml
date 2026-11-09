@@ -68,12 +68,20 @@ jobs:
       - name: Install tools
         if: steps.gate.outputs.run == 'true'
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           npm ci
           npm ci --prefix fixtures/expo
-          # Retries: release downloads returned 504 three times on Nov 9.
-          curl -fsSL --retry 3 --retry-all-errors --retry-delay 10 -o "$RUNNER_TEMP/axe.tar.gz" \
-            "https://github.com/cameroncooke/AXe/releases/download/v$AXE_VERSION/AXe-macOS-v$AXE_VERSION-universal.tar.gz"
+          # Signed in, with retries: anonymous release downloads returned 504
+          # for over 15 minutes on Nov 9.
+          for try in 1 2 3; do
+            gh release download "v$AXE_VERSION" --repo cameroncooke/AXe \
+              --pattern "AXe-macOS-v$AXE_VERSION-universal.tar.gz" \
+              --output "$RUNNER_TEMP/axe.tar.gz" --clobber && break
+            [ "$try" = 3 ] && exit 1
+            sleep 10
+          done
           echo "$AXE_SHA256  $RUNNER_TEMP/axe.tar.gz" | shasum -a 256 -c -
           mkdir -p "$RUNNER_TEMP/axe"
           tar -xzf "$RUNNER_TEMP/axe.tar.gz" -C "$RUNNER_TEMP/axe"
