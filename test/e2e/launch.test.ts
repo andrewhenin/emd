@@ -133,10 +133,6 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
       expect(await response.text()).toContain("packager-status:running");
     });
 
-    test("forced failure, to show the failure output (#130, revert)", () => {
-      expect("forced", "forced failure for #130").toBe("not forced");
-    });
-
     test("the answer stays small and the logs stay on disk", () => {
       expect(JSON.stringify(final).length).toBeLessThan(900);
       const dir = final.result?.logDir ?? "";
