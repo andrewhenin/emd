@@ -132,19 +132,6 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
       expect(existsSync(join(dir, "metro.log"))).toBe(true);
     });
 
-    test(
-      "a second launch ends failed, clearly, while the dev server is up",
-      async () => {
-        const second = await finish(
-          await call("launch", { dir: sandbox }),
-          new Set(),
-        );
-        expect(second.status).toBe("failed");
-        expect(second.result?.reason).toContain("already serves a dev server");
-      },
-      minutes(2),
-    );
-
     // Async, so vitest's worker keeps answering while a tool runs for minutes.
     const run = (
       command: string,
@@ -295,13 +282,15 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
       minutes(5),
     );
 
+    // The first launch's dev server is still up (#121).
     test(
-      "a later run does not see an earlier run's lines",
+      "a later launch stops the dev server the earlier one left, and its run does not see the earlier run's lines",
       async () => {
-        if (final.result) process.kill(-final.result.metro.pid, "SIGTERM");
-        await new Promise((resolve) => setTimeout(resolve, 3000));
+        const left = final.result?.metro;
         again = await finish(await call("launch", { dir: sandbox }), new Set());
-        expect(again.status).toBe("succeeded");
+        expect(again.status, again.result?.reason).toBe("succeeded");
+        expect(again.result?.metro.port).toBe(left?.port);
+        expect(() => process.kill(-(left?.pid ?? 0), 0)).toThrow();
         const later = await readLogs(again.jobId, { tag: "smoke" });
         expect(later).toMatchObject({ verdict: "ok", total: 0, lines: [] });
         const earlier = await readLogs(first.jobId, { tag: "smoke" });

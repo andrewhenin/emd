@@ -8,6 +8,7 @@ import {
   pickPort,
   xcodebuildShim,
 } from "./isolate.js";
+import { launchesIn } from "./jobstore.js";
 import { firstErrors, onlyOpenFailed } from "./log.js";
 import { startCapture, stopCaptures } from "./logs.js";
 import { confirm, reserve, worktreeKey } from "./owned.js";
@@ -24,8 +25,10 @@ import {
   pickDevice,
 } from "./simulator.js";
 import { stateDir } from "./state.js";
+import { runTool } from "./tool.js";
 
 const metroStartSeconds = 120;
+const stopSeconds = 10;
 const defaultTimeoutSeconds = 900;
 
 export type LaunchOptions = {
@@ -48,6 +51,51 @@ async function metroRunning(port: number): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+// Process groups with a process that listens on `port`; none when nothing does.
+async function listeningGroups(port: number): Promise<number[]> {
+  try {
+    const { stdout } = await runTool(
+      "lsof",
+      "lsof",
+      ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN", "-Fg"],
+      60,
+    );
+    return stdout
+      .split("\n")
+      .filter((line) => line.startsWith("g"))
+      .map((line) => Number(line.slice(1)));
+  } catch {
+    return [];
+  }
+}
+
+// Stops the dev server that an earlier launch in this worktree left on `port`.
+// Only a recorded process group that still listens on the port is signalled,
+// so a reused pid or a server EMD did not start is never touched. Stopped, not
+// reused: it can serve an older config, and its log is in the earlier run.
+export async function stopEarlierServer(
+  root: string,
+  port: number,
+): Promise<void> {
+  const recorded = new Set(
+    launchesIn(root).flatMap(({ metro }) =>
+      metro?.port === port ? [metro.pid] : [],
+    ),
+  );
+  if (recorded.size === 0) return;
+  const ours = async () =>
+    (await listeningGroups(port)).filter((group) => recorded.has(group));
+  const found = await ours();
+  if (found.length === 0) return;
+  for (const group of found) {
+    try {
+      process.kill(-group, "SIGTERM");
+    } catch {}
+  }
+  const deadline = Date.now() + stopSeconds * 1000;
+  while (Date.now() < deadline && (await ours()).length > 0) await sleep(250);
 }
 
 async function untilReady(
@@ -219,6 +267,7 @@ export async function launch(
     });
   }
 
+  await stopEarlierServer(root, port);
   if (await metroRunning(port)) {
     return stuck(
       `Port ${port} already serves a dev server. Stop it and retry.`,

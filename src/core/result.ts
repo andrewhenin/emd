@@ -34,7 +34,8 @@ export const launchResultSchema = z.object({
   appPid: z.number().optional(),
   // The Metro port reserved for this worktree; set on a failure after it was.
   port: z.number().optional(),
-  // The dev server left running for the app.
+  // The dev server left running for the app; the next launch in this worktree
+  // stops it.
   metro: z.object({ pid: z.number(), port: z.number() }).optional(),
   // The log stream that captures the app's tagged lines; the next launch in
   // this worktree stops it.

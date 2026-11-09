@@ -52,7 +52,7 @@ export function readJob(id: string): Job | undefined {
   }
 }
 
-export function readJobs(): Job[] {
+function readJobs(): Job[] {
   try {
     return readdirSync(jobsDir())
       .filter((name) => name.endsWith(".json"))
@@ -62,6 +62,14 @@ export function readJobs(): Job[] {
     return [];
   }
 }
+
+// The results of the launch jobs that finished in this worktree.
+export const launchesIn = (root: string): LaunchResult[] =>
+  readJobs().flatMap((job) => {
+    const result =
+      job.kind === "launch" ? (job.result as LaunchResult) : undefined;
+    return result?.root === root ? [result] : [];
+  });
 
 export function update(id: string, patch: Partial<Job>): void {
   const job = readJob(id);

@@ -99,7 +99,7 @@ node dist/bin.js gc --apply  # removes it
 ## Limits today
 
 - Expo apps on the iOS simulator only. No native iOS or Android projects, no Android launch, no physical devices.
-- `launch` leaves the dev server running. A second `launch` of the same folder fails ("Port N already serves a dev server") until you stop it: `kill -- -<pid>`, with `metro.pid` from `$TMPDIR/emd/jobs/<jobId>.json` (the launch result).
+- `launch` leaves the dev server running. The next `launch` of the same folder stops it and starts a new one. A dev server that EMD did not start on that port still blocks `launch` ("Port N already serves a dev server").
 - After 3 failed checks in one app folder, `check` returns `stopped`. Only a person can start over: `node dist/bin.js check reset /path/to/my-app` at a terminal. `EMD_RETRY_LIMIT` (1 to 10) changes the limit.
 - A build can take 900 seconds by default (`timeoutSeconds`, or `--timeout` in the CLI). Two cold builds at the same time can take longer.
 - The CLI `launch` waits and does not make a job. `logs`, `check` and `evidence` need the `jobId` of a `launch` that the agent started.
