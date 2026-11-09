@@ -76,17 +76,26 @@ jobs:
       - name: Install tools
         if: steps.gate.outputs.run == 'true'
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           npm ci
           npm ci --prefix fixtures/expo
-          curl -fsSL -o "$RUNNER_TEMP/axe.tar.gz" \
-            "https://github.com/cameroncooke/AXe/releases/download/v$AXE_VERSION/AXe-macOS-v$AXE_VERSION-universal.tar.gz"
+          # Signed in, with retries: anonymous release downloads returned 504
+          # for over 15 minutes on Nov 9.
+          for try in 1 2 3; do
+            gh release download "v$AXE_VERSION" --repo cameroncooke/AXe \
+              --pattern "AXe-macOS-v$AXE_VERSION-universal.tar.gz" \
+              --output "$RUNNER_TEMP/axe.tar.gz" --clobber && break
+            [ "$try" = 3 ] && exit 1
+            sleep 10
+          done
           echo "$AXE_SHA256  $RUNNER_TEMP/axe.tar.gz" | shasum -a 256 -c -
           mkdir -p "$RUNNER_TEMP/axe"
           tar -xzf "$RUNNER_TEMP/axe.tar.gz" -C "$RUNNER_TEMP/axe"
           echo "$RUNNER_TEMP/axe" >> "$GITHUB_PATH"
           # The script installs MAESTRO_VERSION from the job env.
-          curl -fsSL "https://get.maestro.mobile.dev" | bash
+          curl -fsSL --retry 3 --retry-all-errors --retry-delay 10 "https://get.maestro.mobile.dev" | bash
           echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
 
       - name: Print versions
@@ -108,6 +117,17 @@ jobs:
         env:
           EMD_STATE_DIR: ${{ runner.temp }}/emd-state
         run: npm run test:e2e 2>&1 | tee e2e-output.txt
+
+      - name: Screenshot probe (experiment for #142, not for merge)
+        if: always() && steps.gate.outputs.run == 'true'
+        shell: bash
+        run: |
+          xcrun simctl list devices booted
+          for d in $(xcrun simctl list devices booted -j | python3 -c 'import json,sys; print(" ".join(x["udid"] for v in json.load(sys.stdin)["devices"].values() for x in v))'); do
+            echo "== $d"
+            xcrun simctl io "$d" screenshot "$RUNNER_TEMP/probe-$d.png"; echo "exit $?"
+            ls -la "$RUNNER_TEMP/probe-$d.png" 2>&1
+          done
 
       - name: Upload output and run logs
         if: always() && steps.gate.outputs.run == 'true'
