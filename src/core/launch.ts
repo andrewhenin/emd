@@ -9,7 +9,7 @@ import {
   xcodebuildShim,
 } from "./isolate.js";
 import { launchesIn } from "./jobstore.js";
-import { firstErrors, onlyOpenFailed } from "./log.js";
+import { firstErrors, knownFix, onlyOpenFailed } from "./log.js";
 import { startCapture, stopCaptures } from "./logs.js";
 import { confirm, reserve, worktreeKey } from "./owned.js";
 import { type LoggedProcess, startLogged } from "./process.js";
@@ -310,9 +310,10 @@ export async function launch(
       return stuck(
         outcome === "timeout"
           ? `The build did not finish in ${options.timeoutSeconds ?? defaultTimeoutSeconds}s.`
-          : text.includes("\u203a Build Succeeded")
-            ? `The app compiled, but the install or open step failed (exit ${outcome}).`
-            : `The build failed (exit ${outcome}).`,
+          : (knownFix(text) ??
+              (text.includes("\u203a Build Succeeded")
+                ? `The app compiled, but the install or open step failed (exit ${outcome}).`
+                : `The build failed (exit ${outcome}).`)),
         { errors: firstErrors(text) },
       );
     }
