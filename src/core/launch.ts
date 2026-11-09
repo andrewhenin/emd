@@ -307,15 +307,16 @@ export async function launch(
     // Expo's own open step timed out after the install; EMD opens the app next.
     if (outcome === "timeout" || !onlyOpenFailed(text)) {
       metro.kill();
-      return stuck(
-        outcome === "timeout"
-          ? `The build did not finish in ${options.timeoutSeconds ?? defaultTimeoutSeconds}s.`
-          : (knownFix(text) ??
-              (text.includes("\u203a Build Succeeded")
-                ? `The app compiled, but the install or open step failed (exit ${outcome}).`
-                : `The build failed (exit ${outcome}).`)),
-        { errors: firstErrors(text) },
-      );
+      const fix = knownFix(text);
+      let reason = `The build failed (exit ${outcome}).`;
+      if (outcome === "timeout") {
+        reason = `The build did not finish in ${options.timeoutSeconds ?? defaultTimeoutSeconds}s.`;
+      } else if (fix) {
+        reason = fix;
+      } else if (text.includes("\u203a Build Succeeded")) {
+        reason = `The app compiled, but the install or open step failed (exit ${outcome}).`;
+      }
+      return stuck(reason, { errors: firstErrors(text) });
     }
   }
 
