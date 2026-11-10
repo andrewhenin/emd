@@ -8,8 +8,8 @@ Developers who use coding agents (Claude Code, Codex, Cursor, and others) on exi
 
 ## What it is
 
-- An MCP server, a CLI (`emd`) and an agent skill, installed with one command: `npx emd-agents setup`. Or the user adds the skill (`npx skills add andrewhenin/emd`) and asks the agent to set up EMD (decision 0002).
-- `setup` detects the project's stack and checks or installs only what that stack needs. It registers EMD with the user's agents, installs the skill, previews every change and backs up existing configs. It never installs unrelated software.
+- An MCP server, a CLI (`emd`) and an agent skill, installed with one command: `npx emd-agents setup`.
+- `setup` detects the project's stack and checks or installs only what that stack needs. It registers EMD with the user's agents, installs the skill, previews every change and backs up existing configs. It never installs unrelated software. The skill can start it too: `npx skills add andrewhenin/emd`, then ask the agent to set up EMD.
 - Runs locally. iOS needs a Mac with Xcode installed, but users never have to open it. Android needs only the SDK command-line tools and runs on macOS, Linux or Windows.
 
 ## The loop (one task, one agent)
