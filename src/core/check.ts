@@ -56,21 +56,18 @@ const realDeps: Deps = {
         ["simctl", "io", device, "screenshot", ...extra, path],
         60,
       );
-    try {
-      await shoot([]);
-      return undefined;
-    } catch (error) {
-      // Xcode 27 simulators have two displays and simctl asks which one.
-      // The one it names "(primary)" shows the app (#142).
-      const display = primaryDisplay(String(error));
-      if (display === undefined) return lastLine(error);
-      try {
-        await shoot([`--display=${display}`]);
-        return undefined;
-      } catch (retry) {
-        return lastLine(retry);
-      }
-    }
+    const attempt = (extra: string[]) =>
+      shoot(extra).then(
+        () => undefined,
+        (error: unknown) => String(error),
+      );
+    const first = await attempt([]);
+    // Xcode 27 simulators have two displays and simctl asks which one.
+    // The one it names "(primary)" shows the app (#142).
+    const display = first === undefined ? undefined : primaryDisplay(first);
+    const error =
+      display === undefined ? first : await attempt([`--display=${display}`]);
+    return error === undefined ? undefined : lastLine(error);
   },
 };
 
@@ -79,8 +76,8 @@ const realDeps: Deps = {
 export const primaryDisplay = (message: string): string | undefined =>
   /--display=(\d+)\s.*\(primary\)/m.exec(message)?.[1];
 
-const lastLine = (error: unknown): string =>
-  `simctl screenshot: ${String(error).trim().split("\n").at(-1)?.trim() ?? ""}`;
+const lastLine = (error: string): string =>
+  `simctl screenshot: ${error.trim().split("\n").at(-1)?.trim() ?? ""}`;
 
 const defaultRetryLimit = 3;
 const maxRetryLimit = 10;
@@ -225,15 +222,12 @@ export async function check(
     writeFileSync(join(logDir, `screen-${stamp}.json`), JSON.stringify(nodes));
   }
   const reading = options.agentReading;
-  const secondOpinion =
-    shot || shotError || reading
-      ? {
-          ...(shot ? { screenshot: shot } : { screenshotError: shotError }),
-          ...(reading
-            ? { agent: reading, agrees: (reading === "pass") === passed }
-            : {}),
-        }
-      : undefined;
+  const secondOpinion = {
+    ...(shot ? { screenshot: shot } : { screenshotError: shotError }),
+    ...(reading
+      ? { agent: reading, agrees: (reading === "pass") === passed }
+      : {}),
+  };
   const evidence = {
     logs: logResults.length > 0 ? logResults : undefined,
     elements: elementResults.length > 0 ? elementResults : undefined,
