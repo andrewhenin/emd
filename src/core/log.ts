@@ -43,6 +43,16 @@ export function firstErrors(log: string, max = 5): string[] {
   ).slice(0, max);
 }
 
+// The fix, when a build log shows a known cause whose own message points the
+// wrong way. Expo CLI before SDK 56 looks for Simulator.app, which Xcode 27
+// removed (https://expo.dev/blog/xcode-27-device-hub-expo-device-hub).
+export function knownFix(log: string): string | undefined {
+  if (stripAnsi(log).includes("Can't determine id of Simulator app")) {
+    return "The build failed: this Expo SDK looks for Simulator.app, which Xcode 27 removed. Select Xcode 26 with `xcode-select`, or upgrade the app to Expo SDK 56 or later.";
+  }
+  return undefined;
+}
+
 // True when `expo run:ios` compiled and installed the app and failed only in
 // its own open step: the build succeeded, the "Opening on" line (printed after
 // the install returned) is there, and the first error is `xcrun simctl openurl`.
