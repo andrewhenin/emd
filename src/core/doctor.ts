@@ -63,31 +63,23 @@ export async function doctor(): Promise<DoctorResult> {
     return done(checks);
   }
 
-  try {
-    const iphones = (await listDevices()).filter((d) =>
-      d.name.startsWith("iPhone"),
-    );
-    checks.push(
-      iphones.length > 0
-        ? {
-            name: "simulator",
-            status: "ok",
-            detail: `${iphones.length} iPhone simulators`,
-          }
-        : {
-            name: "simulator",
-            status: "missing",
-            fix: "In Xcode, Settings > Components, add an iOS simulator runtime. It comes with iPhone simulators.",
-          },
-    );
-  } catch (error) {
-    checks.push({
-      name: "simulator",
-      status: "missing",
-      detail: firstLine(error),
-      fix: "Run `xcrun simctl list devices` to see why simulators can't be listed.",
-    });
-  }
+  const iphones = await listDevices().then(
+    (devices) => devices.filter((d) => d.name.startsWith("iPhone")).length,
+    () => 0,
+  );
+  checks.push(
+    iphones > 0
+      ? {
+          name: "simulator",
+          status: "ok",
+          detail: `${iphones} iPhone simulators`,
+        }
+      : {
+          name: "simulator",
+          status: "missing",
+          fix: "In Xcode, Settings > Components, add an iOS simulator runtime. It comes with iPhone simulators.",
+        },
+  );
 
   // Only element checks read the screen (decision 0004).
   const { axe, maestro } = await detectEnvironment();
