@@ -32,4 +32,3 @@ EMD's MCP tools build and launch the app, read its tagged log lines, and decide 
 
 - Don't delete a log tag, loosen an expectation or skip a step to make a check pass. If you must, say so in the PR.
 - Report only checks that ran.
-- Results stay small. Read full logs from the run folder (`logDir`) only when you need them.

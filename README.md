@@ -71,14 +71,7 @@ Install EMD's skill, which tells the agent how to use EMD and MobileBuildMCP: `n
 
    > Use the emd tools on /path/to/my-app. Launch it on the iOS simulator. Check that the `ready` log event fired and that the element with testID `home` is on screen. Then gather the evidence and tell me the folder.
 
-The agent then runs this loop:
-
-1. `launch`, with `dir` set to your app. It returns a `jobId` at once.
-2. `job_status` every 5 to 10 seconds, until `succeeded` or `failed`. A first build takes minutes. A failed launch gives the reason and the first error lines.
-3. To tap, type or swipe: MobileBuildMCP, as the skill describes.
-4. `logs`, to read the tagged lines.
-5. `check`, with the expected log events and elements, then `job_status` until it ends. The verdict is `passed`, `failed` (fix and check again), `stopped` (3 failed checks: stop and report) or `error` (the check could not run).
-6. `evidence`, to write the evidence folder.
+The agent follows EMD's skill (`skills/emd/SKILL.md`): `launch`, wait for the job with `job_status`, tap through MobileBuildMCP, read `logs`, `check`, then `evidence`. A check's verdict is `passed`, `failed` (fix and check again), `stopped` (3 failed checks: stop and report) or `error` (the check could not run).
 
 Output stays on your Mac:
 
