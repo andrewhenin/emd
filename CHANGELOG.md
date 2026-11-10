@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.10.0](https://github.com/andrewhenin/emd/compare/emd-agents-v0.9.0...emd-agents-v0.10.0) (2026-11-10)
+
+
+### Features
+
+* name the fix when an old Expo app fails on Xcode 27 ([#138](https://github.com/andrewhenin/emd/issues/138)) ([cce3a96](https://github.com/andrewhenin/emd/commit/cce3a96d165a109e40fe8c0ce90d8b503c66da9e))
+
+
+### Bug Fixes
+
+* pick a simulator runtime that the selected Xcode supports ([#135](https://github.com/andrewhenin/emd/issues/135)) ([259e41e](https://github.com/andrewhenin/emd/commit/259e41e9b726794af1a72fd36f3790f84440871f))
+
 ## [0.9.0](https://github.com/andrewhenin/emd/compare/emd-agents-v0.8.0...emd-agents-v0.9.0) (2026-11-10)
 
 
