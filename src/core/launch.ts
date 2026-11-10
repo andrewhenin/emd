@@ -22,7 +22,10 @@ import {
   type Device,
   launchApp,
   listDevices,
+  newerThan,
   pickDevice,
+  removeSimulator,
+  simulatorSdk,
 } from "./simulator.js";
 import { stateDir } from "./state.js";
 import { runTool } from "./tool.js";
@@ -176,20 +179,28 @@ export async function launch(
   let shimDir: string;
   try {
     const devices = await listDevices();
-    const simulator = await reserve(
-      root,
-      "simulator",
-      () => `${prefix}${worktreeKey(root)}`,
-    );
+    const sdk = await simulatorSdk();
+    const name = `${prefix}${worktreeKey(root)}`;
+    const simulator = await reserve(root, "simulator", () => name);
     device = devices.find(
       (d) => d.id === simulator.id || d.name === simulator.id,
     );
+    // A clone on a runtime newer than the selected Xcode's SDK does not build
+    // (#122). It is EMD's own, so it is replaced, not reused.
+    if (device && sdk && newerThan(device, sdk)) {
+      report(
+        `replacing the simulator: iOS ${device.version.join(".")} is newer than Xcode's iOS ${sdk.join(".")} SDK`,
+      );
+      await removeSimulator(device);
+      device = undefined;
+    }
     if (!device) {
       const base = pickDevice(
         devices.filter(
           (d) => !d.name.startsWith(prefix) && d.state !== "Booted",
         ),
         options.device,
+        sdk,
       );
       if (!base) {
         return failed(
@@ -199,10 +210,10 @@ export async function launch(
         );
       }
       report("cloning a simulator");
-      const id = await cloneDevice(base, simulator.id);
+      const id = await cloneDevice(base, name);
       device = {
         id,
-        name: simulator.id,
+        name,
         state: "Shutdown",
         version: base.version,
       };
