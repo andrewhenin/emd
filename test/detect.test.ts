@@ -1,5 +1,6 @@
+import { join } from "node:path";
 import { beforeEach, expect, test, vi } from "vitest";
-import { expoConfig, expoProject, makeDir } from "./helpers.ts";
+import { cli, expoConfig, expoProject, makeDir } from "./helpers.ts";
 
 beforeEach(() => vi.resetModules());
 
@@ -98,6 +99,33 @@ test.each([
     expect(result.commands?.server).toBe(server);
   },
 );
+
+// #126: in a pnpm workspace the lockfile is at the workspace root.
+const workspace = (files: Record<string, string>) =>
+  makeDir({
+    "apps/mobile/package.json": JSON.stringify({
+      dependencies: { expo: "~58.0.0" },
+    }),
+    "package.json": JSON.stringify({ private: true }),
+    "pnpm-workspace.yaml": "packages:\n  - apps/*\n",
+    ...files,
+  });
+
+test("finds the package manager at the workspace root, up to the git root", () => {
+  const root = workspace({ ".git/HEAD": "", "pnpm-lock.yaml": "" });
+  const run = cli("detect", join(root, "apps/mobile"));
+  expect(JSON.parse(run.stdout)).toMatchObject({
+    verdict: "detected",
+    packageManager: "pnpm",
+    commands: { server: "pnpm exec expo start" },
+  });
+});
+
+test("does not look above the app folder outside a git repo", () => {
+  const root = workspace({ "pnpm-lock.yaml": "" });
+  const run = cli("detect", join(root, "apps/mobile"));
+  expect(JSON.parse(run.stdout)).toMatchObject({ packageManager: "npm" });
+});
 
 test("lists existing Maestro flows and notes files", async () => {
   const { detect } = await loadCore();

@@ -18,6 +18,9 @@ export const detectResultSchema = z.object({
   packageManager: z.enum(packageManagers).optional(),
   maestroFlows: z.array(z.string()).optional(),
   notes: z.array(z.string()).optional(),
+  // At a workspace root that is not an app itself: the workspace packages EMD
+  // can detect, relative to the root. Run detect on one of them.
+  apps: z.array(z.string()).optional(),
 });
 
 export type DetectResult = z.infer<typeof detectResultSchema>;

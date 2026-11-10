@@ -19,7 +19,15 @@ concurrency:
 
 jobs:
   e2e:
-    if: github.event.pull_request.draft != true
+    # Release Please's own PR changes only versions and the changelog; its
+    # commits were tested in their own PRs and the nightly, so no macOS runner
+    # starts for it. Both the bot and the branch must match, so a person can't
+    # skip e2e by naming a branch. The e2e label still forces a run.
+    if: >-
+      github.event.pull_request.draft != true &&
+      !(github.event.pull_request.user.login == 'github-actions[bot]' &&
+        startsWith(github.head_ref, 'release-please--') &&
+        !contains(github.event.pull_request.labels.*.name, 'e2e'))
     runs-on: macos-26
     timeout-minutes: 60
     # The tool versions e2e tests (decision 0008, condition 4).
@@ -65,18 +73,28 @@ jobs:
           distribution: temurin
           java-version: 17
 
+      # Its own step, so only this download gets the token. Signed in, because
+      # anonymous release downloads can fail while signed-in ones work.
+      - name: Download AXe
+        if: steps.gate.outputs.run == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "v$AXE_VERSION" --repo cameroncooke/AXe \
+            --pattern "AXe-macOS-v$AXE_VERSION-universal.tar.gz" \
+            --output "$RUNNER_TEMP/axe.tar.gz" --clobber
+          echo "$AXE_SHA256  $RUNNER_TEMP/axe.tar.gz" | shasum -a 256 -c -
+          mkdir -p "$RUNNER_TEMP/axe"
+          tar -xzf "$RUNNER_TEMP/axe.tar.gz" -C "$RUNNER_TEMP/axe"
+          echo "$RUNNER_TEMP/axe" >> "$GITHUB_PATH"
+
       - name: Install tools
         if: steps.gate.outputs.run == 'true'
         shell: bash
         run: |
           npm ci
           npm ci --prefix fixtures/expo
-          curl -fsSL -o "$RUNNER_TEMP/axe.tar.gz" \
-            "https://github.com/cameroncooke/AXe/releases/download/v$AXE_VERSION/AXe-macOS-v$AXE_VERSION-universal.tar.gz"
-          echo "$AXE_SHA256  $RUNNER_TEMP/axe.tar.gz" | shasum -a 256 -c -
-          mkdir -p "$RUNNER_TEMP/axe"
-          tar -xzf "$RUNNER_TEMP/axe.tar.gz" -C "$RUNNER_TEMP/axe"
-          echo "$RUNNER_TEMP/axe" >> "$GITHUB_PATH"
           # The script installs MAESTRO_VERSION from the job env.
           curl -fsSL "https://get.maestro.mobile.dev" | bash
           echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
