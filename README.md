@@ -27,9 +27,12 @@ CLI commands (`node dist/bin.js <command>`):
 - `check reset [dir]`: clears the failed-check count. A person must type `reset` at a terminal.
 - `evidence <jobId>`: same as the tool.
 - `gc [--apply]`: lists, then removes, what EMD made for app folders that no longer exist.
+- `doctor`: checks that this Mac has what EMD needs (Node, macOS, Xcode, an iPhone simulator, AXe or Maestro) and says how to add what is missing.
 - `mcp`: starts the MCP server on stdio.
 
 ## Requirements
+
+`node dist/bin.js doctor` checks these for you.
 
 - An Expo app with `expo` in package.json and `ios.bundleIdentifier` in its app config (app.json, app.config.js or app.config.ts). EMD reads it with the app's own `expo config`. Without the ID, `launch` stops: "No iOS app ID found".
 - The app's dependencies, installed. EMD does not install them.
