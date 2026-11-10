@@ -95,6 +95,8 @@ export const checkResultSchema = z.object({
     .object({
       // A screenshot of the screen as it was checked.
       screenshot: z.string().optional(),
+      // Why no screenshot was taken. The check doesn't fail because of it.
+      screenshotError: z.string().optional(),
       // The agent's reading of that screenshot, when it gave one.
       agent: z.enum(["pass", "fail"]).optional(),
       // Whether that reading matches the verdict.
