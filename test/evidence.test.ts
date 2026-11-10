@@ -44,7 +44,7 @@ const readers = (found: boolean): CheckDeps => ({
   screenshot: async (_device, path) => {
     mkdirSync(join(path, ".."), { recursive: true });
     writeFileSync(path, "png");
-    return true;
+    return undefined;
   },
 });
 

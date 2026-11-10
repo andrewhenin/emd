@@ -5,6 +5,7 @@ import {
   type CheckOptions,
   check,
   type Deps,
+  primaryDisplay,
   resetChecks,
 } from "../src/core/check.ts";
 import { readScreen, type ScreenRead } from "../src/core/device/backend.ts";
@@ -51,7 +52,7 @@ function readers(screen: Screen = {}, overrides: Partial<Deps> = {}) {
       calls.screenshot++;
       mkdirSync(join(path, ".."), { recursive: true });
       writeFileSync(path, "png");
-      return true;
+      return undefined;
     },
     ...overrides,
   };
@@ -388,14 +389,32 @@ test("the agent's reading is a second opinion and never changes the verdict", as
   expect(agrees.secondOpinion).toMatchObject({ agent: "pass", agrees: true });
 });
 
-test("the reading is kept even when no screenshot could be taken", async () => {
+test("without a screenshot, the reading is kept and the result says why", async () => {
   const jobId = await launched();
-  const { deps } = readers(tapped, { screenshot: async () => false });
+  const why = "simctl screenshot: Timeout waiting for screen surfaces";
+  const { deps } = readers(tapped, { screenshot: async () => why });
   const result = await run(
     { jobId, elements: [{ id: "smoke-button" }], agentReading: "pass" },
     deps,
   );
-  expect(result.secondOpinion).toEqual({ agent: "pass", agrees: true });
+  expect(result.verdict).toBe("passed");
+  expect(result.secondOpinion).toEqual({
+    screenshotError: why,
+    agent: "pass",
+    agrees: true,
+  });
+});
+
+test("on two displays, the screenshot uses the one simctl calls primary", () => {
+  // simctl's error on Xcode 27.1 (run 42584799716).
+  const asked = [
+    "Cannot choose between 2 displays. Specify one with --display:",
+    "    --display=3  LCD-1 (primary-1) 2007x2853",
+    "    --display=1  LCD (primary) 1398x2034",
+    "Invalid argument",
+  ].join("\n");
+  expect(primaryDisplay(asked)).toBe("1");
+  expect(primaryDisplay("Invalid device: booted")).toBeUndefined();
 });
 
 test.each([

@@ -39,7 +39,8 @@ export type CheckOptions = RunRef & {
 export type Deps = {
   logs: (options: Omit<LogsOptions, "limit">) => Promise<LogsResult>;
   screen: (device: string) => Promise<ScreenRead>;
-  screenshot: (device: string, path: string) => Promise<boolean>;
+  // Undefined when the screenshot was saved, otherwise why not, in one line.
+  screenshot: (device: string, path: string) => Promise<string | undefined>;
 };
 
 const realDeps: Deps = {
@@ -47,20 +48,39 @@ const realDeps: Deps = {
   screen: async (device) =>
     readScreen(device, await detectEnvironment(), [axeBackend, maestroBackend]),
   screenshot: async (device, path) => {
-    try {
-      mkdirSync(dirname(path), { recursive: true });
-      await runTool(
+    mkdirSync(dirname(path), { recursive: true });
+    const shoot = (extra: string[]) =>
+      runTool(
         "simctl screenshot",
         "xcrun",
-        ["simctl", "io", device, "screenshot", path],
+        ["simctl", "io", device, "screenshot", ...extra, path],
         60,
       );
-      return true;
-    } catch {
-      return false;
+    try {
+      await shoot([]);
+      return undefined;
+    } catch (error) {
+      // Xcode 27 simulators have two displays and simctl asks which one.
+      // The one it names "(primary)" shows the app (#142).
+      const display = primaryDisplay(String(error));
+      if (display === undefined) return lastLine(error);
+      try {
+        await shoot([`--display=${display}`]);
+        return undefined;
+      } catch (retry) {
+        return lastLine(retry);
+      }
     }
   },
 };
+
+// From simctl's "Specify one with --display" list, the display named
+// "(primary)", not "(primary-1)".
+export const primaryDisplay = (message: string): string | undefined =>
+  /--display=(\d+)\s.*\(primary\)/m.exec(message)?.[1];
+
+const lastLine = (error: unknown): string =>
+  `simctl screenshot: ${String(error).trim().split("\n").at(-1)?.trim() ?? ""}`;
 
 const defaultRetryLimit = 3;
 const maxRetryLimit = 10;
@@ -197,7 +217,8 @@ export async function check(
   report("taking a screenshot");
   const stamp = Date.now();
   const shotPath = join(logDir, `check-${stamp}.png`);
-  const shot = (await deps.screenshot(device, shotPath)) ? shotPath : undefined;
+  const shotError = await deps.screenshot(device, shotPath);
+  const shot = shotError === undefined ? shotPath : undefined;
   // What the screen reader got, next to the screenshot, for when they disagree.
   if (screen) {
     mkdirSync(logDir, { recursive: true });
@@ -205,9 +226,9 @@ export async function check(
   }
   const reading = options.agentReading;
   const secondOpinion =
-    shot || reading
+    shot || shotError || reading
       ? {
-          ...(shot ? { screenshot: shot } : {}),
+          ...(shot ? { screenshot: shot } : { screenshotError: shotError }),
           ...(reading
             ? { agent: reading, agrees: (reading === "pass") === passed }
             : {}),
