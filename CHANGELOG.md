@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.8.0](https://github.com/andrewhenin/emd/compare/emd-agents-v0.7.2...emd-agents-v0.8.0) (2026-11-09)
+
+
+### Features
+
+* read the Expo app config with expo config --json ([#118](https://github.com/andrewhenin/emd/issues/118)) ([cb3c237](https://github.com/andrewhenin/emd/commit/cb3c237c6addcc32e10d5f4aa98b0c2b45fac710))
+* tap through MobileBuildMCP in e2e, then check with EMD ([#119](https://github.com/andrewhenin/emd/issues/119)) ([651f1ed](https://github.com/andrewhenin/emd/commit/651f1ed3f92c67a7e34164e3a34c5b123fa4502c))
+
+
+### Bug Fixes
+
+* launch stops the dev server an earlier launch left ([#129](https://github.com/andrewhenin/emd/issues/129)) ([87d0bfb](https://github.com/andrewhenin/emd/commit/87d0bfbe73cd04cc2e79c650302bb5604e399e3e))
+
 ## [0.7.2](https://github.com/andrewhenin/emd/compare/emd-agents-v0.7.1...emd-agents-v0.7.2) (2026-11-08)
 
 
