@@ -262,7 +262,10 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
         .map((row) => row.split("|"))
         .find((row) => row[1] === "tap" && row[5] === id)?.[0];
       expect(ref, targets.join("\n")).toBeDefined();
-      return ui("tap", { elementRef: ref });
+      const tap = await ui("tap", { elementRef: ref });
+      // What MobileBuildMCP did. Remove once the e2e tap failure is fixed.
+      console.log(`MobileBuildMCP tap on ${id}: ${tap.output.trim()}`);
+      return tap;
     };
     const readLogs = async (jobId: string, extra: object = {}) =>
       (await client.callTool({ name: "logs", arguments: { jobId, ...extra } }))
