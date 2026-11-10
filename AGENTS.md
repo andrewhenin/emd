@@ -42,6 +42,7 @@ Notes, findings and decisions: follow [docs/logging.md](docs/logging.md) exactly
 - Write the smallest change that meets the acceptance criteria; no code for out-of-scope items; add abstractions only when they remove complexity you've actually seen.
 - Glue first: before you write a feature, check whether a maintained tool does it (decision 0008).
 - Fix problems where they originate. Remove replaced code in the same change.
+- Check every issue against docs/vision.md before you file or start it. If a fix adds a manual step for the user, the step belongs in EMD's install or skill, not the README.
 - Prefer tests through the real CLI and MCP tools over mocks.
 - Don't run `npm run test:e2e` unless the user asks; the e2e workflow runs it. It is slow and starts real simulators. Write "e2e: left to CI" in the PR.
 - Put behavior in `src/core/`. CLI and MCP import core only through `core/index.ts`, never each other. Adapters never import each other and load only through `core/registry.ts`.
@@ -57,6 +58,8 @@ Notes, findings and decisions: follow [docs/logging.md](docs/logging.md) exactly
 ## Review criteria
 
 Flag code that can be deleted or simplified while still meeting the linked issue's acceptance criteria, and any file not named in the plan.
+
+Flag any change that conflicts with docs/vision.md, such as a new manual step for the user.
 
 ## Definition of done
 
