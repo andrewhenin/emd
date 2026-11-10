@@ -4,7 +4,7 @@ Closes #
 
 ## Context
 
-<!-- 1-3 plain sentences, from the big picture down to this PR: what part of EMD this touches and what problem it solves. No file names. -->
+<!-- 1-3 plain sentences: what part of EMD this touches, then the problem this PR solves. No file names. -->
 
 ## What changed
 
