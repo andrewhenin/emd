@@ -39,7 +39,8 @@ export type CheckOptions = RunRef & {
 export type Deps = {
   logs: (options: Omit<LogsOptions, "limit">) => Promise<LogsResult>;
   screen: (device: string) => Promise<ScreenRead>;
-  screenshot: (device: string, path: string) => Promise<boolean>;
+  // Undefined when the screenshot was saved, otherwise why not, in one line.
+  screenshot: (device: string, path: string) => Promise<string | undefined>;
 };
 
 const realDeps: Deps = {
@@ -47,25 +48,42 @@ const realDeps: Deps = {
   screen: async (device) =>
     readScreen(device, await detectEnvironment(), [axeBackend, maestroBackend]),
   screenshot: async (device, path) => {
-    try {
-      mkdirSync(dirname(path), { recursive: true });
-      await runTool(
+    mkdirSync(dirname(path), { recursive: true });
+    const shoot = (extra: string[]) =>
+      runTool(
         "simctl screenshot",
         "xcrun",
-        ["simctl", "io", device, "screenshot", path],
+        ["simctl", "io", device, "screenshot", ...extra, path],
         60,
       );
-      return true;
-    } catch {
-      return false;
-    }
+    const attempt = (extra: string[]) =>
+      shoot(extra).then(
+        () => undefined,
+        (error: unknown) => String(error),
+      );
+    const first = await attempt([]);
+    // Xcode 27 simulators have two displays and simctl asks which one.
+    // The one it names "(primary)" shows the app (#142).
+    const display = first === undefined ? undefined : primaryDisplay(first);
+    const error =
+      display === undefined ? first : await attempt([`--display=${display}`]);
+    return error === undefined ? undefined : lastLine(error);
   },
 };
+
+// From simctl's "Specify one with --display" list, the display named
+// "(primary)", not "(primary-1)".
+export const primaryDisplay = (message: string): string | undefined =>
+  /--display=(\d+)\s.*\(primary\)/m.exec(message)?.[1];
+
+const lastLine = (error: string): string =>
+  `simctl screenshot: ${error.trim().split("\n").at(-1)?.trim() ?? ""}`;
 
 const defaultRetryLimit = 3;
 const maxRetryLimit = 10;
 const maxSpecs = 20;
 const maxText = 200;
+const maxName = 40;
 
 // The count is per worktree and lives outside it. Only a pass or a human
 // (`emd check reset`) clears it; the agent has no input that does (decision 0006).
@@ -133,12 +151,10 @@ export async function check(
       );
     }
   }
-  const name = options.name ?? "default";
-  if (!tagPattern.test(name)) {
-    return error(
-      "A check name has letters, digits, dot, dash and underscore only.",
-    );
-  }
+  // Any other character is stored as a dash, so an agent's first name works.
+  const name =
+    (options.name ?? "").replace(/[^A-Za-z0-9_.-]/g, "-").slice(0, maxName) ||
+    "default";
   const limit = retryLimit();
 
   const resolved = resolveRun(options);
@@ -198,22 +214,20 @@ export async function check(
   report("taking a screenshot");
   const stamp = Date.now();
   const shotPath = join(logDir, `check-${stamp}.png`);
-  const shot = (await deps.screenshot(device, shotPath)) ? shotPath : undefined;
+  const shotError = await deps.screenshot(device, shotPath);
+  const shot = shotError === undefined ? shotPath : undefined;
   // What the screen reader got, next to the screenshot, for when they disagree.
   if (screen) {
     mkdirSync(logDir, { recursive: true });
     writeFileSync(join(logDir, `screen-${stamp}.json`), JSON.stringify(nodes));
   }
   const reading = options.agentReading;
-  const secondOpinion =
-    shot || reading
-      ? {
-          ...(shot ? { screenshot: shot } : {}),
-          ...(reading
-            ? { agent: reading, agrees: (reading === "pass") === passed }
-            : {}),
-        }
-      : undefined;
+  const secondOpinion = {
+    ...(shot ? { screenshot: shot } : { screenshotError: shotError }),
+    ...(reading
+      ? { agent: reading, agrees: (reading === "pass") === passed }
+      : {}),
+  };
   const evidence = {
     logs: logResults.length > 0 ? logResults : undefined,
     elements: elementResults.length > 0 ? elementResults : undefined,

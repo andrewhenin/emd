@@ -5,6 +5,7 @@ import {
   type CheckOptions,
   check,
   type Deps,
+  primaryDisplay,
   resetChecks,
 } from "../src/core/check.ts";
 import { readScreen, type ScreenRead } from "../src/core/device/backend.ts";
@@ -51,7 +52,7 @@ function readers(screen: Screen = {}, overrides: Partial<Deps> = {}) {
       calls.screenshot++;
       mkdirSync(join(path, ".."), { recursive: true });
       writeFileSync(path, "png");
-      return true;
+      return undefined;
     },
     ...overrides,
   };
@@ -251,6 +252,19 @@ test("the agent cannot start a stopped count over", async () => {
   });
 });
 
+test("a check name is stored with a dash for each other character, at most 40 long", async () => {
+  const jobId = await launched();
+  const { deps } = readers(tapped);
+  for (const name of ["my first check!", "x".repeat(50), ""]) {
+    await run({ jobId, ...expectTapped, name }, deps);
+  }
+  const names = readFileSync(join(state, "runs", jobId, "checks.jsonl"), "utf8")
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line).name);
+  expect(names).toEqual(["my-first-check-", "x".repeat(40), "default"]);
+});
+
 test("checks with different names still share one count", async () => {
   process.env.EMD_RETRY_LIMIT = "2";
   const jobId = await launched();
@@ -375,14 +389,32 @@ test("the agent's reading is a second opinion and never changes the verdict", as
   expect(agrees.secondOpinion).toMatchObject({ agent: "pass", agrees: true });
 });
 
-test("the reading is kept even when no screenshot could be taken", async () => {
+test("without a screenshot, the reading is kept and the result says why", async () => {
   const jobId = await launched();
-  const { deps } = readers(tapped, { screenshot: async () => false });
+  const why = "simctl screenshot: Timeout waiting for screen surfaces";
+  const { deps } = readers(tapped, { screenshot: async () => why });
   const result = await run(
     { jobId, elements: [{ id: "smoke-button" }], agentReading: "pass" },
     deps,
   );
-  expect(result.secondOpinion).toEqual({ agent: "pass", agrees: true });
+  expect(result.verdict).toBe("passed");
+  expect(result.secondOpinion).toEqual({
+    screenshotError: why,
+    agent: "pass",
+    agrees: true,
+  });
+});
+
+test("on two displays, the screenshot uses the one simctl calls primary", () => {
+  // simctl's error on Xcode 27.1 (run 42584799716).
+  const asked = [
+    "Cannot choose between 2 displays. Specify one with --display:",
+    "    --display=3  LCD-1 (primary-1) 2007x2853",
+    "    --display=1  LCD (primary) 1398x2034",
+    "Invalid argument",
+  ].join("\n");
+  expect(primaryDisplay(asked)).toBe("1");
+  expect(primaryDisplay("Invalid device: booted")).toBeUndefined();
 });
 
 test.each([
@@ -399,7 +431,6 @@ test.each([
     { logs: Array.from({ length: 21 }, () => ({ tag: "a" })) },
     /At most 20/,
   ],
-  ["a bad check name", { logs: [{ tag: "a" }], name: "a b" }, /check name/],
   [
     "an unknown job",
     { logs: [{ tag: "a" }], jobId: "deadbeef" },

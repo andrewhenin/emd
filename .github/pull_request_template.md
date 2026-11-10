@@ -2,7 +2,13 @@
 
 Closes #
 
+## Context
+
+<!-- 1-3 plain sentences: what part of EMD this touches, then the problem this PR solves. No file names. -->
+
 ## What changed
+
+<!-- Behavior first ("a failed e2e run now prints the screen"). Name a file only if it helps. -->
 
 ## Checks that ran
 
