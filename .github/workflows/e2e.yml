@@ -126,4 +126,5 @@ jobs:
           path: |
             e2e-output.txt
             ${{ runner.temp }}/emd-state/runs
+            /Users/runner/.maestro/tests
           if-no-files-found: warn
