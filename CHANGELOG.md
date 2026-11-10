@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.9.0](https://github.com/andrewhenin/emd/compare/emd-agents-v0.8.0...emd-agents-v0.9.0) (2026-11-10)
+
+
+### Features
+
+* detect points to the Expo app from a workspace root ([#137](https://github.com/andrewhenin/emd/issues/137)) ([9423f16](https://github.com/andrewhenin/emd/commit/9423f162c2bb16136c1e73713564e024e2110833))
+
+
+### Bug Fixes
+
+* accept check names with spaces ([#134](https://github.com/andrewhenin/emd/issues/134)) ([afb7b12](https://github.com/andrewhenin/emd/commit/afb7b12ce25542647bbe633d89e869b6cca4367a))
+* detect the package manager of a workspace from its root ([#136](https://github.com/andrewhenin/emd/issues/136)) ([5aed55e](https://github.com/andrewhenin/emd/commit/5aed55e2fc7427282e46cf2b8fee1dd0008fe7cb))
+* keep the check screenshot on Xcode 27 ([#149](https://github.com/andrewhenin/emd/issues/149)) ([3fe2ac7](https://github.com/andrewhenin/emd/commit/3fe2ac798aba90c84eae59f5673a2d801ce6e71b))
+
 ## [0.8.0](https://github.com/andrewhenin/emd/compare/emd-agents-v0.7.2...emd-agents-v0.8.0) (2026-11-09)
 
 
