@@ -70,6 +70,7 @@ const defaultRetryLimit = 3;
 const maxRetryLimit = 10;
 const maxSpecs = 20;
 const maxText = 200;
+const maxName = 40;
 
 // The count is per worktree and lives outside it. Only a pass or a human
 // (`emd check reset`) clears it; the agent has no input that does (decision 0006).
@@ -137,12 +138,10 @@ export async function check(
       );
     }
   }
-  const name = options.name ?? "default";
-  if (!tagPattern.test(name)) {
-    return error(
-      "A check name has letters, digits, dot, dash and underscore only.",
-    );
-  }
+  // Any other character is stored as a dash, so an agent's first name works.
+  const name =
+    (options.name ?? "").replace(/[^A-Za-z0-9_.-]/g, "-").slice(0, maxName) ||
+    "default";
   const limit = retryLimit();
 
   const resolved = resolveRun(options);

@@ -295,6 +295,19 @@ test("the agent cannot start a stopped count over", async () => {
   });
 });
 
+test("a check name is stored with a dash for each other character, at most 40 long", async () => {
+  const jobId = await launched();
+  const { deps } = readers(tapped);
+  for (const name of ["my first check!", "x".repeat(50), ""]) {
+    await run({ jobId, ...expectTapped, name }, deps);
+  }
+  const names = readFileSync(join(state, "runs", jobId, "checks.jsonl"), "utf8")
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line).name);
+  expect(names).toEqual(["my-first-check-", "x".repeat(40), "default"]);
+});
+
 test("checks with different names still share one count", async () => {
   process.env.EMD_RETRY_LIMIT = "2";
   const jobId = await launched();
@@ -443,7 +456,6 @@ test.each([
     { logs: Array.from({ length: 21 }, () => ({ tag: "a" })) },
     /At most 20/,
   ],
-  ["a bad check name", { logs: [{ tag: "a" }], name: "a b" }, /check name/],
   [
     "an unknown job",
     { logs: [{ tag: "a" }], jobId: "deadbeef" },

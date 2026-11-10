@@ -3,7 +3,15 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
-import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  test,
+} from "vitest";
+import { parseAxe } from "../../src/core/device/axe.ts";
 import { resetChecks } from "../../src/core/index.ts";
 
 // A real build and launch on an iOS simulator, driven the way an agent does:
@@ -156,6 +164,57 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
           child.on("close", (status) => resolve({ status, stdout, output }));
         },
       );
+
+    // #130: when a test fails, the job log alone says why. It prints what was
+    // on screen and the run's last log lines, and saves a screenshot to the
+    // run folder (uploaded with the artifact). A passing test prints nothing.
+    const lastLines = (path: string) => {
+      try {
+        return readFileSync(path, "utf8")
+          .trimEnd()
+          .split("\n")
+          .slice(-20)
+          .map((line) => line.slice(0, 400))
+          .join("\n");
+      } catch {
+        return "(none)";
+      }
+    };
+    const explain = async () => {
+      const latest = (again ?? final)?.result;
+      const dir = latest?.logDir;
+      const device = latest?.device?.id;
+      const out = ["==== e2e failure: state at the failure ===="];
+      if (device && dir) {
+        const png = join(dir, `failure-${Date.now()}.png`);
+        const shot = await run("xcrun", [
+          "simctl",
+          "io",
+          device,
+          "screenshot",
+          png,
+        ]);
+        out.push(`screenshot: ${shot.status === 0 ? png : shot.output.trim()}`);
+        const tree = await run("axe", ["describe-ui", "--udid", device]);
+        out.push(
+          "-- screen (axe describe-ui)",
+          tree.status === 0
+            ? parseAxe(tree.stdout)
+                .slice(0, 40)
+                .map((node) => JSON.stringify(node))
+                .join("\n")
+            : tree.output.trim().slice(0, 600),
+        );
+      }
+      for (const name of ["checks.jsonl", "metro.log", "app.ndjson"]) {
+        out.push(
+          `-- ${name}, last 20 lines`,
+          dir ? lastLines(join(dir, name)) : "(no run)",
+        );
+      }
+      console.log(out.join("\n"));
+    };
+    beforeEach(({ onTestFailed }) => onTestFailed(explain, minutes(1)));
 
     // Tagged logs. The sandbox's tap flow restarts the app (Maestro's
     // launchApp), so the app's pid changes: a run is read by app and time.
@@ -341,6 +400,7 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
     test(
       "a check fails before the tap and passes after it, from the real log and screen",
       async () => {
+        resetChecks(sandbox ?? "");
         const tappedLog = [{ tag: "smoke", message: "tapped" }];
         const before = await runCheck({
           logs: tappedLog,
@@ -381,6 +441,8 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
     test(
       "fix-and-retry stops at the retry limit; the agent's reading never changes the verdict",
       async () => {
+        // A fresh count, so a failure in the test before does not fail this one.
+        resetChecks(sandbox ?? "");
         const wrong = {
           elements: [{ text: "Nope" }],
         };

@@ -21,7 +21,7 @@ function buildServer(): McpServer {
     "detect",
     {
       description:
-        "Detect the mobile stack of a project directory and what launching it needs: platforms, app IDs, run commands, package manager. Returns a small result, not file contents.",
+        "Detect the mobile stack of a project directory and what launching it needs: platforms, app IDs, run commands, package manager. At a workspace root, `apps` lists the app folders to detect instead. Returns a small result, not file contents.",
       inputSchema: z.object({
         dir: z
           .string()
