@@ -45,7 +45,7 @@ jobs:
       AXE_SHA256: 7b76340b72e90d0f211bc7c4636f15009076eff07acef2f2b632b175debd8834
       MAESTRO_VERSION: 2.12.1
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 2
 
@@ -70,13 +70,13 @@ jobs:
           fi
 
       - if: steps.gate.outputs.run == 'true'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
 
       - if: steps.gate.outputs.run == 'true'
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 17
@@ -129,7 +129,7 @@ jobs:
 
       - name: Upload output and run logs
         if: always() && steps.gate.outputs.run == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-${{ github.run_id }}-${{ matrix.runner }}
           path: |
