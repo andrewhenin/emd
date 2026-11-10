@@ -70,8 +70,9 @@ test("--agent picks agents; an unknown one or no agent at all changes nothing", 
   expect(unknown.status).toBe(1);
   expect(JSON.parse(unknown.stdout).reason).toMatch(/Unknown agent: zed/);
 
-  const none = JSON.parse(cli(home({}), "--yes").stdout);
-  expect(none.verdict).toBe("nothing-to-do");
+  const none = cli(home({}), "--yes");
+  expect(none.status).toBe(1);
+  expect(JSON.parse(none.stdout).reason).toMatch(/No supported agent/);
 });
 
 test("a config that is not valid JSON stops setup before any write", () => {

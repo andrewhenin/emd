@@ -130,8 +130,8 @@ jobs:
           home="$RUNNER_TEMP/setup-home"
           mkdir -p "$home/.claude" "$home/.codex" "$home/.cursor"
           echo '{}' > "$home/.claude.json"
-          HOME="$home" EMD_STATE_DIR="$home/.emd" node dist/bin.js setup --yes | tee setup.json
-          grep -q '"verdict":"done"' setup.json
+          HOME="$home" EMD_STATE_DIR="$home/.emd" node dist/bin.js setup --yes | tee "$RUNNER_TEMP/setup.json"
+          grep -q '"verdict":"done"' "$RUNNER_TEMP/setup.json"
 
       - name: Run e2e
         if: steps.gate.outputs.run == 'true'

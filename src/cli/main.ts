@@ -36,6 +36,16 @@ const elementSpec = (raw: string): { id?: string; text?: string } => {
   return { [key]: raw.slice(at + 1) };
 };
 
+const ask = async (question: string): Promise<string> => {
+  const prompt = createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+  const answer = await prompt.question(question);
+  prompt.close();
+  return answer.trim();
+};
+
 // Only a person at a terminal can start the failure count over (decision 0006).
 async function resetCommand(dir?: string): Promise<number> {
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
@@ -43,15 +53,10 @@ async function resetCommand(dir?: string): Promise<number> {
     return 2;
   }
   const { root } = await detect(dir);
-  const prompt = createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-  const typed = await prompt.question(
+  const typed = await ask(
     `Clear the failed-check count for ${root}? Type "reset": `,
   );
-  prompt.close();
-  if (typed.trim() !== "reset") {
+  if (typed !== "reset") {
     console.error("emd: not reset.");
     return 1;
   }
@@ -216,13 +221,7 @@ export async function run(argv: string[]): Promise<number> {
         console.error(
           `EMD setup will run, for ${plan.agents.map((a) => a.id).join(", ")}:\n${plan.steps.map((s) => `  ${s}`).join("\n")}\nIt backs up each config first, in ~/.emd/backups.`,
         );
-        const prompt = createInterface({
-          input: process.stdin,
-          output: process.stdout,
-        });
-        const answer = await prompt.question("Apply? [Y/n] ");
-        prompt.close();
-        approved = !/^n/i.test(answer.trim());
+        approved = !/^n/i.test(await ask("Apply? [Y/n] "));
       }
       if (!approved) {
         console.log(JSON.stringify(plan));
@@ -230,6 +229,9 @@ export async function run(argv: string[]): Promise<number> {
       }
       const result = await setup({ only, apply: true });
       console.log(JSON.stringify(result));
+      if (result.restart && process.stderr.isTTY) {
+        console.error(`Restart ${result.restart.join(", ")} to load EMD.`);
+      }
       return result.verdict === "done" ? 0 : 1;
     }
     default:

@@ -11,7 +11,6 @@ import { fileURLToPath } from "node:url";
 import { firstLine } from "./log.js";
 import { homeDir } from "./state.js";
 import { runTool } from "./tool.js";
-import { version } from "./version.js";
 
 // The installers `setup` calls (decision 0002), pinned like AXe and Maestro.
 const addMcp = "add-mcp@2.6.1";
@@ -28,7 +27,7 @@ const agents: { id: AgentId; dir: string; config: string }[] = [
 ];
 
 export type SetupResult = {
-  verdict: "planned" | "done" | "nothing-to-do" | "failed";
+  verdict: "planned" | "done" | "failed";
   reason?: string;
   agents: { id: AgentId; config: string; backup?: string }[];
   // Each command `setup` runs, in order, as the user would type it.
@@ -47,24 +46,21 @@ export type SetupDeps = {
   run: (command: string, args: string[]) => Promise<void>;
 };
 
+// Each installer downloads its package on first use, so it gets 5 minutes.
+const installSeconds = 300;
+
 const realDeps: SetupDeps = {
   run: async (command, args) => {
-    await runTool(`${command} ${args[1] ?? ""}`, command, args, 300);
+    const installer = args.find((a) => /^(add-mcp|skills)@/.test(a)) ?? command;
+    await runTool(installer, command, args, installSeconds);
   },
 };
 
-// From npx, setup registers the pinned package and the skill of the same
-// release. From a git checkout, it registers that build and its own skill.
-const bin = fileURLToPath(new URL("../bin.js", import.meta.url));
-const fromPackage = bin.includes(`${sep}node_modules${sep}`);
+// Until EMD is on npm (#28), setup registers this checkout's build and installs
+// this checkout's skill.
 const emdServer = () =>
-  fromPackage
-    ? `npx -y emd-agents@${version()} mcp`
-    : `${process.execPath} ${bin} mcp`;
-const skillSource = () =>
-  fromPackage
-    ? `andrewhenin/emd#emd-agents-v${version()}`
-    : fileURLToPath(new URL("../../", import.meta.url));
+  `${process.execPath} ${fileURLToPath(new URL("../bin.js", import.meta.url))} mcp`;
+const skillSource = () => fileURLToPath(new URL("../../", import.meta.url));
 
 function commands(ids: AgentId[]): [string, string[]][] {
   const to = ids.flatMap((id) => ["-a", id]);
@@ -103,8 +99,8 @@ function unreadable(path: string): boolean {
   }
 }
 
-// Codex waits 10 s for a server by default, less than a first npx download.
-// add-mcp can't set it for a local server, so setup does.
+// Codex waits 10 s for a server by default, less than MobileBuildMCP's first
+// npx download. add-mcp can't set it for a local server, so setup does.
 function codexTimeouts(path: string): void {
   const lines = readFileSync(path, "utf8").split("\n");
   const out: string[] = [];
@@ -161,7 +157,7 @@ export async function setup(
   }));
   if (picked.length === 0) {
     return {
-      verdict: "nothing-to-do",
+      verdict: "failed",
       reason: "No supported agent found (Claude Code, Codex or Cursor).",
       agents: [],
       steps: [],

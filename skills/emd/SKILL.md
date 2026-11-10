@@ -9,7 +9,7 @@ EMD's MCP tools build and launch the app, read its tagged log lines, and decide 
 
 ## If EMD's tools are missing
 
-Run `npx emd-agents setup --dry-run` and show the user its plan. Run it with `--yes` only after the user approves. Then ask the user to restart you.
+Run `emd setup --dry-run` from the user's EMD folder (`node dist/bin.js setup --dry-run`) and show the user its plan. Run it with `--yes` only after the user approves. Then ask the user to restart you.
 
 ## Before you change code
 
