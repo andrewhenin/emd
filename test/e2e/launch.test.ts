@@ -263,8 +263,7 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
         .find((row) => row[1] === "tap" && row[5] === id)?.[0];
       expect(ref, targets.join("\n")).toBeDefined();
       const tap = await ui("tap", { elementRef: ref });
-      // What MobileBuildMCP says it did, since a tap can report success and
-      // change nothing (run 42737922737: no touch reached the app).
+      // What MobileBuildMCP did. Remove once the e2e tap failure is fixed.
       console.log(`MobileBuildMCP tap on ${id}: ${tap.output.trim()}`);
       return tap;
     };
