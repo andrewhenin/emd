@@ -65,29 +65,30 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Install tools
+      # Its own step, so only this download gets the token. Signed in, because
+      # anonymous release downloads can fail while signed-in ones work.
+      - name: Download AXe
         if: steps.gate.outputs.run == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          npm ci
-          npm ci --prefix fixtures/expo
-          # Signed in, with retries: anonymous release downloads returned 504
-          # for over 15 minutes on Nov 9.
-          for try in 1 2 3; do
-            gh release download "v$AXE_VERSION" --repo cameroncooke/AXe \
-              --pattern "AXe-macOS-v$AXE_VERSION-universal.tar.gz" \
-              --output "$RUNNER_TEMP/axe.tar.gz" --clobber && break
-            [ "$try" = 3 ] && exit 1
-            sleep 10
-          done
+          gh release download "v$AXE_VERSION" --repo cameroncooke/AXe \
+            --pattern "AXe-macOS-v$AXE_VERSION-universal.tar.gz" \
+            --output "$RUNNER_TEMP/axe.tar.gz" --clobber
           echo "$AXE_SHA256  $RUNNER_TEMP/axe.tar.gz" | shasum -a 256 -c -
           mkdir -p "$RUNNER_TEMP/axe"
           tar -xzf "$RUNNER_TEMP/axe.tar.gz" -C "$RUNNER_TEMP/axe"
           echo "$RUNNER_TEMP/axe" >> "$GITHUB_PATH"
+
+      - name: Install tools
+        if: steps.gate.outputs.run == 'true'
+        shell: bash
+        run: |
+          npm ci
+          npm ci --prefix fixtures/expo
           # The script installs MAESTRO_VERSION from the job env.
-          curl -fsSL --retry 3 --retry-all-errors --retry-delay 10 "https://get.maestro.mobile.dev" | bash
+          curl -fsSL "https://get.maestro.mobile.dev" | bash
           echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
 
       - name: Print versions
