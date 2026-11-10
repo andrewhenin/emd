@@ -10,7 +10,7 @@ Stack: Expo (React Native). `detect` reports iOS and Android. `launch` runs on t
 
 MCP tools (`emd mcp`):
 
-- `detect`: finds the stack, platforms, app IDs, run commands and package manager of a folder.
+- `detect`: finds the stack, platforms, app IDs, run commands and package manager of a folder. At a workspace root, it lists the app folders instead (`apps`).
 - `launch`: builds the app, installs and opens it on an iOS simulator, and keeps its dev server running. Returns a job at once.
 - `job_status`: the state of a job (queued, running, succeeded, failed) and, at the end, its result.
 - `logs`: the `[EMD:<tag>]` lines that the app wrote during the run of a launch job.
