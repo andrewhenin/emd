@@ -67,6 +67,8 @@ test("the CLI turns flags into expectations and refuses bad ones", () => {
     '{"text":"Tapped"}',
     "--agent",
     "pass",
+    "--name",
+    "my first check",
   );
   expect(JSON.parse(run.stdout).reason).toMatch(/No job with id/);
 });
