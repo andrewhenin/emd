@@ -19,7 +19,15 @@ concurrency:
 
 jobs:
   e2e:
-    if: github.event.pull_request.draft != true
+    # Release Please's own PR changes only versions and the changelog; its
+    # commits were tested in their own PRs and the nightly, so no macOS runner
+    # starts for it. Both the bot and the branch must match, so a person can't
+    # skip e2e by naming a branch. The e2e label still forces a run.
+    if: >-
+      github.event.pull_request.draft != true &&
+      !(github.event.pull_request.user.login == 'github-actions[bot]' &&
+        startsWith(github.head_ref, 'release-please--') &&
+        !contains(github.event.pull_request.labels.*.name, 'e2e'))
     runs-on: macos-26
     timeout-minutes: 60
     # The tool versions e2e tests (decision 0008, condition 4).
