@@ -10,11 +10,12 @@ import {
   logs,
   resetChecks,
   runJob,
+  setup,
   version,
 } from "../core/index.js";
 
 const usage =
-  "Commands: detect [dir], launch [dir] [--device X] [--timeout N], job status <id>, logs <jobId> [--tag T] [--limit N], check <jobId> [--log TAG[=TEXT]] [--element id=X|text=Y] [--name N] [--agent pass|fail], check reset [dir], evidence <jobId>, gc [--apply], mcp";
+  "Commands: detect [dir], launch [dir] [--device X] [--timeout N], job status <id>, logs <jobId> [--tag T] [--limit N], check <jobId> [--log TAG[=TEXT]] [--element id=X|text=Y] [--name N] [--agent pass|fail], check reset [dir], evidence <jobId>, gc [--apply], setup [--dry-run] [--yes] [--agent claude-code|codex|cursor], mcp";
 
 // --log smoke   or   --log smoke=tapped
 const logSpec = (raw: string) => {
@@ -192,6 +193,44 @@ export async function run(argv: string[]): Promise<number> {
         result.verdict === "failed" ||
         result.entries.some((e) => e.status === "failed");
       return failed ? 1 : 0;
+    }
+    case "setup": {
+      const { values } = parseArgs({
+        args,
+        options: {
+          "dry-run": { type: "boolean" },
+          yes: { type: "boolean" },
+          agent: { type: "string", multiple: true },
+        },
+      });
+      const only = values.agent;
+      const plan = await setup({ only });
+      if (plan.verdict !== "planned" || values["dry-run"]) {
+        console.log(JSON.stringify(plan));
+        return plan.verdict === "failed" ? 1 : 0;
+      }
+      // One approval for the whole plan (decision 0002). Without a person at a
+      // terminal, only --yes applies it.
+      let approved = values.yes === true;
+      if (!approved && process.stdin.isTTY && process.stdout.isTTY) {
+        console.error(
+          `EMD setup will run, for ${plan.agents.map((a) => a.id).join(", ")}:\n${plan.steps.map((s) => `  ${s}`).join("\n")}\nIt backs up each config first, in ~/.emd/backups.`,
+        );
+        const prompt = createInterface({
+          input: process.stdin,
+          output: process.stdout,
+        });
+        const answer = await prompt.question("Apply? [Y/n] ");
+        prompt.close();
+        approved = !/^n/i.test(answer.trim());
+      }
+      if (!approved) {
+        console.log(JSON.stringify(plan));
+        return 0;
+      }
+      const result = await setup({ only, apply: true });
+      console.log(JSON.stringify(result));
+      return result.verdict === "done" ? 0 : 1;
     }
     default:
       console.error(`emd: unknown command "${command}". ${usage}`);
