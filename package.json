@@ -1,6 +1,6 @@
 {
   "name": "emd-agents",
-  "version": "0.8.0",
+  "version": "0.10.0",
   "description": "Build, run, check and prove mobile changes from any coding agent.",
   "license": "Apache-2.0",
   "type": "module",
@@ -33,15 +33,15 @@
     "*.{ts,js,json}": "biome check --no-errors-on-unmatched --files-ignore-unknown=true"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.0.0",
-    "@commitlint/cli": "^19.0.0",
-    "@commitlint/config-conventional": "^19.0.0",
+    "@biomejs/biome": "^2.6.4",
+    "@commitlint/cli": "^21.2.4",
+    "@commitlint/config-conventional": "^21.2.4",
     "@modelcontextprotocol/client": "^2.4.0",
     "@types/node": "^22.0.0",
     "@types/proper-lockfile": "^4.1.4",
     "husky": "^9.0.0",
     "jscpd": "^5.4.2",
-    "knip": "^6.43.0",
+    "knip": "^6.44.1",
     "lint-staged": "^15.0.0",
     "typescript": "^5.6.0",
     "vitest": "^4.1.12"

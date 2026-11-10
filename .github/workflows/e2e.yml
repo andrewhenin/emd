@@ -28,7 +28,15 @@ jobs:
       !(github.event.pull_request.user.login == 'github-actions[bot]' &&
         startsWith(github.head_ref, 'release-please--') &&
         !contains(github.event.pull_request.labels.*.name, 'e2e'))
-    runs-on: macos-26
+    # PRs run on Xcode 26 only; the nightly and manual runs also run on Xcode 27
+    # (#124). Xcode 27 is advisory until it has passed: its failure does not
+    # fail the run.
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: ${{ fromJSON(github.event_name == 'pull_request' && '["macos-26"]' || '["macos-26","xcode-27"]') }}
+    runs-on: ${{ matrix.runner }}
+    continue-on-error: ${{ matrix.runner == 'xcode-27' }}
     timeout-minutes: 60
     # The tool versions e2e tests (decision 0008, condition 4).
     # To bump AXe, change the version and the archive's SHA-256 together.
@@ -37,7 +45,7 @@ jobs:
       AXE_SHA256: 7b76340b72e90d0f211bc7c4636f15009076eff07acef2f2b632b175debd8834
       MAESTRO_VERSION: 2.12.1
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 2
 
@@ -62,13 +70,13 @@ jobs:
           fi
 
       - if: steps.gate.outputs.run == 'true'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
 
       - if: steps.gate.outputs.run == 'true'
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 17
@@ -104,6 +112,7 @@ jobs:
         shell: bash
         run: |
           xcodebuild -version
+          echo "iOS simulator SDK $(xcrun --sdk iphonesimulator --show-sdk-version)"
           xcrun simctl list runtimes
           java -version
           node --version
@@ -120,10 +129,11 @@ jobs:
 
       - name: Upload output and run logs
         if: always() && steps.gate.outputs.run == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: e2e-${{ github.run_id }}
+          name: e2e-${{ github.run_id }}-${{ matrix.runner }}
           path: |
             e2e-output.txt
             ${{ runner.temp }}/emd-state/runs
+            ~/.maestro/tests
           if-no-files-found: warn

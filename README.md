@@ -62,6 +62,8 @@ Register `emd mcp` with your agent. Run these lines in the `emd` folder, so that
 
 EMD does not tap or type. For that, also register [MobileBuildMCP](https://github.com/getsentry/MobileBuildMCP) with your agent; its README has the steps. EMD's e2e tests one version of it, pinned in `test/e2e/launch.test.ts`.
 
+Install EMD's skill, which tells the agent how to use EMD and MobileBuildMCP: `npx skills add andrewhenin/emd -g`.
+
 ## First run
 
 1. In your app, log an event with a tag, for example `console.log("[EMD:ready] home shown")`. Give a testID to each element that you want to check.
@@ -69,14 +71,7 @@ EMD does not tap or type. For that, also register [MobileBuildMCP](https://githu
 
    > Use the emd tools on /path/to/my-app. Launch it on the iOS simulator. Check that the `ready` log event fired and that the element with testID `home` is on screen. Then gather the evidence and tell me the folder.
 
-The agent then runs this loop:
-
-1. `launch`, with `dir` set to your app. It returns a `jobId` at once.
-2. `job_status` every 5 to 10 seconds, until `succeeded` or `failed`. A first build takes minutes. A failed launch gives the reason and the first error lines.
-3. To tap, type or swipe: MobileBuildMCP's `snapshot_ui`, then `tap` (or `type_text`, `swipe`), on the simulator from the launch result (`device.id`).
-4. `logs`, to read the tagged lines.
-5. `check`, with the expected log events and elements, then `job_status` until it ends. The verdict is `passed`, `failed` (fix and check again), `stopped` (3 failed checks: stop and report) or `error` (the check could not run).
-6. `evidence`, to write the evidence folder.
+The agent follows EMD's skill (`skills/emd/SKILL.md`): `launch`, wait for the job with `job_status`, tap through MobileBuildMCP, read `logs`, `check`, then `evidence`. A check's verdict is `passed`, `failed` (fix and check again), `stopped` (3 failed checks: stop and report) or `error` (the check could not run).
 
 Output stays on your Mac:
 

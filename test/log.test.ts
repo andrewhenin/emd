@@ -1,5 +1,10 @@
 import { expect, test } from "vitest";
-import { firstErrors, onlyOpenFailed, stripAnsi } from "../src/core/log.ts";
+import {
+  firstErrors,
+  knownFix,
+  onlyOpenFailed,
+  stripAnsi,
+} from "../src/core/log.ts";
 
 const esc = String.fromCharCode(27);
 
@@ -96,4 +101,14 @@ test.each([
     lines[4] = "Error: xcrun simctl install 27E1 exited with non-zero code: 1";
   else lines.splice(drop, 1);
   expect(onlyOpenFailed(lines.join("\n"))).toBe(false);
+});
+
+// #127: the line from a real run, an Expo app before SDK 56 on Xcode 27.
+test("names the fix when an old Expo CLI looks for Simulator.app", () => {
+  const line =
+    "Can't determine id of Simulator app; the Simulator is most likely not installed";
+  expect(knownFix(`\u001b[31m${line}\u001b[39m\n`)).toContain(
+    "Select Xcode 26 with `xcode-select`, or upgrade the app to Expo SDK 56 or later.",
+  );
+  expect(knownFix("\u203a Build Succeeded\n")).toBeUndefined();
 });
