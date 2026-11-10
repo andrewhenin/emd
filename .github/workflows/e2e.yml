@@ -19,7 +19,9 @@ concurrency:
 
 jobs:
   e2e:
-    if: github.event.pull_request.draft != true
+    # A release PR changes only versions and the changelog; its commits were
+    # tested in their own PRs and the nightly, so no macOS runner starts for it.
+    if: github.event.pull_request.draft != true && !startsWith(github.head_ref, 'release-please--')
     runs-on: macos-26
     timeout-minutes: 60
     # The tool versions e2e tests (decision 0008, condition 4).
@@ -39,16 +41,10 @@ jobs:
         env:
           EVENT: ${{ github.event_name }}
           LABELLED: ${{ contains(github.event.pull_request.labels.*.name, 'e2e') }}
-          HEAD_REF: ${{ github.head_ref }}
         run: |
           paths='^(src/core/(simulator|launch|isolate|jobs|process|logs|tool)\.ts|src/core/device/|src/adapters/|test/e2e/|fixtures/|package(-lock)?\.json|\.github/workflows/e2e\.yml)'
           if [ "$EVENT" != pull_request ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
-          elif [[ "$HEAD_REF" == release-please--* ]]; then
-            # A release PR changes only versions and the changelog; its commits
-            # were tested in their own PRs and the nightly.
-            echo "run=false" >> "$GITHUB_OUTPUT"
-            echo "Release PR: no e2e."
           elif [ "$LABELLED" = true ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
             echo "The e2e label is on."
