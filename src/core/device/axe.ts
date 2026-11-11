@@ -4,8 +4,8 @@ import { runTool } from "../tool.js";
 import type { DeviceBackend, Target, Where } from "./backend.js";
 import type { UiNode } from "./screen.js";
 
-// The AXe release `setup` installs: the same pin as e2e.yml (a test checks
-// they match). Its release archive, not Homebrew: Homebrew floats the version
+// The AXe release `setup` installs. e2e gets AXe through `setup`, so this is
+// its only pin. Its release archive, not Homebrew: Homebrew floats the version
 // and refused AXe on older Xcode (decision 0005).
 export const axePin = {
   version: "1.8.0",

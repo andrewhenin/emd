@@ -70,8 +70,8 @@ const realDeps: SetupDeps = {
 };
 
 // Downloads the pinned archive, checks its SHA-256, unpacks it next to its
-// final folder and moves it there, so a failed install leaves nothing that
-// `detectEnvironment` would find. Then it runs the installed AXe.
+// final folder, runs it, and only then moves it there, so a failed install
+// leaves nothing that `detectEnvironment` would find.
 async function installAxe(
   axe: NonNullable<SetupResult["axe"]>,
   run: SetupDeps["run"],
@@ -89,21 +89,16 @@ async function installAxe(
       throw new Error(`AXe's archive has SHA-256 ${sha}, not ${axe.sha256}.`);
     }
     await run("tar", ["-xzf", archive, "-C", partial]);
+    const bin = join(partial, "axe");
+    const { stdout } = await runTool("axe --version", bin, ["--version"], 60);
+    if (!stdout.split("\n").includes(axe.version)) {
+      throw new Error(`AXe printed ${firstLine(stdout)}, not ${axe.version}.`);
+    }
     rmSync(axe.dir, { recursive: true, force: true });
     renameSync(partial, axe.dir);
   } finally {
     rmSync(archive, { force: true });
     rmSync(partial, { recursive: true, force: true });
-  }
-  try {
-    const bin = join(axe.dir, "axe");
-    const { stdout } = await runTool("axe --version", bin, ["--version"], 60);
-    if (!stdout.split("\n").includes(axe.version)) {
-      throw new Error(`AXe printed ${firstLine(stdout)}, not ${axe.version}.`);
-    }
-  } catch (error) {
-    rmSync(axe.dir, { recursive: true, force: true });
-    throw error;
   }
 }
 
