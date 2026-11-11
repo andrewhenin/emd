@@ -2,6 +2,7 @@ import { accessSync, constants } from "node:fs";
 import { homedir } from "node:os";
 import { delimiter, join } from "node:path";
 import { firstLine } from "../log.js";
+import { axeDir } from "./axe.js";
 import type { UiNode } from "./screen.js";
 
 // Decision 0004: device actions go through backends, and core picks the best
@@ -119,7 +120,7 @@ function findExecutable(name: string, extraDirs: string[]): string | undefined {
 
 export async function detectEnvironment(): Promise<Environment> {
   return {
-    axe: findExecutable("axe", []),
+    axe: findExecutable("axe", [axeDir()]),
     maestro: findExecutable("maestro", [join(homedir(), ".maestro", "bin")]),
   };
 }

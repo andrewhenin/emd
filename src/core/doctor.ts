@@ -5,14 +5,13 @@ import { runTool } from "./tool.js";
 
 type Check = {
   name: string;
-  // `optional`: missing, but only some features need it.
-  status: "ok" | "missing" | "optional";
+  status: "ok" | "missing";
   detail?: string;
   fix?: string;
 };
 
 export type DoctorResult = {
-  // `ready`: everything required is there. Optional checks don't change it.
+  // `ready`: everything required is there.
   verdict: "ready" | "missing";
   checks: Check[];
 };
@@ -89,10 +88,10 @@ export async function doctor(): Promise<DoctorResult> {
       ? { name: "device tool", status: "ok", detail: axe ? "axe" : "maestro" }
       : {
           name: "device tool",
-          status: "optional",
+          status: "missing",
           detail:
             "Taps, typing, swipes and element checks need AXe or Maestro.",
-          fix: "brew install cameroncooke/axe/axe",
+          fix: "Run `emd setup`. It installs AXe.",
         },
   );
   return done(checks);

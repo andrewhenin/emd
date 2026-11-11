@@ -129,7 +129,8 @@ jobs:
           grep -q '"verdict":"ready"' "$RUNNER_TEMP/doctor.json"
 
       # setup's pinned installers (add-mcp, skills) for real, in a throwaway
-      # home, so a breaking change in them shows here (decision 0008).
+      # home, so a breaking change in them shows here (decision 0008). Without
+      # the job's AXe on PATH, setup downloads and installs its own pinned AXe.
       - name: Run setup with the real installers
         if: steps.gate.outputs.run == 'true'
         shell: bash
@@ -137,8 +138,11 @@ jobs:
           home="$RUNNER_TEMP/setup-home"
           mkdir -p "$home/.claude" "$home/.codex" "$home/.cursor"
           echo '{}' > "$home/.claude.json"
-          HOME="$home" EMD_STATE_DIR="$home/.emd" node dist/bin.js setup --yes | tee "$RUNNER_TEMP/setup.json"
+          PATH="${PATH//"$RUNNER_TEMP/axe:"/}" HOME="$home" EMD_STATE_DIR="$home/.emd" \
+            node dist/bin.js setup --yes | tee "$RUNNER_TEMP/setup.json"
           grep -q '"verdict":"done"' "$RUNNER_TEMP/setup.json"
+          grep -q '"axe":{"version"' "$RUNNER_TEMP/setup.json"
+          grep -q '"name":"device tool","status":"ok","detail":"axe"' "$RUNNER_TEMP/setup.json"
 
       - name: Run e2e
         if: steps.gate.outputs.run == 'true'

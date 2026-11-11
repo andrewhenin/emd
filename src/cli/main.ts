@@ -261,8 +261,11 @@ export async function run(argv: string[]): Promise<number> {
       // terminal, only --yes applies it.
       let approved = values.yes === true;
       if (!approved && process.stdin.isTTY && process.stdout.isTTY) {
+        const axe = plan.axe
+          ? `EMD setup will install AXe ${plan.axe.version} into ${plan.axe.dir}, from ${plan.axe.url}, SHA-256 ${plan.axe.sha256}.\n`
+          : "";
         console.error(
-          `EMD setup will run, for ${plan.agents.map((a) => a.id).join(", ")}:\n${plan.steps.map((s) => `  ${s}`).join("\n")}\nIt backs up each config first, in ~/.emd/backups.`,
+          `${axe}EMD setup will run, for ${plan.agents.map((a) => a.id).join(", ")}:\n${plan.steps.map((s) => `  ${s}`).join("\n")}\nIt backs up each config first, in ~/.emd/backups.`,
         );
         approved = !/^n/i.test(await ask("Apply? [Y/n] "));
       }
@@ -273,6 +276,9 @@ export async function run(argv: string[]): Promise<number> {
       const result = await setup({ only, apply: true });
       console.log(JSON.stringify(result));
       if (result.restart && process.stderr.isTTY) {
+        for (const check of result.doctor?.checks ?? []) {
+          if (check.fix) console.error(`Missing ${check.name}: ${check.fix}`);
+        }
         console.error(`Restart ${result.restart.join(", ")} to load EMD.`);
       }
       return result.verdict === "done" ? 0 : 1;
