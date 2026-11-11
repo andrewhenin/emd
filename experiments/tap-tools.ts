@@ -42,7 +42,7 @@ const run = async (cmd: string, args: string[], seconds = 240) => {
 };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const screenHas = async (label: string) =>
-  (await run("axe", ["describe-ui", "--udid", udid], 60)).stdout.includes(
+  (await run("axe", ["describe-ui", "--udid", udid], 15)).stdout.includes(
     `"${label}"`,
   );
 const waitFor = async (label: string, seconds: number) => {
@@ -57,13 +57,14 @@ const waitFor = async (label: string, seconds: number) => {
 const reset = async () => {
   await run("xcrun", ["simctl", "terminate", udid, app], 30);
   await run("xcrun", ["simctl", "launch", udid, app], 60);
-  if (!(await waitFor("Ready", 60))) throw new Error("app never showed Ready");
+  return waitFor("Ready", 120);
 };
 const saved = new Set<string>();
 const sample = (name: string, text: string) => {
   if (saved.has(name)) return;
   saved.add(name);
   writeFileSync(join(out, `${name}.txt`), text);
+  console.log(`--- sample ${name} (${text.length} bytes)\n${text}\n--- end`);
 };
 const textOf = (r: unknown) =>
   ((r as { content?: { type: string; text?: string }[] }).content ?? [])
@@ -92,10 +93,22 @@ const defaults = await client.callTool({
   arguments: { simulatorId: udid },
 });
 sample("A-session_set_defaults", textOf(defaults));
-const viaMcp = async () => {
-  const snap = textOf(
-    await client.callTool({ name: "snapshot_ui", arguments: {} }),
+// Some clients pass structuredContent to the model too; log its size once.
+const structured = (name: string, r: unknown) =>
+  sample(
+    `${name}-structured`,
+    JSON.stringify(
+      (r as { structuredContent?: unknown }).structuredContent ?? null,
+    ),
   );
+structured("A-session_set_defaults", defaults);
+const viaMcp = async () => {
+  const snapReply = await client.callTool({
+    name: "snapshot_ui",
+    arguments: {},
+  });
+  structured("A-snapshot_ui", snapReply);
+  const snap = textOf(snapReply);
   sample("A-snapshot_ui", snap);
   const ref = refFor(snap);
   if (!ref) return { ok: false, bytes: snap.length, note: "no ref" };
@@ -103,6 +116,7 @@ const viaMcp = async () => {
     name: "tap",
     arguments: { elementRef: ref },
   });
+  structured("A-tap", reply);
   const tap = textOf(reply);
   sample("A-tap", tap);
   return {
@@ -167,28 +181,50 @@ const ways: [
   ["C axe", viaAxe],
   ["C maestro", viaMaestro],
 ];
-for (let round = 1; round <= rounds; round++) {
-  const order = round % 2 ? ways : [...ways].reverse();
-  for (const [way, tap] of order) {
-    if (way === "C maestro" && round > maestroRounds) continue;
-    await reset();
-    const start = Date.now();
-    const r = await tap();
-    const seconds = (Date.now() - start) / 1000;
-    const reacted = await waitFor("Tapped", 5);
+// Maestro runs in its own phase at the end: its driver can leave the
+// simulator slow to read for a while, which would bias the others.
+const once = async (
+  way: string,
+  round: number,
+  tap: () => Promise<{ ok: boolean; bytes: number; note?: string }>,
+) => {
+  if (!(await reset())) {
     const row = {
       way,
       round,
-      seconds,
-      reported: r.ok,
-      reacted,
-      bytes: r.bytes,
-      ...(r.note ? { note: r.note } : {}),
+      seconds: 0,
+      reported: false,
+      reacted: false,
+      bytes: 0,
+      note: "reset: no Ready",
     };
     rows.push(row);
     console.log(JSON.stringify(row));
+    return;
   }
+  const start = Date.now();
+  const r = await tap();
+  const seconds = (Date.now() - start) / 1000;
+  const reacted = await waitFor("Tapped", 5);
+  const row = {
+    way,
+    round,
+    seconds,
+    reported: r.ok,
+    reacted,
+    bytes: r.bytes,
+    ...(r.note ? { note: r.note } : {}),
+  };
+  rows.push(row);
+  console.log(JSON.stringify(row));
+};
+const fast = ways.filter(([way]) => way !== "C maestro");
+for (let round = 1; round <= rounds; round++) {
+  for (const [way, tap] of round % 2 ? fast : [...fast].reverse())
+    await once(way, round, tap);
 }
+for (let round = 1; round <= maestroRounds; round++)
+  await once("C maestro", round, viaMaestro);
 await client.close();
 
 console.log(
