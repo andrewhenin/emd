@@ -10,6 +10,7 @@ export type {
 export { check, resetChecks } from "./check.js";
 export { detect } from "./detect.js";
 export { directions } from "./device/backend.js";
+export { type DoctorResult, doctor } from "./doctor.js";
 export { evidence } from "./evidence.js";
 export { type GcResult, gc } from "./gc.js";
 export { swipe, tap, typeText } from "./input.js";

@@ -30,6 +30,7 @@ CLI commands (`node dist/bin.js <command>`):
 - `gc [--apply]`: lists, then removes, what EMD made for app folders that no longer exist.
 - `tap <jobId> --id X|--text Y|--x N --y N`, `type <jobId> <text>`, `swipe <jobId> up|down|left|right`: same as the tools.
 - `setup [--dry-run] [--yes] [--agent X]`: registers EMD with your agents and installs the skill (see below).
+- `doctor`: checks that this Mac has what EMD needs (Node, macOS, Xcode, an iPhone simulator, AXe or Maestro) and says how to add what is missing.
 - `mcp`: starts the MCP server on stdio.
 
 ## Requirements

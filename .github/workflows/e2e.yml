@@ -56,7 +56,7 @@ jobs:
           EVENT: ${{ github.event_name }}
           LABELLED: ${{ contains(github.event.pull_request.labels.*.name, 'e2e') }}
         run: |
-          paths='^(src/core/(simulator|launch|isolate|jobs|process|logs|tool|setup)\.ts|src/core/device/|src/adapters/|test/e2e/|fixtures/|package(-lock)?\.json|\.github/workflows/e2e\.yml)'
+          paths='^(src/core/(simulator|launch|isolate|jobs|process|logs|tool|setup|doctor)\.ts|src/core/device/|src/adapters/|test/e2e/|fixtures/|package(-lock)?\.json|\.github/workflows/e2e\.yml)'
           if [ "$EVENT" != pull_request ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           elif [ "$LABELLED" = true ]; then
@@ -120,13 +120,20 @@ jobs:
           "$HOME/.maestro/bin/maestro" --version | tee /dev/stderr | grep -Fx "$MAESTRO_VERSION" > /dev/null
           axe --version | tee /dev/stderr | grep -Fx "$AXE_VERSION" > /dev/null
 
+      - name: Run doctor
+        if: steps.gate.outputs.run == 'true'
+        shell: bash
+        run: |
+          npm run build
+          node dist/bin.js doctor | tee "$RUNNER_TEMP/doctor.json"
+          grep -q '"verdict":"ready"' "$RUNNER_TEMP/doctor.json"
+
       # setup's pinned installers (add-mcp, skills) for real, in a throwaway
       # home, so a breaking change in them shows here (decision 0008).
       - name: Run setup with the real installers
         if: steps.gate.outputs.run == 'true'
         shell: bash
         run: |
-          npm run build
           home="$RUNNER_TEMP/setup-home"
           mkdir -p "$home/.claude" "$home/.codex" "$home/.cursor"
           echo '{}' > "$home/.claude.json"
