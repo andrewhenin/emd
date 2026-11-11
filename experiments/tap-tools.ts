@@ -93,21 +93,11 @@ const defaults = await client.callTool({
   arguments: { simulatorId: udid },
 });
 sample("A-session_set_defaults", textOf(defaults));
-// Some clients pass structuredContent to the model too; log its size once.
-const structured = (name: string, r: unknown) =>
-  sample(
-    `${name}-structured`,
-    JSON.stringify(
-      (r as { structuredContent?: unknown }).structuredContent ?? null,
-    ),
-  );
-structured("A-session_set_defaults", defaults);
 const viaMcp = async () => {
   const snapReply = await client.callTool({
     name: "snapshot_ui",
     arguments: {},
   });
-  structured("A-snapshot_ui", snapReply);
   const snap = textOf(snapReply);
   sample("A-snapshot_ui", snap);
   const ref = refFor(snap);
@@ -116,7 +106,6 @@ const viaMcp = async () => {
     name: "tap",
     arguments: { elementRef: ref },
   });
-  structured("A-tap", reply);
   const tap = textOf(reply);
   sample("A-tap", tap);
   return {

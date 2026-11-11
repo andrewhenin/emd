@@ -19,7 +19,9 @@ of each reply, and a summary.
 
 GitHub's `macos-26` runner (arm64), Xcode 26.6, AXe 1.8.0, Maestro 2.12.1,
 MobileBuildMCP 2.7.1, 10 rounds. Run
-[42938667023](https://github.com/andrewhenin/emd/actions/runs/42938667023).
+[42938667023](https://github.com/andrewhenin/emd/actions/runs/42938667023) used
+the script at [158b1c8](https://github.com/andrewhenin/emd/blob/158b1c8/experiments/tap-tools.ts);
+since then only its logging and summary lines changed, not the taps or the timing.
 
 ## Results
 
