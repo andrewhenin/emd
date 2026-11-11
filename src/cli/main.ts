@@ -11,11 +11,14 @@ import {
   resetChecks,
   runJob,
   setup,
+  swipe,
+  tap,
+  typeText,
   version,
 } from "../core/index.js";
 
 const usage =
-  "Commands: detect [dir], launch [dir] [--device X] [--timeout N], job status <id>, logs <jobId> [--tag T] [--limit N], check <jobId> [--log TAG[=TEXT]] [--element id=X|text=Y] [--name N] [--agent pass|fail], check reset [dir], evidence <jobId>, gc [--apply], setup [--dry-run] [--yes] [--agent claude-code|codex|cursor], mcp";
+  "Commands: detect [dir], launch [dir] [--device X] [--timeout N], job status <id>, logs <jobId> [--tag T] [--limit N], check <jobId> [--log TAG[=TEXT]] [--element id=X|text=Y] [--name N] [--agent pass|fail], check reset [dir], tap <jobId> --id X|--text Y|--x N --y N, type <jobId> [--] <text>, swipe <jobId> up|down|left|right, evidence <jobId>, gc [--apply], setup [--dry-run] [--yes] [--agent claude-code|codex|cursor], mcp";
 
 // --log smoke   or   --log smoke=tapped
 const logSpec = (raw: string) => {
@@ -136,6 +139,40 @@ export async function run(argv: string[]): Promise<number> {
         tag: values.tag,
         limit: values.limit === undefined ? undefined : Number(values.limit),
       });
+      console.log(JSON.stringify(result));
+      return result.verdict === "ok" ? 0 : 1;
+    }
+    case "tap": {
+      const { values, positionals } = parseArgs({
+        args,
+        allowPositionals: true,
+        options: {
+          id: { type: "string" },
+          text: { type: "string" },
+          x: { type: "string" },
+          y: { type: "string" },
+        },
+      });
+      const number = (raw?: string) =>
+        raw === undefined ? undefined : Number(raw);
+      const result = await tap({
+        jobId: positionals[0] ?? "",
+        id: values.id,
+        text: values.text,
+        x: number(values.x),
+        y: number(values.y),
+      });
+      console.log(JSON.stringify(result));
+      return result.verdict === "ok" ? 0 : 1;
+    }
+    case "type":
+    case "swipe": {
+      const { positionals } = parseArgs({ args, allowPositionals: true });
+      const [jobId = "", value = ""] = positionals;
+      const result =
+        command === "type"
+          ? await typeText({ jobId, text: value })
+          : await swipe({ jobId, direction: value });
       console.log(JSON.stringify(result));
       return result.verdict === "ok" ? 0 : 1;
     }

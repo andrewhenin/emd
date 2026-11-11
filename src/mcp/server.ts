@@ -4,15 +4,26 @@ import { z } from "zod";
 import {
   detect,
   detectResultSchema,
+  directions,
   evidence,
   evidenceResultSchema,
+  type InputResult,
+  inputResultSchema,
   jobStatus,
   jobViewSchema,
   logs,
   logsResultSchema,
   startJob,
+  swipe,
+  tap,
+  typeText,
   version,
 } from "../core/index.js";
+
+const reply = (result: InputResult) => ({
+  content: [{ type: "text" as const, text: JSON.stringify(result) }],
+  structuredContent: result,
+});
 
 function buildServer(): McpServer {
   const server = new McpServer({ name: "emd", version: version() });
@@ -186,6 +197,56 @@ function buildServer(): McpServer {
         structuredContent: job,
       };
     },
+  );
+
+  const jobId = z.string().describe("The launch job whose app to act on.");
+
+  server.registerTool(
+    "tap",
+    {
+      description:
+        "Tap the launched app: an element by testID or by visible text, or a point. Give one target. Waits up to 5 s for the element. A result of ok means the tap was sent; call check to see what the app did.",
+      inputSchema: z.object({
+        jobId,
+        id: z.string().optional().describe("The element's testID."),
+        text: z
+          .string()
+          .optional()
+          .describe("Its visible text or accessibility label, exactly."),
+        x: z.number().optional().describe("A point's x, in points."),
+        y: z.number().optional().describe("A point's y, in points."),
+      }),
+      outputSchema: inputResultSchema,
+    },
+    async (input) => reply(await tap(input)),
+  );
+
+  server.registerTool(
+    "type",
+    {
+      description:
+        "Type text into the field that has focus. Tap the field first. Letters, digits and US keyboard symbols only.",
+      inputSchema: z.object({
+        jobId,
+        text: z.string().describe("The text to type."),
+      }),
+      outputSchema: inputResultSchema,
+    },
+    async (input) => reply(await typeText(input)),
+  );
+
+  server.registerTool(
+    "swipe",
+    {
+      description:
+        "Swipe across the middle of the screen to scroll. The direction is the way the finger moves: up shows what is further down.",
+      inputSchema: z.object({
+        jobId,
+        direction: z.enum(directions),
+      }),
+      outputSchema: inputResultSchema,
+    },
+    async (input) => reply(await swipe(input)),
   );
 
   server.registerTool(
