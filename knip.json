@@ -1,5 +1,5 @@
 {
   "$schema": "https://unpkg.com/knip@latest/schema.json",
-  "ignore": ["fixtures/**"],
+  "ignore": ["fixtures/**", "experiments/**"],
   "ignoreBinaries": ["maestro", "pgrep"]
 }
