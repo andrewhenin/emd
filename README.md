@@ -28,6 +28,7 @@ CLI commands (`node dist/bin.js <command>`):
 - `evidence <jobId>`: same as the tool.
 - `gc [--apply]`: lists, then removes, what EMD made for app folders that no longer exist.
 - `setup [--dry-run] [--yes] [--agent X]`: registers EMD and MobileBuildMCP with your agents and installs the skill (see below).
+- `doctor`: checks that this Mac has what EMD needs (Node, macOS, Xcode, an iPhone simulator, AXe or Maestro) and says how to add what is missing.
 - `mcp`: starts the MCP server on stdio.
 
 ## Requirements

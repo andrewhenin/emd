@@ -3,6 +3,7 @@ import { parseArgs } from "node:util";
 import {
   check,
   detect,
+  doctor,
   evidence,
   gc,
   jobStatus,
@@ -15,7 +16,7 @@ import {
 } from "../core/index.js";
 
 const usage =
-  "Commands: detect [dir], launch [dir] [--device X] [--timeout N], job status <id>, logs <jobId> [--tag T] [--limit N], check <jobId> [--log TAG[=TEXT]] [--element id=X|text=Y] [--name N] [--agent pass|fail], check reset [dir], evidence <jobId>, gc [--apply], setup [--dry-run] [--yes] [--agent claude-code|codex|cursor], mcp";
+  "Commands: detect [dir], launch [dir] [--device X] [--timeout N], job status <id>, logs <jobId> [--tag T] [--limit N], check <jobId> [--log TAG[=TEXT]] [--element id=X|text=Y] [--name N] [--agent pass|fail], check reset [dir], evidence <jobId>, gc [--apply], setup [--dry-run] [--yes] [--agent claude-code|codex|cursor], doctor, mcp";
 
 // --log smoke   or   --log smoke=tapped
 const logSpec = (raw: string) => {
@@ -198,6 +199,11 @@ export async function run(argv: string[]): Promise<number> {
         result.verdict === "failed" ||
         result.entries.some((e) => e.status === "failed");
       return failed ? 1 : 0;
+    }
+    case "doctor": {
+      const result = await doctor();
+      console.log(JSON.stringify(result));
+      return result.verdict === "ready" ? 0 : 1;
     }
     case "setup": {
       const { values } = parseArgs({

@@ -9,6 +9,7 @@ export type {
 } from "./adapter.js";
 export { check, resetChecks } from "./check.js";
 export { detect } from "./detect.js";
+export { type DoctorResult, doctor } from "./doctor.js";
 export { evidence } from "./evidence.js";
 export { type GcResult, gc } from "./gc.js";
 export { jobStatus, runJob, startJob } from "./jobs.js";
