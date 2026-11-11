@@ -26,6 +26,8 @@ export default function App() {
       <TextInput
         testID="smoke-input"
         placeholder="Type here"
+        autoCapitalize="none"
+        autoCorrect={false}
         style={styles.input}
         onChangeText={(text) => console.log(`[EMD:typed] ${text}`)}
       />
