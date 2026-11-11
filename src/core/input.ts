@@ -16,8 +16,6 @@ import { type RunRef, resolveRun } from "./run.js";
 // Taps, typing and swipes on a launched app (decision 0009). Each acts once
 // and says which backend did it; whether the app reacted is for `check`.
 
-const maxText = 500;
-
 async function act(
   what: string,
   { jobId }: RunRef,
@@ -47,30 +45,23 @@ export type TapOptions = RunRef & {
   y?: number;
 };
 
+// One target: an id, a text, or a point (x and y together).
+function targetOf({ id, text, x, y }: TapOptions): Target | undefined {
+  const given = [id, text, x, y].filter((v) => v !== undefined).length;
+  if (id !== undefined && given === 1) return { id };
+  if (text !== undefined && given === 1) return { text };
+  if (x !== undefined && y !== undefined && given === 2) return { x, y };
+  return undefined;
+}
+
 export function tap(options: TapOptions): Promise<InputResult> {
-  const { id, text, x, y } = options;
-  const given = [id, text, x ?? y].filter((v) => v !== undefined).length;
-  if (given !== 1 || (x === undefined) !== (y === undefined)) {
+  const target = targetOf(options);
+  if (!target) {
     return Promise.resolve({
       verdict: "failed",
       reason: "Give one target: id, text, or both x and y.",
     });
   }
-  const badPoint = [x, y].some(
-    (n) => n !== undefined && !(n >= 0 && Number.isFinite(n)),
-  );
-  if ((id ?? text ?? "").length > maxText || badPoint) {
-    return Promise.resolve({
-      verdict: "failed",
-      reason: `An id or text is at most ${maxText} characters; x and y are numbers, 0 or more.`,
-    });
-  }
-  const target: Target =
-    id !== undefined
-      ? { id }
-      : text !== undefined
-        ? { text }
-        : { x: x ?? 0, y: y ?? 0 };
   return act("tap", options, (b, where, bin) => b.tap(where, bin, target));
 }
 
@@ -78,11 +69,8 @@ export function typeText(
   options: RunRef & { text: string },
 ): Promise<InputResult> {
   const { text } = options;
-  if (text.length === 0 || text.length > maxText) {
-    return Promise.resolve({
-      verdict: "failed",
-      reason: `Give 1 to ${maxText} characters to type.`,
-    });
+  if (text.length === 0) {
+    return Promise.resolve({ verdict: "failed", reason: "Give text to type." });
   }
   return act("type", options, (b, where, bin) => b.type(where, bin, text));
 }

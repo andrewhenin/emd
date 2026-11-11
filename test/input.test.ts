@@ -25,7 +25,6 @@ test.each([
   ["no target", [], {}],
   ["two targets", ["--id", "a", "--text", "b"], { id: "a", text: "b" }],
   ["x without y", ["--x", "10"], { x: 10 }],
-  ["a negative point", ["--x=-1", "--y=5"], { x: -1, y: 5 }],
 ])("tap refuses %s, from the CLI and MCP alike", async (_name, flags, args) => {
   const run = fromCli("tap", "deadbeef", ...flags);
   expect(run.status).toBe(1);
@@ -46,7 +45,7 @@ test("each gesture needs a launched app", async () => {
 });
 
 test("type needs text and swipe needs a direction", () => {
-  expect(fromCli("type", "deadbeef").result.reason).toMatch(/characters/);
+  expect(fromCli("type", "deadbeef").result.reason).toMatch(/text to type/);
   expect(fromCli("swipe", "deadbeef", "sideways").result.reason).toMatch(
     /up, down, left, right/,
   );
