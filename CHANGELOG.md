@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.11.0](https://github.com/andrewhenin/emd/compare/emd-agents-v0.10.0...emd-agents-v0.11.0) (2026-11-11)
+
+
+### Features
+
+* add EMD's agent skill ([#154](https://github.com/andrewhenin/emd/issues/154)) ([a304887](https://github.com/andrewhenin/emd/commit/a3048879e058b4ba805b346595820fd00796f62f))
+* agents tap, type and swipe through EMD ([#161](https://github.com/andrewhenin/emd/issues/161)) ([aaa1a8a](https://github.com/andrewhenin/emd/commit/aaa1a8ad2f28a22f6c77c15b7d1831d7fb41c1bb))
+* doctor checks what EMD needs on this Mac ([#157](https://github.com/andrewhenin/emd/issues/157)) ([552646e](https://github.com/andrewhenin/emd/commit/552646e9fcc2160dc0eb688f5847aa604252a9bb))
+* setup registers EMD and MobileBuildMCP with each agent ([#156](https://github.com/andrewhenin/emd/issues/156)) ([27ed312](https://github.com/andrewhenin/emd/commit/27ed3122c2464addecfe292196f73eb6c127075e))
+
+
+### Bug Fixes
+
+* check reads again until a time limit before it fails ([#143](https://github.com/andrewhenin/emd/issues/143)) ([f2d5900](https://github.com/andrewhenin/emd/commit/f2d59004abe753ab9661feac64b6a7436f35f1de))
+
 ## [0.10.0](https://github.com/andrewhenin/emd/compare/emd-agents-v0.9.0...emd-agents-v0.10.0) (2026-11-10)
 
 
