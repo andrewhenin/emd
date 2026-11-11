@@ -7,6 +7,9 @@ import {
 } from "../src/core/device/backend.ts";
 import type { UiNode } from "../src/core/device/screen.ts";
 
+// What a screen read needs from a backend.
+type Reader = Pick<DeviceBackend, "id" | "readScreen">;
+
 // Decision 0004. The backends here are small real objects, not the tools; the
 // real ones run in test/e2e.
 const env = (
@@ -20,7 +23,7 @@ const nodesFrom = (id: BackendId): UiNode[] => [
   { id: `from-${id}`, texts: [] },
 ];
 
-const works = (id: BackendId, calls: BackendId[] = []): DeviceBackend => ({
+const works = (id: BackendId, calls: BackendId[] = []): Reader => ({
   id,
   readScreen: async () => {
     calls.push(id);
@@ -35,11 +38,11 @@ const breaks = (id: BackendId, message: string, calls: BackendId[] = []) =>
       calls.push(id);
       throw new Error(message);
     },
-  }) as DeviceBackend;
+  }) as Reader;
 
 test("hands each backend the path it was found at", async () => {
   const paths: string[] = [];
-  const at = (id: BackendId): DeviceBackend => ({
+  const at = (id: BackendId): Reader => ({
     id,
     readScreen: async (_device, bin) => {
       paths.push(bin);
@@ -115,7 +118,7 @@ test("when no backend can read the screen, the error names each reason", async (
   );
 });
 
-const empty = (id: BackendId): DeviceBackend => ({
+const empty = (id: BackendId): Reader => ({
   id,
   readScreen: async () => [],
 });

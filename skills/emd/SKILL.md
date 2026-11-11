@@ -20,10 +20,7 @@ Run `emd setup --dry-run` from the user's EMD folder (`node dist/bin.js setup --
 
 1. `launch` with `dir` set to the app folder. It returns a `jobId` at once.
 2. `job_status` every 5 to 10 seconds, until `succeeded` or `failed`. A first build takes minutes. A failed launch gives the reason and the first error lines: fix the cause and launch again.
-3. To tap, type or swipe, use MobileBuildMCP (EMD doesn't tap):
-   - `session_set_defaults` with `simulatorId` set to `device.id` from the launch result.
-   - `snapshot_ui`, then `tap` (or `type_text`, `swipe`).
-   - A `tap` can report success and change nothing. Judge it by the next `check`. If nothing changed, try `touch` (down, then up) once.
+3. `tap` with the `jobId`, and a testID (`id`) or a visible `text`. Use a point only when the element has neither. `type` types into the field that has focus, so tap the field first. `swipe` scrolls. A result of `ok` means the gesture was sent; the next `check` shows what the app did.
 4. `logs`, to read the tagged lines of this run.
 5. `check` with the expected log events and elements, then `job_status` until it ends:
    - `passed`: done.

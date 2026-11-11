@@ -1,5 +1,5 @@
 import { runTool } from "../tool.js";
-import type { DeviceBackend } from "./backend.js";
+import type { DeviceBackend, Target, Where } from "./backend.js";
 import type { UiNode } from "./screen.js";
 
 type RawNode = Record<string, unknown> & { children?: unknown };
@@ -45,4 +45,39 @@ async function readScreen(device: string, bin: string): Promise<UiNode[]> {
   return parseAxe(stdout);
 }
 
-export const axeBackend: DeviceBackend = { id: "axe", readScreen };
+// One AXe command on the simulator. AXe needs no driver, so a gesture takes
+// about a second (experiments/tap-tools.md).
+const run = async (
+  bin: string,
+  { device }: Where,
+  command: string,
+  args: string[],
+) => {
+  await runTool(
+    `axe ${command}`,
+    bin,
+    [command, "--udid", device, ...args],
+    60,
+  );
+};
+
+// By testID (AXUniqueId) or label (AXLabel), AXe waits up to 5 s for the
+// element to appear, then taps its activation point.
+const targetArgs = (target: Target): string[] =>
+  "id" in target
+    ? ["--id", target.id, "--wait-timeout", "5"]
+    : "text" in target
+      ? ["--label", target.text, "--wait-timeout", "5"]
+      : ["-x", String(target.x), "-y", String(target.y)];
+
+export const axeBackend: DeviceBackend = {
+  id: "axe",
+  readScreen,
+  tap: (where, bin, target) => run(bin, where, "tap", targetArgs(target)),
+  // `--` so text that starts with a dash is typed, not read as an option.
+  type: (where, bin, text) => run(bin, where, "type", ["--", text]),
+  // AXe's preset scrolls 200 points through the screen's centre, the finger
+  // moving the way named.
+  swipe: (where, bin, direction) =>
+    run(bin, where, "gesture", [`scroll-${direction}`]),
+};

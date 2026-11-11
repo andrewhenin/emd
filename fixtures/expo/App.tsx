@@ -1,6 +1,6 @@
 import { StatusBar } from "expo-status-bar";
 import { useState } from "react";
-import { Button, StyleSheet, Text, View } from "react-native";
+import { Button, StyleSheet, Text, TextInput, View } from "react-native";
 
 export default function App() {
   const [label, setLabel] = useState("Ready");
@@ -23,6 +23,14 @@ export default function App() {
           setLabel("Tapped");
         }}
       />
+      <TextInput
+        testID="smoke-input"
+        placeholder="Type here"
+        autoCapitalize="none"
+        autoCorrect={false}
+        style={styles.input}
+        onChangeText={(text) => console.log(`[EMD:typed] ${text}`)}
+      />
       <StatusBar style="auto" />
     </View>
   );
@@ -35,4 +43,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  input: { borderWidth: 1, minWidth: 200, padding: 8 },
 });

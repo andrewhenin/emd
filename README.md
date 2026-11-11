@@ -14,6 +14,7 @@ MCP tools (`emd mcp`):
 - `launch`: builds the app, installs and opens it on an iOS simulator, and keeps its dev server running. Returns a job at once.
 - `job_status`: the state of a job (queued, running, succeeded, failed) and, at the end, its result.
 - `logs`: the `[EMD:<tag>]` lines that the app wrote during the run of a launch job.
+- `tap`, `type`, `swipe`: act on the launched app. `tap` takes a testID, a visible text or a point. Each says which tool did it (AXe or Maestro).
 - `check`: passes or fails a run from tagged log lines and on-screen elements (by testID or text). Returns a job.
 - `evidence`: puts the checks, log lines, screenshots and Maestro flows of a run in one folder.
 
@@ -27,7 +28,8 @@ CLI commands (`node dist/bin.js <command>`):
 - `check reset [dir]`: clears the failed-check count. A person must type `reset` at a terminal.
 - `evidence <jobId>`: same as the tool.
 - `gc [--apply]`: lists, then removes, what EMD made for app folders that no longer exist.
-- `setup [--dry-run] [--yes] [--agent X]`: registers EMD and MobileBuildMCP with your agents and installs the skill (see below).
+- `tap <jobId> --id X|--text Y|--x N --y N`, `type <jobId> <text>`, `swipe <jobId> up|down|left|right`: same as the tools.
+- `setup [--dry-run] [--yes] [--agent X]`: registers EMD with your agents and installs the skill (see below).
 - `doctor`: checks that this Mac has what EMD needs (Node, macOS, Xcode, an iPhone simulator, AXe or Maestro) and says how to add what is missing.
 - `mcp`: starts the MCP server on stdio.
 
@@ -39,10 +41,10 @@ CLI commands (`node dist/bin.js <command>`):
 - Xcode, tested with Xcode 26 and 27. Expo SDK 58 apps need Xcode 26 or newer. Without Xcode, `launch` fails: "Could not set up this worktree's simulator and build folders."
 - An iOS simulator runtime and at least one shut-down iPhone simulator. EMD clones it once per app folder, as `emd-<key>`. Without one, `launch` fails: "No shut-down iPhone simulator is available to clone."
 - Node 22 or newer.
-- AXe or Maestro, for element checks only. EMD tries AXe first, then Maestro.
-  - AXe (optional, about 40 times faster): `brew install cameroncooke/axe/axe`. With Xcode 27, Device Hub must be running.
+- AXe or Maestro, for taps, typing, swipes and element checks. EMD tries AXe first, then Maestro.
+  - AXe (about 40 times faster for checks, 60 for taps): `brew install cameroncooke/axe/axe`. With Xcode 27, Device Hub must be running.
   - Maestro: `curl -fsSL "https://get.maestro.mobile.dev" | bash`. It needs Java 17 or newer, with `JAVA_HOME` set.
-  - With neither, a check with elements returns `error`. `launch`, `logs`, log checks and `evidence` still work.
+  - With neither, taps, typing and swipes fail, and a check with elements returns `error`. `launch`, `logs`, log checks and `evidence` still work.
 
 ## Install from source
 
@@ -62,10 +64,10 @@ Then set EMD up for your agents:
 node dist/bin.js setup
 ```
 
-It finds Claude Code, Codex and Cursor, prints its plan and asks once. Then it registers EMD and [MobileBuildMCP](https://github.com/getsentry/MobileBuildMCP) (which taps and types; EMD doesn't) with each agent, and installs EMD's skill, which tells the agent how to use both. It backs up each config to `~/.emd/backups/` first. Restart your agents afterwards.
+It finds Claude Code, Codex and Cursor, prints its plan and asks once. Then it registers EMD with each agent and installs EMD's skill, which tells the agent how to use it. It backs up each config to `~/.emd/backups/` first. Restart your agents afterwards.
 
 - `--dry-run` prints the plan and changes nothing. `--yes` applies it without asking. `--agent codex` (repeatable) picks agents.
-- It calls two installers, pinned: [add-mcp](https://github.com/neondatabase/add-mcp) for the servers and [skills](https://github.com/vercel-labs/skills) for the skill.
+- It calls two installers, pinned: [add-mcp](https://github.com/neondatabase/add-mcp) for the server and [skills](https://github.com/vercel-labs/skills) for the skill.
 
 ## First run
 
@@ -74,7 +76,7 @@ It finds Claude Code, Codex and Cursor, prints its plan and asks once. Then it r
 
    > Use the emd tools on /path/to/my-app. Launch it on the iOS simulator. Check that the `ready` log event fired and that the element with testID `home` is on screen. Then gather the evidence and tell me the folder.
 
-The agent follows EMD's skill (`skills/emd/SKILL.md`): `launch`, wait for the job with `job_status`, tap through MobileBuildMCP, read `logs`, `check`, then `evidence`. A check's verdict is `passed`, `failed` (fix and check again), `stopped` (3 failed checks: stop and report) or `error` (the check could not run).
+The agent follows EMD's skill (`skills/emd/SKILL.md`): `launch`, wait for the job with `job_status`, `tap`, read `logs`, `check`, then `evidence`. A check's verdict is `passed`, `failed` (fix and check again), `stopped` (3 failed checks: stop and report) or `error` (the check could not run).
 
 Output stays on your Mac:
 

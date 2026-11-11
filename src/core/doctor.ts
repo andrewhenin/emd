@@ -81,15 +81,17 @@ export async function doctor(): Promise<DoctorResult> {
         },
   );
 
-  // Only element checks read the screen (decision 0004).
+  // Taps, typing, swipes and element checks go through AXe or Maestro
+  // (decisions 0004, 0009).
   const { axe, maestro } = await detectEnvironment();
   checks.push(
     axe || maestro
-      ? { name: "screen reader", status: "ok", detail: axe ? "axe" : "maestro" }
+      ? { name: "device tool", status: "ok", detail: axe ? "axe" : "maestro" }
       : {
-          name: "screen reader",
+          name: "device tool",
           status: "optional",
-          detail: "Checks of on-screen elements need AXe or Maestro.",
+          detail:
+            "Taps, typing, swipes and element checks need AXe or Maestro.",
           fix: "brew install cameroncooke/axe/axe",
         },
   );

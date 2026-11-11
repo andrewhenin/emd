@@ -238,34 +238,18 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
         },
       );
 
-    // An agent taps through MobileBuildMCP, not EMD (decision 0008), at the
-    // version e2e tests. It reads the screen's element refs, then taps the
-    // ref whose identifier is the testID. A row is ref|action|role|label|value|id.
-    const mobileBuildMcp = "mobilebuildmcp@2.7.1";
-    const tapById = async (device: string, id: string) => {
-      const ui = (tool: string, args: object) =>
-        run("npx", [
-          "-y",
-          mobileBuildMcp,
-          "ui-automation",
-          tool,
-          "--json",
-          JSON.stringify({ simulatorId: device, ...args }),
-          "--output",
-          "json",
-        ]);
-      const snapshot = await ui("snapshot-ui", {});
-      expect(snapshot.status, snapshot.output).toBe(0);
-      const targets: string[] = JSON.parse(snapshot.stdout).data.capture
-        .targets;
-      const ref = targets
-        .map((row) => row.split("|"))
-        .find((row) => row[1] === "tap" && row[5] === id)?.[0];
-      expect(ref, targets.join("\n")).toBeDefined();
-      const tap = await ui("tap", { elementRef: ref });
-      // What MobileBuildMCP did. Remove once the e2e tap failure is fixed.
-      console.log(`MobileBuildMCP tap on ${id}: ${tap.output.trim()}`);
-      return tap;
+    // An agent taps, types and swipes through EMD's own tools (decision 0009).
+    type Input = { verdict: string; reason?: string; backend?: string };
+    const input = async (name: string, args: Record<string, unknown>) => {
+      const result = (
+        await client.callTool({
+          name,
+          arguments: { jobId: again?.jobId ?? "", ...args },
+        })
+      ).structuredContent as Input;
+      expect(result.verdict, result.reason).toBe("ok");
+      expect(["axe", "maestro"]).toContain(result.backend);
+      return result;
     };
     const readLogs = async (jobId: string, extra: object = {}) =>
       (await client.callTool({ name: "logs", arguments: { jobId, ...extra } }))
@@ -420,11 +404,7 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
         );
         expectBackendNamed(before);
 
-        const tap = await tapById(
-          again?.result?.device.id ?? "",
-          "smoke-button",
-        );
-        expect(tap.status, tap.output).toBe(0);
+        await input("tap", { id: "smoke-button" });
         const after = await runCheck({
           logs: tappedLog,
           elements: [{ id: "smoke-button" }, { text: "Tapped" }],
@@ -439,6 +419,22 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
         expectBackendNamed(after);
       },
       minutes(8),
+    );
+
+    test(
+      "types into a field and swipes, through EMD's tools",
+      async () => {
+        await input("tap", { id: "smoke-input" });
+        await input("type", { text: "hello" });
+        const typed = await runCheck({
+          name: "typed",
+          logs: [{ tag: "typed", message: "hello" }],
+        });
+        expect(typed.result).toMatchObject({ verdict: "passed" });
+        // The sandbox has nothing to scroll: this shows only that the swipe ran.
+        await input("swipe", { direction: "up" });
+      },
+      minutes(4),
     );
 
     test(

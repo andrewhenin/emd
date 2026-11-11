@@ -1,5 +1,8 @@
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { runTool } from "../tool.js";
-import type { DeviceBackend } from "./backend.js";
+import type { DeviceBackend, Target, Where } from "./backend.js";
 import type { UiNode } from "./screen.js";
 
 type RawNode = { attributes?: Record<string, unknown>; children?: RawNode[] };
@@ -33,21 +36,23 @@ export function parseMaestro(output: string): UiNode[] {
   return nodes;
 }
 
+// Maestro's driver can take minutes to start on a busy host.
+const driverEnv = () => ({
+  MAESTRO_DRIVER_STARTUP_TIMEOUT:
+    process.env.MAESTRO_DRIVER_STARTUP_TIMEOUT ?? "300000",
+});
+
 // The accessibility tree of what is on the simulator's screen now. Maestro
 // starts and stops its XCUITest driver on every call, which takes about 20 s,
 // and about 50 s for the first call after an app launch.
 async function readScreen(device: string, bin: string): Promise<UiNode[]> {
-  const env = {
-    MAESTRO_DRIVER_STARTUP_TIMEOUT:
-      process.env.MAESTRO_DRIVER_STARTUP_TIMEOUT ?? "300000",
-  };
   try {
     const { stdout } = await runTool(
       "maestro hierarchy",
       bin,
       ["--device", device, "hierarchy"],
       240,
-      { env },
+      { env: driverEnv() },
     );
     return parseMaestro(stdout);
   } catch (error) {
@@ -63,4 +68,44 @@ async function readScreen(device: string, bin: string): Promise<UiNode[]> {
   }
 }
 
-export const maestroBackend: DeviceBackend = { id: "maestro", readScreen };
+// One step as a Maestro flow for the app. JSON strings are valid YAML
+// strings. A run takes 80 to 100 s (experiments/tap-tools.md).
+async function runStep({ device, appId }: Where, bin: string, step: string) {
+  const dir = mkdtempSync(join(tmpdir(), "emd-maestro-"));
+  try {
+    const flow = join(dir, "step.yaml");
+    writeFileSync(flow, `appId: ${JSON.stringify(appId)}\n---\n- ${step}\n`);
+    await runTool(
+      "maestro test",
+      bin,
+      ["--device", device, "test", flow],
+      240,
+      {
+        env: driverEnv(),
+      },
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+// Maestro matches `id` and `text` as regular expressions, so both are escaped.
+const literal = (text: string) =>
+  JSON.stringify(text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+
+const tapStep = (target: Target): string => {
+  if ("id" in target) return `tapOn: { id: ${literal(target.id)} }`;
+  if ("text" in target) return `tapOn: { text: ${literal(target.text)} }`;
+  // Unchecked whether Maestro's iOS points match AXe's, so points stay with AXe.
+  throw new Error("taps at a point need AXe");
+};
+
+export const maestroBackend: DeviceBackend = {
+  id: "maestro",
+  readScreen,
+  tap: (where, bin, target) => runStep(where, bin, tapStep(target)),
+  type: (where, bin, text) =>
+    runStep(where, bin, `inputText: ${JSON.stringify(text)}`),
+  swipe: (where, bin, direction) =>
+    runStep(where, bin, `swipe: { direction: ${direction.toUpperCase()} }`),
+};

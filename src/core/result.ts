@@ -55,6 +55,10 @@ export const launchResultSchema = z.object({
 
 export type LaunchResult = z.infer<typeof launchResultSchema>;
 
+const fellBackSchema = z
+  .array(z.object({ backend: z.enum(backendIds), reason: z.string() }))
+  .optional();
+
 // The verdict comes only from log events and UI elements. The agent's own
 // reading of a screenshot is recorded next to it as a second opinion and never
 // changes the verdict.
@@ -91,9 +95,7 @@ export const checkResultSchema = z.object({
   // Which backend read the screen (decision 0004), and the backends it passed
   // over first, each with why. Absent when no element was checked.
   backend: z.enum(backendIds).optional(),
-  fellBack: z
-    .array(z.object({ backend: z.enum(backendIds), reason: z.string() }))
-    .optional(),
+  fellBack: fellBackSchema,
   secondOpinion: z
     .object({
       // A screenshot of the screen as it was checked.
@@ -109,6 +111,17 @@ export const checkResultSchema = z.object({
 });
 
 export type CheckResult = z.infer<typeof checkResultSchema>;
+
+// A tap, typing or swipe (decision 0009). ok: the backend did it; only a check
+// shows whether the app reacted. failed: it could not, and `reason` says why.
+export const inputResultSchema = z.object({
+  verdict: z.enum(["ok", "failed"]),
+  reason: z.string().optional(),
+  backend: z.enum(backendIds).optional(),
+  fellBack: fellBackSchema,
+});
+
+export type InputResult = z.infer<typeof inputResultSchema>;
 
 export const evidenceResultSchema = z.object({
   verdict: z.enum(["written", "failed"]),

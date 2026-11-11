@@ -46,8 +46,9 @@ export type Deps = {
 };
 
 const realDeps: Deps = {
-  // A first value: the result's `waited` and the e2e log measure it.
-  recheckSeconds: 5,
+  // Measured by the result's `waited` in the e2e log. A tap through AXe
+  // returns at once, and in 2 of 2 e2e runs the check after it waited 5 s.
+  recheckSeconds: 10,
   logs: allLines,
   screen: async (device) =>
     readScreen(device, await detectEnvironment(), [axeBackend, maestroBackend]),

@@ -49,10 +49,8 @@ test("without --yes and without a terminal, setup prints its plan and changes no
   ]);
   const steps = plan.steps.join("\n");
   expect(steps).toContain("add-mcp@2.6.1");
-  expect(steps).toContain("mobilebuildmcp@2.7.1");
-  expect(steps).toContain(
-    "MOBILEBUILDMCP_ENABLED_WORKFLOWS=simulator,ui-automation",
-  );
+  // Agents tap through EMD (decision 0009): no second server.
+  expect(steps.toLowerCase()).not.toContain("mobilebuildmcp");
   expect(steps).toContain("skills@1.7.6 add");
   expect(readFileSync(join(dir, ".codex/config.toml"), "utf8")).toBe(
     'model = "gpt-5"\n',
@@ -125,17 +123,10 @@ test("applied, setup backs up each config, runs the installers and checks the re
   // Backups hold the configs as they were.
   const backup = result.agents.find((a) => a.id === "codex")?.backup ?? "";
   expect(readFileSync(backup, "utf8")).toBe('model = "gpt-5"\n');
-  // Codex waits 30 s for each EMD server, not its default 10 s.
-  const toml = readFileSync(join(dir, ".codex/config.toml"), "utf8");
-  expect(toml.match(/startup_timeout_sec = 30/g)).toHaveLength(2);
   // Unrelated entries stay.
   const claude = JSON.parse(readFileSync(join(dir, ".claude.json"), "utf8"));
   expect(claude.numStartups).toBe(3);
-  expect(Object.keys(claude.mcpServers)).toEqual([
-    "other",
-    "emd",
-    "mobilebuildmcp",
-  ]);
+  expect(Object.keys(claude.mcpServers)).toEqual(["other", "emd"]);
 });
 
 test("when an installer fails, setup fails and names the backups", async () => {

@@ -1,10 +1,4 @@
-import {
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  writeFileSync,
-} from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15,7 +9,6 @@ import { runTool } from "./tool.js";
 // The installers `setup` calls (decision 0002), pinned like AXe and Maestro.
 const addMcp = "add-mcp@2.6.1";
 const skillsCli = "skills@1.7.6";
-const mobileBuildMcp = "mobilebuildmcp@2.7.1";
 
 type AgentId = "claude-code" | "codex" | "cursor";
 
@@ -66,21 +59,6 @@ function commands(ids: AgentId[]): [string, string[]][] {
   const to = ids.flatMap((id) => ["-a", id]);
   return [
     ["npx", ["-y", addMcp, emdServer(), "-n", "emd", "-g", ...to, "-y"]],
-    [
-      "npx",
-      [
-        "-y",
-        addMcp,
-        `npx -y ${mobileBuildMcp} mcp`,
-        "-n",
-        "mobilebuildmcp",
-        "--env",
-        "MOBILEBUILDMCP_ENABLED_WORKFLOWS=simulator,ui-automation",
-        "-g",
-        ...to,
-        "-y",
-      ],
-    ],
     ["npx", ["-y", skillsCli, "add", skillSource(), "-g", ...to, "-y"]],
   ];
 }
@@ -99,36 +77,13 @@ function unreadable(path: string): boolean {
   }
 }
 
-// Codex waits 10 s for a server by default, less than MobileBuildMCP's first
-// npx download. add-mcp can't set it for a local server, so setup does.
-function codexTimeouts(path: string): void {
-  const lines = readFileSync(path, "utf8").split("\n");
-  const out: string[] = [];
-  for (let i = 0; i < lines.length; i++) {
-    out.push(lines[i] ?? "");
-    const header = /^\[mcp_servers\.(emd|mobilebuildmcp)\]\s*$/.exec(
-      lines[i] ?? "",
-    );
-    if (!header) continue;
-    const rest = lines.slice(i + 1);
-    const end = rest.findIndex((l) => /^\s*\[/.test(l));
-    const table = end < 0 ? rest : rest.slice(0, end);
-    if (!table.some((l) => /^\s*startup_timeout_sec\s*=/.test(l))) {
-      out.push("startup_timeout_sec = 30");
-    }
-  }
-  writeFileSync(path, out.join("\n"));
-}
-
-// Whether an agent has both servers, read back from its config.
+// Whether an agent has EMD's server, read back from its config.
 function registered(path: string): boolean {
   if (!existsSync(path)) return false;
   const text = readFileSync(path, "utf8");
-  return ["emd", "mobilebuildmcp"].every((name) =>
-    path.endsWith(".toml")
-      ? text.includes(`[mcp_servers.${name}]`)
-      : Boolean(JSON.parse(text).mcpServers?.[name]),
-  );
+  return path.endsWith(".toml")
+    ? text.includes("[mcp_servers.emd]")
+    : Boolean(JSON.parse(text).mcpServers?.emd);
 }
 
 export async function setup(
@@ -187,8 +142,6 @@ export async function setup(
   });
   try {
     for (const [command, args] of steps) await deps.run(command, args);
-    const codex = listed.find((a) => a.id === "codex");
-    if (codex && existsSync(codex.config)) codexTimeouts(codex.config);
   } catch (error) {
     return {
       verdict: "failed",
