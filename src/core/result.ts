@@ -67,6 +67,9 @@ export const checkResultSchema = z.object({
   // Failed checks so far for this check name, and how many are allowed.
   attempt: z.number().optional(),
   retryLimit: z.number().optional(),
+  // Seconds the check read again for what was missing; absent when the first
+  // read decided.
+  waited: z.number().optional(),
   logs: z
     .array(
       z.object({

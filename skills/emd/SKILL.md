@@ -7,6 +7,10 @@ description: Build, run and check a change to a mobile app (Expo on the iOS simu
 
 EMD's MCP tools build and launch the app, read its tagged log lines, and decide pass or fail from the log and the screen. Your own reading of a screenshot is only a second opinion.
 
+## If EMD's tools are missing
+
+Run `emd setup --dry-run` from the user's EMD folder (`node dist/bin.js setup --dry-run`) and show the user its plan. Run it with `--yes` only after the user approves. Then ask the user to restart you.
+
 ## Before you change code
 
 1. Call `detect` with the app folder. At a workspace root it lists the app folders (`apps`): call it again with one of them.

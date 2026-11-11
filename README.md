@@ -27,6 +27,7 @@ CLI commands (`node dist/bin.js <command>`):
 - `check reset [dir]`: clears the failed-check count. A person must type `reset` at a terminal.
 - `evidence <jobId>`: same as the tool.
 - `gc [--apply]`: lists, then removes, what EMD made for app folders that no longer exist.
+- `setup [--dry-run] [--yes] [--agent X]`: registers EMD and MobileBuildMCP with your agents and installs the skill (see below).
 - `doctor`: checks that this Mac has what EMD needs (Node, macOS, Xcode, an iPhone simulator, AXe or Maestro) and says how to add what is missing.
 - `mcp`: starts the MCP server on stdio.
 
@@ -55,15 +56,16 @@ node dist/bin.js detect fixtures/expo
 
 The last line must print `"verdict":"detected"` and `"appIds":{"ios":"com.emd.sandbox"}`.
 
-Register `emd mcp` with your agent. Run these lines in the `emd` folder, so that `$PWD` is its full path.
+Then set EMD up for your agents:
 
-- Claude Code ([docs](https://code.claude.com/docs/en/mcp)): `claude mcp add --scope user --transport stdio emd -- node "$PWD/dist/bin.js" mcp`. `--scope user` makes EMD available in all your projects. Check with `claude mcp list`.
-- Codex ([docs](https://developers.openai.com/codex/mcp)): `codex mcp add emd -- node "$PWD/dist/bin.js" mcp`. This writes `[mcp_servers.emd]` in `~/.codex/config.toml`. Check with `/mcp` in Codex.
-- Cursor ([docs](https://cursor.com/docs/mcp)): add `{ "mcpServers": { "emd": { "command": "node", "args": ["/full/path/to/emd/dist/bin.js", "mcp"] } } }` to `~/.cursor/mcp.json`, with the full path of your `emd` folder. Check under Output > MCP Logs.
+```sh
+node dist/bin.js setup
+```
 
-EMD does not tap or type. For that, also register [MobileBuildMCP](https://github.com/getsentry/MobileBuildMCP) with your agent; its README has the steps. EMD's e2e tests one version of it, pinned in `test/e2e/launch.test.ts`.
+It finds Claude Code, Codex and Cursor, prints its plan and asks once. Then it registers EMD and [MobileBuildMCP](https://github.com/getsentry/MobileBuildMCP) (which taps and types; EMD doesn't) with each agent, and installs EMD's skill, which tells the agent how to use both. It backs up each config to `~/.emd/backups/` first. Restart your agents afterwards.
 
-Install EMD's skill, which tells the agent how to use EMD and MobileBuildMCP: `npx skills add andrewhenin/emd -g`.
+- `--dry-run` prints the plan and changes nothing. `--yes` applies it without asking. `--agent codex` (repeatable) picks agents.
+- It calls two installers, pinned: [add-mcp](https://github.com/neondatabase/add-mcp) for the servers and [skills](https://github.com/vercel-labs/skills) for the skill.
 
 ## First run
 

@@ -11,11 +11,12 @@ import {
   logs,
   resetChecks,
   runJob,
+  setup,
   version,
 } from "../core/index.js";
 
 const usage =
-  "Commands: detect [dir], launch [dir] [--device X] [--timeout N], job status <id>, logs <jobId> [--tag T] [--limit N], check <jobId> [--log TAG[=TEXT]] [--element id=X|text=Y] [--name N] [--agent pass|fail], check reset [dir], evidence <jobId>, gc [--apply], doctor, mcp";
+  "Commands: detect [dir], launch [dir] [--device X] [--timeout N], job status <id>, logs <jobId> [--tag T] [--limit N], check <jobId> [--log TAG[=TEXT]] [--element id=X|text=Y] [--name N] [--agent pass|fail], check reset [dir], evidence <jobId>, gc [--apply], setup [--dry-run] [--yes] [--agent claude-code|codex|cursor], doctor, mcp";
 
 // --log smoke   or   --log smoke=tapped
 const logSpec = (raw: string) => {
@@ -36,6 +37,16 @@ const elementSpec = (raw: string): { id?: string; text?: string } => {
   return { [key]: raw.slice(at + 1) };
 };
 
+const ask = async (question: string): Promise<string> => {
+  const prompt = createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+  const answer = await prompt.question(question);
+  prompt.close();
+  return answer.trim();
+};
+
 // Only a person at a terminal can start the failure count over (decision 0006).
 async function resetCommand(dir?: string): Promise<number> {
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
@@ -43,15 +54,10 @@ async function resetCommand(dir?: string): Promise<number> {
     return 2;
   }
   const { root } = await detect(dir);
-  const prompt = createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-  const typed = await prompt.question(
+  const typed = await ask(
     `Clear the failed-check count for ${root}? Type "reset": `,
   );
-  prompt.close();
-  if (typed.trim() !== "reset") {
+  if (typed !== "reset") {
     console.error("emd: not reset.");
     return 1;
   }
@@ -198,6 +204,41 @@ export async function run(argv: string[]): Promise<number> {
       const result = await doctor();
       console.log(JSON.stringify(result));
       return result.verdict === "ready" ? 0 : 1;
+    }
+    case "setup": {
+      const { values } = parseArgs({
+        args,
+        options: {
+          "dry-run": { type: "boolean" },
+          yes: { type: "boolean" },
+          agent: { type: "string", multiple: true },
+        },
+      });
+      const only = values.agent;
+      const plan = await setup({ only });
+      if (plan.verdict !== "planned" || values["dry-run"]) {
+        console.log(JSON.stringify(plan));
+        return plan.verdict === "failed" ? 1 : 0;
+      }
+      // One approval for the whole plan (decision 0002). Without a person at a
+      // terminal, only --yes applies it.
+      let approved = values.yes === true;
+      if (!approved && process.stdin.isTTY && process.stdout.isTTY) {
+        console.error(
+          `EMD setup will run, for ${plan.agents.map((a) => a.id).join(", ")}:\n${plan.steps.map((s) => `  ${s}`).join("\n")}\nIt backs up each config first, in ~/.emd/backups.`,
+        );
+        approved = !/^n/i.test(await ask("Apply? [Y/n] "));
+      }
+      if (!approved) {
+        console.log(JSON.stringify(plan));
+        return 0;
+      }
+      const result = await setup({ only, apply: true });
+      console.log(JSON.stringify(result));
+      if (result.restart && process.stderr.isTTY) {
+        console.error(`Restart ${result.restart.join(", ")} to load EMD.`);
+      }
+      return result.verdict === "done" ? 0 : 1;
     }
     default:
       console.error(`emd: unknown command "${command}". ${usage}`);

@@ -30,5 +30,6 @@ export {
   launchResultSchema,
   logsResultSchema,
 } from "./result.js";
+export { type SetupResult, setup } from "./setup.js";
 export { runTool } from "./tool.js";
 export { version } from "./version.js";

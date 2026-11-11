@@ -35,6 +35,7 @@ const deps = {
 };
 
 const readers = (found: boolean): CheckDeps => ({
+  recheckSeconds: 0,
   logs: async () => ({
     verdict: "ok",
     lines: found ? taps : [],
