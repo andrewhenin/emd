@@ -1,6 +1,6 @@
 # 0009: How agents tap, type and swipe
 
-Status: Proposed
+Status: Accepted (2026-11-11)
 Date: 2026-11-11
 
 ## Context
@@ -29,4 +29,11 @@ lines with tests. AXe is pinned and run in e2e already.
 
 ## Decision
 
+C. One tap is 1 call and 1.4 s, and agents need one server. The tools name no
+platform, so Android backends can join for Linux and Windows hosts.
+
 ## Consequences
+
+- `setup` stops registering MobileBuildMCP. On macOS it installs AXe.
+- EMD keeps the backends. AXe's pin and e2e show its breaking changes (0008).
+- A gesture EMD lacks (long press, drag) is added to EMD, not to a second server.
