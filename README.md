@@ -2,7 +2,7 @@
 
 EMD is an MCP server and CLI. It lets a coding agent launch an Expo app on the iOS simulator, check it, and collect evidence.
 
-Status: early, not on npm yet. Install from source.
+Status: early.
 
 ## What works today
 
@@ -18,7 +18,7 @@ MCP tools (`emd mcp`):
 - `check`: passes or fails a run from tagged log lines and on-screen elements (by testID or text). Returns a job.
 - `evidence`: puts the checks, log lines, screenshots and Maestro flows of a run in one folder.
 
-CLI commands (`node dist/bin.js <command>`):
+CLI commands (`npx -y emd-agents@latest <command>`, or `node dist/bin.js <command>` in a clone; below, `emd` means either):
 
 - `detect [dir]`: same as the tool.
 - `launch [dir] [--device X] [--timeout N]`: same as the tool, but waits for the result.
@@ -46,6 +46,18 @@ CLI commands (`node dist/bin.js <command>`):
   - Maestro: `curl -fsSL "https://get.maestro.mobile.dev" | bash`. It needs Java 17 or newer, with `JAVA_HOME` set.
   - With neither, taps, typing and swipes fail, and a check with elements returns `error`. `launch`, `logs`, log checks and `evidence` still work.
 
+## Install
+
+```sh
+npx -y emd-agents@latest setup
+```
+
+It finds Claude Code, Codex and Cursor, prints its plan and asks once. On a Mac without AXe, it first installs AXe into `~/.emd/tools/`, from AXe's pinned release archive, checked by SHA-256. Then it registers EMD with each agent and installs EMD's skill, which tells the agent how to use it. It backs up each config to `~/.emd/backups/` first. At the end it runs `doctor` and lists what is still missing. Restart your agents afterwards.
+
+- `--dry-run` prints the plan and changes nothing. `--yes` applies it without asking. `--agent codex` (repeatable) picks agents.
+- It registers this exact version, `npx -y emd-agents@<version> mcp`, so the server matches the skill. To upgrade, run the same command again.
+- It calls two installers, pinned: [add-mcp](https://github.com/neondatabase/add-mcp) for the server and [skills](https://github.com/vercel-labs/skills) for the skill.
+
 ## Install from source
 
 ```sh
@@ -56,18 +68,7 @@ npm run build
 node dist/bin.js detect fixtures/expo
 ```
 
-The last line must print `"verdict":"detected"` and `"appIds":{"ios":"com.emd.sandbox"}`.
-
-Then set EMD up for your agents:
-
-```sh
-node dist/bin.js setup
-```
-
-It finds Claude Code, Codex and Cursor, prints its plan and asks once. On a Mac without AXe, it first installs AXe into `~/.emd/tools/`, from AXe's pinned release archive, checked by SHA-256. Then it registers EMD with each agent and installs EMD's skill, which tells the agent how to use it. It backs up each config to `~/.emd/backups/` first. At the end it runs `doctor` and lists what is still missing. Restart your agents afterwards.
-
-- `--dry-run` prints the plan and changes nothing. `--yes` applies it without asking. `--agent codex` (repeatable) picks agents.
-- It calls two installers, pinned: [add-mcp](https://github.com/neondatabase/add-mcp) for the server and [skills](https://github.com/vercel-labs/skills) for the skill.
+The last line must print `"verdict":"detected"` and `"appIds":{"ios":"com.emd.sandbox"}`. Then `node dist/bin.js setup` registers this clone's build with your agents.
 
 ## First run
 
@@ -89,8 +90,8 @@ Output stays on your Mac:
 `gc` removes what EMD made for app folders that no longer exist, for example a deleted git worktree: the simulator clone and its `~/.emd/` folders. It removes only what EMD recorded as its own. For a folder that still exists, it removes nothing. It is a CLI command only, not an MCP tool.
 
 ```sh
-node dist/bin.js gc          # dry run: lists what it would remove, and the size
-node dist/bin.js gc --apply  # removes it
+emd gc          # dry run: lists what it would remove, and the size
+emd gc --apply  # removes it
 ```
 
 - It lists `emd-*` simulators that no record names, but it never deletes them.
@@ -100,7 +101,7 @@ node dist/bin.js gc --apply  # removes it
 
 - Expo apps on the iOS simulator only. No native iOS or Android projects, no Android launch, no physical devices.
 - `launch` leaves the dev server running. The next `launch` of the same folder stops it and starts a new one. A dev server that EMD did not start on that port still blocks `launch` ("Port N already serves a dev server").
-- After 3 failed checks in one app folder, `check` returns `stopped`. Only a person can start over: `node dist/bin.js check reset /path/to/my-app` at a terminal. `EMD_RETRY_LIMIT` (1 to 10) changes the limit.
+- After 3 failed checks in one app folder, `check` returns `stopped`. Only a person can start over: `emd check reset /path/to/my-app` at a terminal. `EMD_RETRY_LIMIT` (1 to 10) changes the limit.
 - A build can take 900 seconds by default (`timeoutSeconds`, or `--timeout` in the CLI). Two cold builds at the same time can take longer.
 - The CLI `launch` waits and does not make a job. `logs`, `check` and `evidence` need the `jobId` of a `launch` that the agent started.
 
@@ -109,8 +110,8 @@ node dist/bin.js gc --apply  # removes it
 Open an [issue](https://github.com/andrewhenin/emd/issues) with:
 
 - What you asked the agent, and the tool or command that failed, with its JSON result.
-- Versions: `node dist/bin.js` and `git rev-parse --short HEAD` in the `emd` folder (EMD), `sw_vers` (macOS), `xcodebuild -version`, `node --version`, and `axe --version` or `maestro --version` if you use them.
-- The output of `node dist/bin.js detect /path/to/my-app`.
+- Versions: EMD's (the `emd-agents@<version>` in your agent's MCP config, or `node dist/bin.js` and `git rev-parse --short HEAD` in a clone), `sw_vers` (macOS), `xcodebuild -version`, `node --version`, and `axe --version` or `maestro --version` if you use them.
+- The output of `emd detect /path/to/my-app`.
 - From the run folder: `build.log` and `metro.log`, or the lines near the error.
 - Before you attach logs or screenshots, remove private details: names, tokens, keys, internal URLs and user data.
 

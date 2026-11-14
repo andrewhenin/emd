@@ -3,12 +3,17 @@
   "version": "0.13.0",
   "description": "Build, run, check and prove mobile changes from any coding agent.",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrewhenin/emd.git"
+  },
   "type": "module",
   "bin": {
     "emd": "dist/bin.js"
   },
   "files": [
     "dist",
+    "skills",
     "LICENSE",
     "NOTICE"
   ],
@@ -17,6 +22,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "prepack": "npm run build",
     "lint": "biome check . && npm run check:imports && npm run check:unused && npm run check:duplicates",
     "typecheck": "tsc --noEmit",
     "test": "npm run build && vitest run",
