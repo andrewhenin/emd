@@ -1,6 +1,21 @@
+import { join } from "node:path";
+import { homeDir } from "../state.js";
 import { runTool } from "../tool.js";
 import type { DeviceBackend, Target, Where } from "./backend.js";
 import type { UiNode } from "./screen.js";
+
+// The AXe release `setup` installs. e2e gets AXe through `setup`, so this is
+// its only pin. Its release archive, not Homebrew: Homebrew floats the version
+// and refused AXe on older Xcode (decision 0005).
+export const axePin = {
+  version: "1.8.0",
+  sha256: "7b76340b72e90d0f211bc7c4636f15009076eff07acef2f2b632b175debd8834",
+  url: "https://github.com/cameroncooke/AXe/releases/download/v1.8.0/AXe-macOS-v1.8.0-universal.tar.gz",
+};
+
+// Where `setup` puts it, with its frameworks: a user folder, so no admin rights.
+export const axeDir = (): string =>
+  join(homeDir(), "tools", `axe-${axePin.version}`);
 
 type RawNode = Record<string, unknown> & { children?: unknown };
 

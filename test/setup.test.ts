@@ -1,5 +1,7 @@
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
+  copyFileSync,
   existsSync,
   mkdirSync,
   readdirSync,
@@ -8,6 +10,8 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { afterEach, expect, test } from "vitest";
+import { axeDir, axePin } from "../src/core/device/axe.ts";
+import { detectEnvironment } from "../src/core/device/backend.ts";
 import { type SetupDeps, setup } from "../src/core/setup.ts";
 import { makeDir } from "./helpers.ts";
 
@@ -82,7 +86,10 @@ test("a config that is not valid JSON stops setup before any write", () => {
 });
 
 // Installers that write what add-mcp and skills write, without the network.
+// Off macOS, so setup plans no AXe.
 const installers = (dir: string): SetupDeps => ({
+  platform: "linux",
+  axe: axePin,
   run: async (_command, args) => {
     const name = args[args.indexOf("-n") + 1];
     if (args.includes("add")) {
@@ -113,13 +120,22 @@ afterEach(() => {
   process.env.EMD_STATE_DIR = realState;
 });
 
-test("applied, setup backs up each config, runs the installers and checks the result", async () => {
+// A home with every agent, for setup called in this process.
+function inProcessHome(): string {
   const dir = home(allAgents);
   process.env.HOME = dir;
   process.env.EMD_STATE_DIR = join(dir, ".emd");
+  return dir;
+}
+
+test("applied, setup backs up each config, runs the installers and checks the result", async () => {
+  const dir = inProcessHome();
   const result = await setup({ apply: true }, installers(dir));
   expect(result.verdict).toBe("done");
   expect(result.restart).toEqual(["claude-code", "codex", "cursor"]);
+  expect(result.axe).toBeUndefined();
+  // doctor runs at the end.
+  expect(result.doctor?.checks.length).toBeGreaterThan(0);
   // Backups hold the configs as they were.
   const backup = result.agents.find((a) => a.id === "codex")?.backup ?? "";
   expect(readFileSync(backup, "utf8")).toBe('model = "gpt-5"\n');
@@ -130,12 +146,11 @@ test("applied, setup backs up each config, runs the installers and checks the re
 });
 
 test("when an installer fails, setup fails and names the backups", async () => {
-  const dir = home(allAgents);
-  process.env.HOME = dir;
-  process.env.EMD_STATE_DIR = join(dir, ".emd");
+  const dir = inProcessHome();
   const result = await setup(
     { apply: true },
     {
+      ...installers(dir),
       run: async () => {
         throw new Error("npx add-mcp failed (exit 1): offline");
       },
@@ -145,3 +160,73 @@ test("when an installer fails, setup fails and names the backups", async () => {
   expect(result.reason).toMatch(/offline.*Backups: /);
   expect(readdirSync(join(dir, ".emd/backups"))).toHaveLength(1);
 });
+
+// A Mac may have a real AXe, which setup would keep; e2e covers macOS.
+const offMac = test.skipIf(process.platform === "darwin");
+
+// An archive laid out like AXe's: `axe` at the top, printing its version.
+function fakeAxeArchive(): { path: string; sha256: string } {
+  const dir = makeDir();
+  mkdirSync(join(dir, "in/Frameworks"), { recursive: true });
+  writeFileSync(join(dir, "in/axe"), `#!/bin/sh\necho ${axePin.version}\n`, {
+    mode: 0o755,
+  });
+  const path = join(dir, "axe.tar.gz");
+  spawnSync("tar", ["-czf", path, "-C", join(dir, "in"), "."]);
+  const sha256 = createHash("sha256").update(readFileSync(path)).digest("hex");
+  return { path, sha256 };
+}
+
+// macOS deps: curl copies the archive, tar is the real one.
+const onMac = (dir: string, archive: string, sha256: string): SetupDeps => ({
+  ...installers(dir),
+  platform: "darwin",
+  axe: { ...axePin, sha256 },
+  run: async (command, args) => {
+    if (command === "curl") {
+      copyFileSync(archive, args[args.indexOf("-o") + 1] ?? "");
+    } else if (command === "tar") {
+      expect(spawnSync("tar", args).status).toBe(0);
+    } else {
+      await installers(dir).run(command, args);
+    }
+  },
+});
+
+offMac(
+  "on macOS without AXe, setup installs the pinned archive where EMD finds it",
+  async () => {
+    const dir = inProcessHome();
+    const archive = fakeAxeArchive();
+    const deps = onMac(dir, archive.path, archive.sha256);
+    const plan = await setup({}, deps);
+    expect(plan.axe).toMatchObject({ url: axePin.url, dir: axeDir() });
+
+    const result = await setup({ apply: true }, deps);
+    expect(result.verdict).toBe("done");
+    expect((await detectEnvironment()).axe).toBe(join(axeDir(), "axe"));
+    expect(existsSync(join(axeDir(), "Frameworks"))).toBe(true);
+    expect(readdirSync(join(dir, ".emd/tools"))).toEqual([
+      `axe-${axePin.version}`,
+    ]);
+  },
+);
+
+offMac(
+  "an AXe archive with the wrong SHA-256 stops setup before any config changes",
+  async () => {
+    const dir = inProcessHome();
+    const archive = fakeAxeArchive();
+    const result = await setup(
+      { apply: true },
+      onMac(dir, archive.path, axePin.sha256),
+    );
+    expect(result.verdict).toBe("failed");
+    expect(result.reason).toMatch(/SHA-256 [0-9a-f]{64}, not /);
+    expect(readdirSync(join(dir, ".emd/tools"))).toEqual([]);
+    expect(existsSync(join(dir, ".emd/backups"))).toBe(false);
+    expect(readFileSync(join(dir, ".codex/config.toml"), "utf8")).toBe(
+      'model = "gpt-5"\n',
+    );
+  },
+);

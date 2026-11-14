@@ -38,11 +38,9 @@ jobs:
     runs-on: ${{ matrix.runner }}
     continue-on-error: ${{ matrix.runner == 'xcode-27' }}
     timeout-minutes: 60
-    # The tool versions e2e tests (decision 0008, condition 4).
-    # To bump AXe, change the version and the archive's SHA-256 together.
+    # The tool versions e2e tests (decision 0008, condition 4). AXe's pin is
+    # in src/core/device/axe.ts: setup installs it below.
     env:
-      AXE_VERSION: 1.8.0
-      AXE_SHA256: 7b76340b72e90d0f211bc7c4636f15009076eff07acef2f2b632b175debd8834
       MAESTRO_VERSION: 2.12.1
     steps:
       - uses: actions/checkout@v7
@@ -81,22 +79,6 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      # Its own step, so only this download gets the token. Signed in, because
-      # anonymous release downloads can fail while signed-in ones work.
-      - name: Download AXe
-        if: steps.gate.outputs.run == 'true'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release download "v$AXE_VERSION" --repo cameroncooke/AXe \
-            --pattern "AXe-macOS-v$AXE_VERSION-universal.tar.gz" \
-            --output "$RUNNER_TEMP/axe.tar.gz" --clobber
-          echo "$AXE_SHA256  $RUNNER_TEMP/axe.tar.gz" | shasum -a 256 -c -
-          mkdir -p "$RUNNER_TEMP/axe"
-          tar -xzf "$RUNNER_TEMP/axe.tar.gz" -C "$RUNNER_TEMP/axe"
-          echo "$RUNNER_TEMP/axe" >> "$GITHUB_PATH"
-
       - name: Install tools
         if: steps.gate.outputs.run == 'true'
         shell: bash
@@ -107,6 +89,23 @@ jobs:
           curl -fsSL "https://get.maestro.mobile.dev" | bash
           echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
 
+      # setup for real, in a throwaway home: its pinned installers (add-mcp,
+      # skills), so a breaking change in them shows here (decision 0008), and
+      # its pinned AXe, which the rest of the job uses. setup checks AXe's
+      # SHA-256 and version; `jq -e` fails when setup installed no AXe.
+      - name: Run setup with the real installers
+        if: steps.gate.outputs.run == 'true'
+        shell: bash
+        run: |
+          npm run build
+          home="$RUNNER_TEMP/setup-home"
+          mkdir -p "$home/.claude" "$home/.codex" "$home/.cursor"
+          echo '{}' > "$home/.claude.json"
+          HOME="$home" EMD_STATE_DIR="$home/.emd" node dist/bin.js setup --yes | tee "$RUNNER_TEMP/setup.json"
+          grep -q '"verdict":"done"' "$RUNNER_TEMP/setup.json"
+          grep -q '"name":"device tool","status":"ok","detail":"axe"' "$RUNNER_TEMP/setup.json"
+          jq -er .axe.dir "$RUNNER_TEMP/setup.json" >> "$GITHUB_PATH"
+
       - name: Print versions
         if: steps.gate.outputs.run == 'true'
         shell: bash
@@ -116,29 +115,16 @@ jobs:
           xcrun simctl list runtimes
           java -version
           node --version
-          # Fail when an installed tool is not the pinned version.
+          axe --version
+          # Fail when Maestro is not the pinned version.
           "$HOME/.maestro/bin/maestro" --version | tee /dev/stderr | grep -Fx "$MAESTRO_VERSION" > /dev/null
-          axe --version | tee /dev/stderr | grep -Fx "$AXE_VERSION" > /dev/null
 
       - name: Run doctor
         if: steps.gate.outputs.run == 'true'
         shell: bash
         run: |
-          npm run build
           node dist/bin.js doctor | tee "$RUNNER_TEMP/doctor.json"
           grep -q '"verdict":"ready"' "$RUNNER_TEMP/doctor.json"
-
-      # setup's pinned installers (add-mcp, skills) for real, in a throwaway
-      # home, so a breaking change in them shows here (decision 0008).
-      - name: Run setup with the real installers
-        if: steps.gate.outputs.run == 'true'
-        shell: bash
-        run: |
-          home="$RUNNER_TEMP/setup-home"
-          mkdir -p "$home/.claude" "$home/.codex" "$home/.cursor"
-          echo '{}' > "$home/.claude.json"
-          HOME="$home" EMD_STATE_DIR="$home/.emd" node dist/bin.js setup --yes | tee "$RUNNER_TEMP/setup.json"
-          grep -q '"verdict":"done"' "$RUNNER_TEMP/setup.json"
 
       - name: Run e2e
         if: steps.gate.outputs.run == 'true'

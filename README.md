@@ -42,7 +42,7 @@ CLI commands (`node dist/bin.js <command>`):
 - An iOS simulator runtime and at least one shut-down iPhone simulator. EMD clones it once per app folder, as `emd-<key>`. Without one, `launch` fails: "No shut-down iPhone simulator is available to clone."
 - Node 22 or newer.
 - AXe or Maestro, for taps, typing, swipes and element checks. EMD tries AXe first, then Maestro.
-  - AXe (about 40 times faster for checks, 60 for taps): `brew install cameroncooke/axe/axe`. With Xcode 27, Device Hub must be running.
+  - AXe (about 40 times faster for checks, 60 for taps): `setup` installs it (below). With Xcode 27, Device Hub must be running.
   - Maestro: `curl -fsSL "https://get.maestro.mobile.dev" | bash`. It needs Java 17 or newer, with `JAVA_HOME` set.
   - With neither, taps, typing and swipes fail, and a check with elements returns `error`. `launch`, `logs`, log checks and `evidence` still work.
 
@@ -64,7 +64,7 @@ Then set EMD up for your agents:
 node dist/bin.js setup
 ```
 
-It finds Claude Code, Codex and Cursor, prints its plan and asks once. Then it registers EMD with each agent and installs EMD's skill, which tells the agent how to use it. It backs up each config to `~/.emd/backups/` first. Restart your agents afterwards.
+It finds Claude Code, Codex and Cursor, prints its plan and asks once. On a Mac without AXe, it first installs AXe into `~/.emd/tools/`, from AXe's pinned release archive, checked by SHA-256. Then it registers EMD with each agent and installs EMD's skill, which tells the agent how to use it. It backs up each config to `~/.emd/backups/` first. At the end it runs `doctor` and lists what is still missing. Restart your agents afterwards.
 
 - `--dry-run` prints the plan and changes nothing. `--yes` applies it without asking. `--agent codex` (repeatable) picks agents.
 - It calls two installers, pinned: [add-mcp](https://github.com/neondatabase/add-mcp) for the server and [skills](https://github.com/vercel-labs/skills) for the skill.
