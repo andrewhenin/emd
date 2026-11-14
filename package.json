@@ -3,12 +3,17 @@
   "version": "0.13.0",
   "description": "Build, run, check and prove mobile changes from any coding agent.",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrewhenin/emd.git"
+  },
   "type": "module",
   "bin": {
     "emd": "dist/bin.js"
   },
   "files": [
     "dist",
+    "skills",
     "LICENSE",
     "NOTICE"
   ],

@@ -11,8 +11,35 @@ permissions:
 jobs:
   release-please:
     runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
     steps:
       - uses: googleapis/release-please-action@v5
+        id: release
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+  # Stages each release on npm through trusted publishing, with no npm token.
+  # The owner approves it with 2FA on npmjs.com (decision 0011). npm's trusted
+  # publisher names this file, so the publish stays in it.
+  publish:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      # `npm stage publish` needs npm 11.15.0 or later.
+      - run: npm install -g npm@11.21.2
+      - run: npm ci
+      # npm's docs don't say whether `npm stage publish` runs prepack scripts.
+      - run: npm run build
+      - run: npm stage publish

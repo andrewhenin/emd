@@ -16,6 +16,7 @@ import { type DoctorResult, doctor } from "./doctor.js";
 import { firstLine } from "./log.js";
 import { homeDir } from "./state.js";
 import { runTool } from "./tool.js";
+import { version } from "./version.js";
 
 // The installers `setup` calls (decision 0002), pinned like AXe and Maestro.
 const addMcp = "add-mcp@2.6.1";
@@ -102,11 +103,16 @@ async function installAxe(
   }
 }
 
-// Until EMD is on npm (#28), setup registers this checkout's build and installs
-// this checkout's skill.
-const emdServer = () =>
-  `${process.execPath} ${fileURLToPath(new URL("../bin.js", import.meta.url))} mcp`;
+// The package root: the skill's source, and where EMD runs from.
 const skillSource = () => fileURLToPath(new URL("../../", import.meta.url));
+
+// From an installed package (npx's cache included), the server is this exact
+// version through npx, so it stays the version of the skill that setup copies
+// (decision 0011). From a clone, it is the clone's build.
+const emdServer = () =>
+  skillSource().split(sep).includes("node_modules")
+    ? `npx -y emd-agents@${version()} mcp`
+    : `${process.execPath} ${fileURLToPath(new URL("../bin.js", import.meta.url))} mcp`;
 
 function commands(ids: AgentId[]): [string, string[]][] {
   const to = ids.flatMap((id) => ["-a", id]);

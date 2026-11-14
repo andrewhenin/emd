@@ -6,6 +6,8 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  realpathSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
@@ -34,11 +36,49 @@ const allAgents = {
 };
 
 // `emd setup` through the real CLI, with HOME and EMD's state in temp folders.
-const cli = (dir: string, ...args: string[]) =>
-  spawnSync("node", ["dist/bin.js", "setup", ...args], {
+const setupWith = (bin: string, dir: string, ...args: string[]) =>
+  spawnSync("node", [bin, "setup", ...args], {
     encoding: "utf8",
     env: { ...process.env, HOME: dir, EMD_STATE_DIR: join(dir, ".emd") },
   });
+const cli = (dir: string, ...args: string[]) =>
+  setupWith("dist/bin.js", dir, ...args);
+
+// The package as npm installs it: packed, unpacked into a node_modules folder,
+// with its dependencies linked from this clone.
+function installed(): string {
+  const dir = realpathSync(makeDir());
+  const pack = spawnSync(
+    "npm",
+    ["pack", "--ignore-scripts", "--json", "--pack-destination", dir],
+    { encoding: "utf8" },
+  );
+  const [{ filename }] = JSON.parse(pack.stdout);
+  const pkg = join(dir, "node_modules", "emd-agents");
+  mkdirSync(pkg, { recursive: true });
+  const tar = ["-xzf", join(dir, filename), "-C", pkg, "--strip-components=1"];
+  expect(spawnSync("tar", tar).status).toBe(0);
+  const { dependencies } = JSON.parse(readFileSync("package.json", "utf8"));
+  for (const name of Object.keys(dependencies)) {
+    const link = join(dir, "node_modules", name);
+    mkdirSync(join(link, ".."), { recursive: true });
+    symlinkSync(join(process.cwd(), "node_modules", name), link);
+  }
+  return pkg;
+}
+
+test("from an installed package, setup registers its own version through npx and installs the packed skill", () => {
+  const pkg = installed();
+  expect(existsSync(join(pkg, "skills/emd/SKILL.md"))).toBe(true);
+  const { version } = JSON.parse(readFileSync("package.json", "utf8"));
+  const run = setupWith(join(pkg, "dist/bin.js"), home(allAgents), "--dry-run");
+  const steps = JSON.parse(run.stdout).steps.join("\n");
+  expect(steps).toContain(`npx -y emd-agents@${version} mcp`);
+  expect(steps).toContain(`skills@1.7.6 add ${pkg}`);
+  // From a clone, setup registers the clone's build.
+  const clone = JSON.parse(cli(home(allAgents), "--dry-run").stdout);
+  expect(clone.steps.join("\n")).toContain(join(process.cwd(), "dist/bin.js"));
+}, 30_000);
 
 test("without --yes and without a terminal, setup prints its plan and changes nothing", () => {
   const dir = home(allAgents);
