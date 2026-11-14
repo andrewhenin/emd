@@ -13,6 +13,7 @@ import {
 } from "vitest";
 import { parseAxe } from "../../src/core/device/axe.ts";
 import { resetChecks } from "../../src/core/index.ts";
+import { parseTagged } from "../../src/core/logs.ts";
 
 // A real build and launch on an iOS simulator, driven the way an agent does:
 // `launch` starts a job, `job_status` is polled. macOS, Xcode and a fixture
@@ -168,11 +169,16 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
     // #130: when a test fails, the job log alone says why. It prints what was
     // on screen and the run's last log lines, and saves a screenshot to the
     // run folder (uploaded with the artifact). A passing test prints nothing.
+    // #163: app lines show the time the app wrote each (a raw app.ndjson line
+    // is cut before its time), and `inputs` the time each input returned, so
+    // the log shows whether an input reached the app late.
     const lastLines = (path: string) => {
       try {
-        return readFileSync(path, "utf8")
-          .trimEnd()
-          .split("\n")
+        const text = readFileSync(path, "utf8");
+        const lines = path.endsWith(".ndjson")
+          ? parseTagged(text).map((l) => `${l.time} [${l.tag}] ${l.message}`)
+          : text.trimEnd().split("\n");
+        return lines
           .slice(-20)
           .map((line) => line.slice(0, 400))
           .join("\n");
@@ -180,6 +186,7 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
         return "(none)";
       }
     };
+    const inputs: string[] = [];
     const explain = async () => {
       const latest = (again ?? final)?.result;
       const dir = latest?.logDir;
@@ -212,6 +219,7 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
           dir ? lastLines(join(dir, name)) : "(no run)",
         );
       }
+      out.push("-- inputs, at the time each returned", inputs.join("\n"));
       console.log(out.join("\n"));
     };
     beforeEach(({ onTestFailed }) => onTestFailed(explain, minutes(1)));
@@ -247,6 +255,9 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
           arguments: { jobId: again?.jobId ?? "", ...args },
         })
       ).structuredContent as Input;
+      inputs.push(
+        `${new Date().toISOString()} ${name} ${JSON.stringify(args)}: ${result.verdict} (${result.backend})`,
+      );
       expect(result.verdict, result.reason).toBe("ok");
       expect(["axe", "maestro"]).toContain(result.backend);
       return result;
@@ -426,6 +437,9 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
     test(
       "types into a field and swipes, through EMD's tools",
       async () => {
+        // A fresh count, so a failure in the test before does not stop this
+        // check before it reads (#163, Nov 12 nightly).
+        resetChecks(sandbox ?? "");
         await input("tap", { id: "smoke-input" });
         await input("type", { text: "hello" });
         const typed = await runCheck({
