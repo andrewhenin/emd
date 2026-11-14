@@ -390,6 +390,7 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
         resetChecks(sandbox ?? "");
         const tappedLog = [{ tag: "smoke", message: "tapped" }];
         const before = await runCheck({
+          name: "before-tap",
           logs: tappedLog,
           elements: [{ id: "smoke-button" }, { text: "Ready" }],
         });
@@ -406,6 +407,7 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
 
         await input("tap", { id: "smoke-button" });
         const after = await runCheck({
+          name: "after-tap",
           logs: tappedLog,
           elements: [{ id: "smoke-button" }, { text: "Tapped" }],
         });

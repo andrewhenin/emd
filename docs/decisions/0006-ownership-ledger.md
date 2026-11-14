@@ -1,6 +1,6 @@
 # 0006: EMD records what it creates in a ledger, per worktree
 
-Status: Accepted (2026-10-24)
+Status: Accepted (2026-10-24); the `name` line is superseded by 0010
 
 ## Context
 
