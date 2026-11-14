@@ -40,6 +40,5 @@ jobs:
       # `npm stage publish` needs npm 11.15.0 or later.
       - run: npm install -g npm@11.21.2
       - run: npm ci
-      # npm's docs don't say whether `npm stage publish` runs prepack scripts.
-      - run: npm run build
+      # Builds through the package's prepack script.
       - run: npm stage publish

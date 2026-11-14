@@ -20,7 +20,7 @@ Two commands, and the one-command npx install would still point into npx's cache
 
 ## Decision
 
-B. Each release is published from the Release Please workflow with `npm stage publish` through trusted publishing, and the owner approves it. The first version is published by hand, as a prerelease on the `next` tag, because the trusted publisher needs the package to exist.
+B. Each release is published from the Release Please workflow with `npm stage publish` through trusted publishing, and the owner approves it. The first version is published by hand, because the trusted publisher needs the package to exist.
 
 ## Consequences
 

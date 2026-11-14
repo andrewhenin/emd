@@ -67,7 +67,7 @@ function installed(): string {
   return pkg;
 }
 
-test("from an installed package, setup registers its own version through npx and installs the packed skill", () => {
+test("the package has the skill, and setup from it plans its own version through npx", () => {
   const pkg = installed();
   expect(existsSync(join(pkg, "skills/emd/SKILL.md"))).toBe(true);
   const { version } = JSON.parse(readFileSync("package.json", "utf8"));
@@ -75,9 +75,6 @@ test("from an installed package, setup registers its own version through npx and
   const steps = JSON.parse(run.stdout).steps.join("\n");
   expect(steps).toContain(`npx -y emd-agents@${version} mcp`);
   expect(steps).toContain(`skills@1.7.6 add ${pkg}`);
-  // From a clone, setup registers the clone's build.
-  const clone = JSON.parse(cli(home(allAgents), "--dry-run").stdout);
-  expect(clone.steps.join("\n")).toContain(join(process.cwd(), "dist/bin.js"));
 }, 30_000);
 
 test("without --yes and without a terminal, setup prints its plan and changes nothing", () => {
@@ -93,6 +90,8 @@ test("without --yes and without a terminal, setup prints its plan and changes no
   ]);
   const steps = plan.steps.join("\n");
   expect(steps).toContain("add-mcp@2.6.1");
+  // From a clone, setup registers the clone's build.
+  expect(steps).toContain(join(process.cwd(), "dist/bin.js"));
   // Agents tap through EMD (decision 0009): no second server.
   expect(steps.toLowerCase()).not.toContain("mobilebuildmcp");
   expect(steps).toContain("skills@1.7.6 add");

@@ -22,6 +22,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "prepack": "npm run build",
     "lint": "biome check . && npm run check:imports && npm run check:unused && npm run check:duplicates",
     "typecheck": "tsc --noEmit",
     "test": "npm run build && vitest run",
