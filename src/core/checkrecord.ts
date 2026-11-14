@@ -44,20 +44,19 @@ export function resetChecks(root: string): void {
   rmSync(recordFile(worktreeKey(root)), { force: true });
 }
 
-const sameLog = (a: LogSpec, b: LogSpec) =>
-  a.tag === b.tag && a.message === b.message;
-const sameElement = (a: ElementSpec, b: ElementSpec) =>
-  a.id === b.id && a.text === b.text;
-
 // Each first expectation that the new ones leave out or change, in words.
 export function dropped(first: Expected, now: Expected): string[] {
   const logs = first.logs
-    .filter((a) => !now.logs.some((b) => sameLog(a, b)))
+    .filter(
+      (a) => !now.logs.some((b) => b.tag === a.tag && b.message === a.message),
+    )
     .map(({ tag, message }) =>
       message === undefined ? `log ${tag}` : `log ${tag} "${message}"`,
     );
   const elements = first.elements
-    .filter((a) => !now.elements.some((b) => sameElement(a, b)))
+    .filter(
+      (a) => !now.elements.some((b) => b.id === a.id && b.text === a.text),
+    )
     .map(
       ({ id, text }) =>
         `element${id === undefined ? "" : ` id=${id}`}${text === undefined ? "" : ` text "${text}"`}`,

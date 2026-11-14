@@ -164,10 +164,7 @@ export async function check(
 
   // A name's first expectations are its bar: a later check under the name
   // can add to them but not drop or change one (decision 0010).
-  const expected: Expected = {
-    logs: logSpecs.map(({ tag, message }) => ({ tag, message })),
-    elements: elementSpecs.map(({ id, text }) => ({ id, text })),
-  };
+  const expected: Expected = { logs: logSpecs, elements: elementSpecs };
   const first = record.names[name]?.expected;
   const missing = first ? dropped(first, expected) : [];
   if (missing.length > 0) {
