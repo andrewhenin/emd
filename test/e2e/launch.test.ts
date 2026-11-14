@@ -13,6 +13,7 @@ import {
 } from "vitest";
 import { parseAxe } from "../../src/core/device/axe.ts";
 import { resetChecks } from "../../src/core/index.ts";
+import { parseTagged } from "../../src/core/logs.ts";
 
 // A real build and launch on an iOS simulator, driven the way an agent does:
 // `launch` starts a job, `job_status` is polled. macOS, Xcode and a fixture
@@ -180,6 +181,25 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
         return "(none)";
       }
     };
+    // #163: the time the app wrote each line and the time each input returned,
+    // so the job log shows whether an input reached the app late or the check
+    // missed a line. A raw app.ndjson line is cut before its time.
+    const inputs: string[] = [];
+    const appLines = (path: string) => {
+      try {
+        const text = readFileSync(path, "utf8");
+        const lines = parseTagged(text);
+        const events = text.split("\n").filter((l) => l.startsWith("{"));
+        return [
+          `read ${lines.length} of ${events.length} events`,
+          ...lines
+            .slice(-20)
+            .map((l) => `${l.time} [${l.tag}] ${l.message.slice(0, 200)}`),
+        ].join("\n");
+      } catch {
+        return "(none)";
+      }
+    };
     const explain = async () => {
       const latest = (again ?? final)?.result;
       const dir = latest?.logDir;
@@ -206,12 +226,18 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
             : tree.output.trim().slice(0, 600),
         );
       }
-      for (const name of ["checks.jsonl", "metro.log", "app.ndjson"]) {
+      for (const name of ["checks.jsonl", "metro.log"]) {
         out.push(
           `-- ${name}, last 20 lines`,
           dir ? lastLines(join(dir, name)) : "(no run)",
         );
       }
+      out.push(
+        "-- app.ndjson, last 20 tagged lines, at the time the app wrote each",
+        dir ? appLines(join(dir, "app.ndjson")) : "(no run)",
+        "-- inputs, at the time each returned",
+        inputs.join("\n") || "(none)",
+      );
       console.log(out.join("\n"));
     };
     beforeEach(({ onTestFailed }) => onTestFailed(explain, minutes(1)));
@@ -247,6 +273,9 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
           arguments: { jobId: again?.jobId ?? "", ...args },
         })
       ).structuredContent as Input;
+      inputs.push(
+        `${new Date().toISOString()} ${name} ${JSON.stringify(args)}: ${result.verdict} (${result.backend})`,
+      );
       expect(result.verdict, result.reason).toBe("ok");
       expect(["axe", "maestro"]).toContain(result.backend);
       return result;
@@ -426,6 +455,9 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
     test(
       "types into a field and swipes, through EMD's tools",
       async () => {
+        // A fresh count, so a failure in the test before does not stop this
+        // check before it reads (#163, Nov 12 nightly).
+        resetChecks(sandbox ?? "");
         await input("tap", { id: "smoke-input" });
         await input("type", { text: "hello" });
         const typed = await runCheck({
