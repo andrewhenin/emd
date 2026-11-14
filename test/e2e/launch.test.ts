@@ -169,11 +169,16 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
     // #130: when a test fails, the job log alone says why. It prints what was
     // on screen and the run's last log lines, and saves a screenshot to the
     // run folder (uploaded with the artifact). A passing test prints nothing.
+    // #163: app lines show the time the app wrote each (a raw app.ndjson line
+    // is cut before its time), and `inputs` the time each input returned, so
+    // the log shows whether an input reached the app late.
     const lastLines = (path: string) => {
       try {
-        return readFileSync(path, "utf8")
-          .trimEnd()
-          .split("\n")
+        const text = readFileSync(path, "utf8");
+        const lines = path.endsWith(".ndjson")
+          ? parseTagged(text).map((l) => `${l.time} [${l.tag}] ${l.message}`)
+          : text.trimEnd().split("\n");
+        return lines
           .slice(-20)
           .map((line) => line.slice(0, 400))
           .join("\n");
@@ -181,25 +186,7 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
         return "(none)";
       }
     };
-    // #163: the time the app wrote each line and the time each input returned,
-    // so the job log shows whether an input reached the app late or the check
-    // missed a line. A raw app.ndjson line is cut before its time.
     const inputs: string[] = [];
-    const appLines = (path: string) => {
-      try {
-        const text = readFileSync(path, "utf8");
-        const lines = parseTagged(text);
-        const events = text.split("\n").filter((l) => l.startsWith("{"));
-        return [
-          `read ${lines.length} of ${events.length} events`,
-          ...lines
-            .slice(-20)
-            .map((l) => `${l.time} [${l.tag}] ${l.message.slice(0, 200)}`),
-        ].join("\n");
-      } catch {
-        return "(none)";
-      }
-    };
     const explain = async () => {
       const latest = (again ?? final)?.result;
       const dir = latest?.logDir;
@@ -226,18 +213,13 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
             : tree.output.trim().slice(0, 600),
         );
       }
-      for (const name of ["checks.jsonl", "metro.log"]) {
+      for (const name of ["checks.jsonl", "metro.log", "app.ndjson"]) {
         out.push(
           `-- ${name}, last 20 lines`,
           dir ? lastLines(join(dir, name)) : "(no run)",
         );
       }
-      out.push(
-        "-- app.ndjson, last 20 tagged lines, at the time the app wrote each",
-        dir ? appLines(join(dir, "app.ndjson")) : "(no run)",
-        "-- inputs, at the time each returned",
-        inputs.join("\n") || "(none)",
-      );
+      out.push("-- inputs, at the time each returned", inputs.join("\n"));
       console.log(out.join("\n"));
     };
     beforeEach(({ onTestFailed }) => onTestFailed(explain, minutes(1)));
