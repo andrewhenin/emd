@@ -22,12 +22,12 @@ Run `emd setup --dry-run` from the user's EMD folder (`node dist/bin.js setup --
 2. `job_status` every 5 to 10 seconds, until `succeeded` or `failed`. A first build takes minutes. A failed launch gives the reason and the first error lines: fix the cause and launch again.
 3. `tap` with the `jobId`, and a testID (`id`) or a visible `text`. Use a point only when the element has neither. `type` types into the field that has focus, so tap the field first. `swipe` scrolls. A result of `ok` means the gesture was sent; the next `check` shows what the app did.
 4. `logs`, to read the tagged lines of this run.
-5. `check` with the expected log events and elements, then `job_status` until it ends:
+5. `check` with the expected log events and elements and a `name` for the moment, e.g. `after-save`. A later check under that name must keep the first expectations unchanged; it can add more. Then `job_status` until it ends:
    - `passed`: done.
    - `failed`: fix the cause, then check again.
    - `stopped`: the retry limit is reached. Stop and report what is missing. Only a person can reset the count.
    - `error`: the check could not run. Read its reason.
-6. `evidence`, to write the evidence folder. Put its path, the screenshots and the matching log lines in your report or PR.
+6. `evidence`, to write the evidence folder. Put its path, the screenshots and the matching log lines in your report or PR, and each name in `notPassed`.
 
 ## Rules
 

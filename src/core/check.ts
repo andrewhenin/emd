@@ -1,5 +1,12 @@
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import {
+  dropped,
+  type Expected,
+  type LogSpec,
+  readRecord,
+  writeRecord,
+} from "./checkrecord.js";
 import { axeBackend } from "./device/axe.js";
 import {
   detectEnvironment,
@@ -19,17 +26,14 @@ import {
 import { worktreeKey } from "./owned.js";
 import type { CheckResult, LogsResult } from "./result.js";
 import { type RunRef, resolveRun } from "./run.js";
-import { homeDir } from "./state.js";
 import { runTool } from "./tool.js";
-
-// A tagged log event the run must have produced: the tag, and optionally text
-// its message must contain.
-type LogSpec = { tag: string; message?: string };
 
 export type CheckOptions = RunRef & {
   logs?: LogSpec[];
   elements?: ElementSpec[];
-  // A label for this check in the evidence bundle. Never part of the count.
+  // The moment this check covers, and its label in the evidence bundle. Its
+  // first expectations are recorded, and a later check under the name must
+  // keep them (decision 0010). Never part of the count.
   name?: string;
   // The agent's own reading of the screenshot. Second opinion only.
   agentReading?: "pass" | "fail";
@@ -90,34 +94,12 @@ const maxSpecs = 20;
 const maxText = 200;
 const maxName = 40;
 
-// The count is per worktree and lives outside it. Only a pass or a human
-// (`emd check reset`) clears it; the agent has no input that does (decision 0006).
-const countFile = (key: string) => join(homeDir(), "checks", `${key}.json`);
-
 // 3 unless a human sets EMD_RETRY_LIMIT; never an agent input.
 function retryLimit(): number {
   const wanted = Number(process.env.EMD_RETRY_LIMIT);
   return Number.isInteger(wanted) && wanted >= 1 && wanted <= maxRetryLimit
     ? wanted
     : defaultRetryLimit;
-}
-
-export function resetChecks(root: string): void {
-  rmSync(countFile(worktreeKey(root)), { force: true });
-}
-
-function failuresSoFar(key: string): number {
-  try {
-    const { failures } = JSON.parse(readFileSync(countFile(key), "utf8"));
-    return Number.isInteger(failures) && failures > 0 ? failures : 0;
-  } catch {
-    return 0;
-  }
-}
-
-function setFailures(key: string, failures: number): void {
-  mkdirSync(dirname(countFile(key)), { recursive: true });
-  writeFileSync(countFile(key), JSON.stringify({ failures }));
 }
 
 // Independent pass or fail from machine-checkable signals: the tagged log
@@ -169,7 +151,8 @@ export async function check(
   // Failed checks count per worktree, across relaunches, because a fix
   // usually means launching again.
   const key = worktreeKey(root);
-  const before = failuresSoFar(key);
+  const record = readRecord(key);
+  const before = record.failures;
   if (before >= limit) {
     return {
       verdict: "stopped",
@@ -177,6 +160,17 @@ export async function check(
       retryLimit: limit,
       reason: `${before} failed checks already. Stop retrying and report what is still missing. Only a person can start over (emd check reset).`,
     };
+  }
+
+  // A name's first expectations are its bar: a later check under the name
+  // can add to them but not drop or change one (decision 0010).
+  const expected: Expected = { logs: logSpecs, elements: elementSpecs };
+  const first = record.names[name]?.expected;
+  const missing = first ? dropped(first, expected) : [];
+  if (missing.length > 0) {
+    return error(
+      `Check "${name}" first expected: ${missing.join("; ")}. Keep each of these unchanged; you can add more. For a different moment, use a new name. Only a person can clear this (emd check reset).`,
+    );
   }
 
   const byTag = new Map<string, TaggedLine[]>();
@@ -266,18 +260,22 @@ export async function check(
     secondOpinion,
   };
 
-  // Only a check that read something is a check that ran.
+  // Only a check that read something is a check that ran. It sets the count
+  // (a pass starts it over) and the name's last verdict.
   const ran = (result: CheckResult): CheckResult => {
     recordCheck(logDir, name, result);
+    writeRecord(key, {
+      failures: result.verdict === "passed" ? 0 : before + 1,
+      names: {
+        ...record.names,
+        [name]: { expected: first ?? expected, last: result.verdict },
+      },
+    });
     return result;
   };
 
-  if (passed) {
-    rmSync(countFile(key), { force: true });
-    return ran({ verdict: "passed", ...evidence });
-  }
+  if (passed) return ran({ verdict: "passed", ...evidence });
   const failures = before + 1;
-  setFailures(key, failures);
   const stopped = failures >= limit;
   return ran({
     verdict: stopped ? "stopped" : "failed",

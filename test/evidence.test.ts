@@ -110,6 +110,33 @@ test("only checks that ran are listed: not invalid ones, not ones refused for th
   expect(read(result.dir, "manifest.json").checks).toHaveLength(1);
 });
 
+test("checks in the worktree that never got back to a pass are listed, from any run", async () => {
+  const root = sandbox();
+  const first = await launchedJob(state, root);
+  const save = { ...smoke, name: "save" };
+  await check({ jobId: first, ...save }, undefined, readers(false));
+  await check(
+    { jobId: first, ...smoke, name: "open" },
+    undefined,
+    readers(true),
+  );
+  const jobId = await launchedJob(state, root);
+  const result = await evidence({ jobId }, deps);
+  expect(result).toMatchObject({ checks: 0, notPassed: ["save"] });
+  expect(read(result.dir, "manifest.json").notPassed).toEqual([
+    {
+      name: "save",
+      verdict: "failed",
+      expected: { logs: [{ tag: "smoke" }], elements: [] },
+    },
+  ]);
+
+  await check({ jobId, ...save }, undefined, readers(true));
+  const after = await evidence({ jobId }, deps);
+  expect(after.notPassed).toBeUndefined();
+  expect(read(after.dir, "manifest.json").notPassed).toEqual([]);
+});
+
 test("a run with no checks still gets a bundle", async () => {
   const jobId = await launchedJob(state, sandbox());
   const result = await evidence({ jobId }, deps);
