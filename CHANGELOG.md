@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.0](https://github.com/andrewhenin/emd/compare/emd-agents-v0.13.0...emd-agents-v0.14.0) (2026-11-14)
+
+
+### Features
+
+* publish emd-agents to npm ([#170](https://github.com/andrewhenin/emd/issues/170)) ([329a053](https://github.com/andrewhenin/emd/commit/329a0537bd94070c8049a77bfc6540e2b89da3ed)), closes [#169](https://github.com/andrewhenin/emd/issues/169)
+
 ## [0.13.0](https://github.com/andrewhenin/emd/compare/emd-agents-v0.12.0...emd-agents-v0.13.0) (2026-11-14)
 
 
