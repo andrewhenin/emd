@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.0](https://github.com/andrewhenin/emd/compare/emd-agents-v0.11.0...emd-agents-v0.12.0) (2026-11-14)
+
+
+### Features
+
+* lock each check's first expectations ([#165](https://github.com/andrewhenin/emd/issues/165)) ([f0c46a9](https://github.com/andrewhenin/emd/commit/f0c46a968d19faec1f4ada6a0129e6872d57adf4))
+
 ## [0.11.0](https://github.com/andrewhenin/emd/compare/emd-agents-v0.10.0...emd-agents-v0.11.0) (2026-11-11)
 
 
