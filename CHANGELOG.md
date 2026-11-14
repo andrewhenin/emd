@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.0](https://github.com/andrewhenin/emd/compare/emd-agents-v0.12.0...emd-agents-v0.13.0) (2026-11-14)
+
+
+### Features
+
+* setup installs AXe and runs doctor at its end ([#162](https://github.com/andrewhenin/emd/issues/162)) ([bc5a916](https://github.com/andrewhenin/emd/commit/bc5a916c1066451ebfe335b7d7c875c0f6aaab24))
+
 ## [0.12.0](https://github.com/andrewhenin/emd/compare/emd-agents-v0.11.0...emd-agents-v0.12.0) (2026-11-14)
 
 
