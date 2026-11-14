@@ -132,6 +132,9 @@ export const evidenceResultSchema = z.object({
   layout: z.record(z.string(), z.string()).optional(),
   // How much went in. Checks are only those that ran.
   checks: z.number().optional(),
+  // Check names in this worktree whose last verdict is not passed. Absent
+  // when every check got back to a pass. Report each one.
+  notPassed: z.array(z.string()).optional(),
   logLines: z.number().optional(),
   screenshots: z.number().optional(),
   flows: z.number().optional(),

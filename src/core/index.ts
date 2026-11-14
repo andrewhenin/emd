@@ -7,7 +7,8 @@ export type {
   StackDetection,
   StackId,
 } from "./adapter.js";
-export { check, resetChecks } from "./check.js";
+export { check } from "./check.js";
+export { resetChecks } from "./checkrecord.js";
 export { detect } from "./detect.js";
 export { directions } from "./device/backend.js";
 export { type DoctorResult, doctor } from "./doctor.js";

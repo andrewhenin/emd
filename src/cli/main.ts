@@ -50,7 +50,8 @@ const ask = async (question: string): Promise<string> => {
   return answer.trim();
 };
 
-// Only a person at a terminal can start the failure count over (decision 0006).
+// Only a person at a terminal can start the failure count and the recorded
+// expectations over (decisions 0006, 0010).
 async function resetCommand(dir?: string): Promise<number> {
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     console.error("emd: check reset needs a person at a terminal.");
@@ -58,7 +59,7 @@ async function resetCommand(dir?: string): Promise<number> {
   }
   const { root } = await detect(dir);
   const typed = await ask(
-    `Clear the failed-check count for ${root}? Type "reset": `,
+    `Clear the failed-check count and recorded expectations for ${root}? Type "reset": `,
   );
   if (typed !== "reset") {
     console.error("emd: not reset.");

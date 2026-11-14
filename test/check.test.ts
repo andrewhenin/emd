@@ -6,8 +6,8 @@ import {
   check,
   type Deps,
   primaryDisplay,
-  resetChecks,
 } from "../src/core/check.ts";
+import { resetChecks } from "../src/core/checkrecord.ts";
 import { readScreen, type ScreenRead } from "../src/core/device/backend.ts";
 import type { UiNode } from "../src/core/device/screen.ts";
 import type { LogsResult } from "../src/core/result.ts";
@@ -178,7 +178,7 @@ test("a result names the backend that read the screen, and any it passed over", 
 
   // A failing check names its backend too.
   const failing = await run(
-    { jobId, elements: [{ text: "Nope" }] },
+    { jobId, elements: [{ text: "Nope" }], name: "missing" },
     fallback.deps,
   );
   expect(failing).toMatchObject({ verdict: "failed", backend: "maestro" });
@@ -219,6 +219,7 @@ test("fails when an element is missing, and needs id and text on one node", asyn
     {
       jobId,
       elements: [{ id: "smoke-button", text: "Tapped" }],
+      name: "one-node",
     },
     deps,
   );
@@ -245,9 +246,9 @@ test("a log expectation without a message matches any line with the tag", async 
   expect((await run({ jobId, logs: [{ tag: "smoke" }] }, deps)).verdict).toBe(
     "passed",
   );
-  expect((await run({ jobId, logs: [{ tag: "nav" }] }, deps)).verdict).toBe(
-    "failed",
-  );
+  expect(
+    (await run({ jobId, logs: [{ tag: "nav" }], name: "nav" }, deps)).verdict,
+  ).toBe("failed");
 });
 
 test("stops at the retry limit and then refuses to run", async () => {
@@ -334,6 +335,49 @@ test("a person's reset clears the count; the CLI refuses without a terminal", as
   expect((await run(options, deps)).verdict).toBe("stopped");
   resetChecks("/work/app");
   expect((await run(options, deps)).attempt).toBe(1);
+});
+
+test("a later check under a name must keep its first expectations", async () => {
+  const jobId = await launched();
+  const { deps, calls } = readers({});
+  expect((await run({ jobId, ...expectTapped }, deps)).verdict).toBe("failed");
+  const reads = calls.logs + calls.screen;
+  const dropped = await run(
+    { jobId, logs: expectTapped.logs, elements: [{ id: "smoke-button" }] },
+    deps,
+  );
+  expect(dropped.verdict).toBe("error");
+  expect(dropped.reason).toContain('element text "Tapped"');
+  expect(dropped.reason).toContain("emd check reset");
+  const changed = await run(
+    { ...expectTapped, jobId, logs: [{ tag: "smoke" }] },
+    deps,
+  );
+  expect(changed.reason).toContain('log smoke "tapped"');
+  // Refused checks read nothing and use no attempt.
+  expect(calls.logs + calls.screen).toBe(reads);
+  const added = await run(
+    {
+      ...expectTapped,
+      jobId,
+      elements: [...expectTapped.elements, { id: "x" }],
+    },
+    deps,
+  );
+  expect(added).toMatchObject({ verdict: "failed", attempt: 2 });
+});
+
+test("a pass keeps the first expectations; a new name or a reset starts fresh", async () => {
+  const jobId = await launched("/work/app");
+  const { deps } = readers(tapped);
+  expect((await run({ jobId, ...expectTapped }, deps)).verdict).toBe("passed");
+  const fewer = { jobId, elements: [{ text: "Tapped" }] };
+  expect((await run(fewer, deps)).verdict).toBe("error");
+  expect((await run({ ...fewer, name: "after-tap" }, deps)).verdict).toBe(
+    "passed",
+  );
+  resetChecks("/work/app");
+  expect((await run(fewer, deps)).verdict).toBe("passed");
 });
 
 test("EMD_RETRY_LIMIT, set by a person, changes the limit", async () => {

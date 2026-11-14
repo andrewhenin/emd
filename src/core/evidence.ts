@@ -8,7 +8,9 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, join } from "node:path";
+import { readRecord } from "./checkrecord.js";
 import { type LogsOptions, logs as readLogs } from "./logs.js";
+import { worktreeKey } from "./owned.js";
 import { inspectProject } from "./project.js";
 import type { CheckResult, EvidenceResult, LogsResult } from "./result.js";
 import { type RunRef, resolveRun } from "./run.js";
@@ -43,7 +45,7 @@ function recordedChecks(logDir: string): Recorded[] {
 // The layout is part of the tool result, so no agent has to look it up.
 const layout = {
   "manifest.json":
-    "The run, every check that ran with its result, and the files below.",
+    "The run, every check that ran with its result, the worktree's checks whose last verdict is not passed (notPassed), and the files below.",
   "logs.json": "Tagged log lines the app wrote during the run, oldest first.",
   "screenshots/": "The screenshot each check took, named as in the manifest.",
   "flows/": "The project's Maestro flow files, copied as they are.",
@@ -100,6 +102,12 @@ export async function evidence(
     flows.push(`flows/${basename(flow)}`);
   }
 
+  // Checks in this worktree, from any run, that never got back to a pass:
+  // one an agent gave up on stays in view (decision 0010).
+  const notPassed = Object.entries(readRecord(worktreeKey(root)).names)
+    .filter(([, { last }]) => last !== "passed")
+    .map(([name, { last, expected }]) => ({ name, verdict: last, expected }));
+
   const logLines = lines.lines ?? [];
   writeFileSync(join(dir, "logs.json"), JSON.stringify(logLines, null, 2));
   const manifest = {
@@ -111,6 +119,7 @@ export async function evidence(
       root,
     },
     checks,
+    notPassed,
     logs: { file: "logs.json", total: lines.total ?? logLines.length },
     screenshots,
     flows,
@@ -122,6 +131,7 @@ export async function evidence(
     dir,
     layout,
     checks: checks.length,
+    ...(notPassed.length > 0 && { notPassed: notPassed.map((n) => n.name) }),
     logLines: logLines.length,
     screenshots: screenshots.length,
     flows: flows.length,

@@ -181,7 +181,7 @@ function buildServer(): McpServer {
           .string()
           .optional()
           .describe(
-            "A label for this check in the evidence. It does not change the retry count.",
+            "The moment this check covers, e.g. after-save; its label in the evidence. The first check under a name records its expectations: a later one under it must keep each unchanged and can add more. Use a new name for a different moment. It does not change the retry count.",
           ),
         agentReading: z
           .enum(["pass", "fail"])
@@ -253,7 +253,7 @@ function buildServer(): McpServer {
     "evidence",
     {
       description:
-        "Gather a run's evidence into one folder: the checks that ran with their results, the tagged log lines, the screenshots the checks took and the project's Maestro flow files, with a manifest.json that lists them. Returns the folder and what each file in it is. Writing the same run again gives the same bundle.",
+        "Gather a run's evidence into one folder: the checks that ran with their results, the tagged log lines, the screenshots the checks took and the project's Maestro flow files, with a manifest.json that lists them. Returns the folder, what each file in it is, and notPassed: check names in this worktree whose last verdict is not passed. Report each of them. Writing the same run again gives the same bundle.",
       inputSchema: z.object({
         jobId: z.string().describe("The launch job whose run to gather."),
       }),
