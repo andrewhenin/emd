@@ -13,8 +13,11 @@ on:
 permissions:
   contents: read
 
+# A label other than `e2e` (the agent loop's `agent:*` labels) gets a group of
+# its own: a run in the PR's group would replace that group's pending run, and
+# then skip, so the real run would be lost.
 concurrency:
-  group: e2e-${{ github.event.pull_request.number || github.ref }}
+  group: e2e-${{ github.event.pull_request.number || github.ref }}${{ github.event.action == 'labeled' && github.event.label.name != 'e2e' && format('-label-{0}', github.run_id) || '' }}
   cancel-in-progress: false
 
 jobs:
@@ -22,8 +25,10 @@ jobs:
     # Release Please's own PR changes only versions and the changelog; its
     # commits were tested in their own PRs and the nightly, so no macOS runner
     # starts for it. Both the bot and the branch must match, so a person can't
-    # skip e2e by naming a branch. The e2e label still forces a run.
+    # skip e2e by naming a branch. The e2e label still forces a run. Adding
+    # any other label starts nothing.
     if: >-
+      (github.event.action != 'labeled' || github.event.label.name == 'e2e') &&
       github.event.pull_request.draft != true &&
       !(github.event.pull_request.user.login == 'github-actions[bot]' &&
         startsWith(github.head_ref, 'release-please--') &&
