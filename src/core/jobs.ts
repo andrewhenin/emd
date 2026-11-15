@@ -157,3 +157,24 @@ export function jobStatus(id: string): JobView | undefined {
   const current = readJob(id);
   return current && view(current);
 }
+
+// Like jobStatus, but when the job is queued or running, reads it again every
+// half second until it ends or `waitSeconds` pass. A wait of 0 answers at once.
+export async function waitForJob(
+  id: string,
+  waitSeconds: number,
+): Promise<JobView | undefined> {
+  const deadline = Date.now() + waitSeconds * 1000;
+  let job = jobStatus(id);
+  while (
+    job &&
+    (job.status === "queued" || job.status === "running") &&
+    Date.now() < deadline
+  ) {
+    await new Promise((resolve) =>
+      setTimeout(resolve, Math.min(500, Math.max(0, deadline - Date.now()))),
+    );
+    job = jobStatus(id);
+  }
+  return job;
+}

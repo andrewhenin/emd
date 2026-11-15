@@ -8,6 +8,7 @@ import {
   jobStatus,
   runJob,
   startJob,
+  waitForJob,
 } from "../src/core/jobs.ts";
 import { readJob } from "../src/core/jobstore.ts";
 import type { CheckResult, LaunchResult } from "../src/core/result.ts";
@@ -238,4 +239,32 @@ test("startJob returns at once and a real worker process finishes the job", asyn
       reason: expect.stringMatching(/No supported/),
     },
   });
+});
+
+test("waitForJob returns when the job ends, before the wait runs out", async () => {
+  const job = createJob("launch", { dir: "/x" });
+  const run = runJob(
+    job.id,
+    handlers(
+      async () => {
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        return { verdict: "launched", root: "/x" };
+      },
+      () => job.id,
+    ),
+  );
+  const started = Date.now();
+  const done = await waitForJob(job.id, 20);
+  expect(done?.status).toBe("succeeded");
+  expect(Date.now() - started).toBeLessThan(5000);
+  await run;
+});
+
+test("waitForJob answers at once with a wait of 0 and when the wait runs out", async () => {
+  const job = createJob("launch", { dir: "/x" });
+  const started = Date.now();
+  expect((await waitForJob(job.id, 0))?.status).toBe("queued");
+  expect((await waitForJob(job.id, 0.6))?.status).toBe("queued");
+  expect(Date.now() - started).toBeGreaterThanOrEqual(500);
+  expect(await waitForJob("00000000", 0)).toBeUndefined();
 });
