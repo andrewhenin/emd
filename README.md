@@ -14,7 +14,7 @@ Status: early. Expo apps on the iOS simulator only.
 
 - A Mac with Xcode 26 or 27 and at least one iPhone simulator.
 - Node 22 or newer.
-- An Expo app with its dependencies installed and an iOS app ID (`ios.bundleIdentifier`) in its app config.
+- An Expo app with its dependencies installed and an iOS app ID. [Check your app](#check-your-app) shows how to check both.
 
 Tested: Expo SDK 58 on Xcode 26 and 27. On Xcode 27, apps below Expo SDK 56 can't build (Expo's bug). Use Xcode 26, or upgrade the app to SDK 56 or newer.
 
@@ -81,7 +81,7 @@ Output stays on your Mac:
 
 ### How is EMD different from agent-device, Argent or MobileBuildMCP?
 
-[agent-device](https://github.com/callstack/agent-device) and [Argent](https://github.com/software-mansion/argent) let an agent inspect, control and debug a running app. [MobileBuildMCP](https://github.com/getsentry/MobileBuildMCP) gives an agent tools to build, run and test iOS projects. EMD centers on the verdict:
+Each project's README says what it does. [agent-device](https://github.com/callstack/agent-device) lets agents inspect, control, debug and verify apps. [Argent](https://github.com/software-mansion/argent) gives agents direct control of simulators, emulators and devices, to interact, debug, profile and record e2e tests. [MobileBuildMCP](https://github.com/getsentry/MobileBuildMCP) gives agents tools for iOS and macOS projects, such as build and test. EMD centers on the verdict:
 
 - One check reads the app's own tagged log lines and the elements on screen, and passes or fails on both.
 - A check name keeps its first expectations, so the agent can't pass it by dropping one.
@@ -122,7 +122,7 @@ Open an [issue](https://github.com/andrewhenin/emd/issues) with:
 
 ## Contributing
 
-EMD is open source but does not accept outside pull requests yet. Bug reports and ideas are welcome as issues. To send a fix, say so in the issue. Report vulnerabilities per [SECURITY.md](SECURITY.md).
+EMD is open source but does not accept pull requests from outside contributors yet. Bug reports and ideas are welcome as issues. If you want to fix something yourself, say so in the issue. Report vulnerabilities per [SECURITY.md](SECURITY.md).
 
 ## Reference
 
@@ -162,7 +162,6 @@ Run them as `npx -y emd-agents@latest <command>`, or `node dist/bin.js <command>
 - macOS. On other systems `detect` works, and `launch` returns "iOS simulators need macOS."
 - Xcode, tested with Xcode 26 and 27. Expo SDK 58 apps need Xcode 26 or newer. Without Xcode, `launch` fails: "Could not set up this worktree's simulator and build folders."
 - An iOS simulator runtime and at least one shut-down iPhone simulator. EMD clones it once per app folder, as `emd-<key>`. Without one, `launch` fails: "No shut-down iPhone simulator is available to clone."
-- Node 22 or newer.
 - AXe or Maestro, for taps, typing, swipes and element checks. EMD tries AXe first, then Maestro.
   - AXe (about 40 times faster for checks, 60 for taps): `setup` installs it into `~/.emd/tools/`, from AXe's pinned release archive, checked by SHA-256. With Xcode 27, Device Hub must be running.
   - Maestro: `curl -fsSL "https://get.maestro.mobile.dev" | bash`. It needs Java 17 or newer, with `JAVA_HOME` set.
