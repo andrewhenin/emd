@@ -43,6 +43,13 @@ export const launchResultSchema = z.object({
   // The log stream that captures the app's tagged lines; the next launch in
   // this worktree stops it.
   logStream: z.object({ pid: z.number() }).optional(),
+  // Whether the Xcode build ran or an installed build was reused; why it ran.
+  build: z
+    .object({
+      action: z.enum(["built", "reused"]),
+      reason: z.string().optional(),
+    })
+    .optional(),
   // This worktree's own build folder, and what it and its simulator weigh.
   derivedData: z.string().optional(),
   diskMB: z

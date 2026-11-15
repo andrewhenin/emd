@@ -110,6 +110,22 @@ export async function boot(device: Device): Promise<void> {
   );
 }
 
+// Stops the app if it runs; a later launch then starts it fresh. Not running is
+// not a failure.
+export async function terminateApp(
+  device: Device,
+  appId: string,
+): Promise<void> {
+  try {
+    await runTool(
+      "simctl terminate",
+      "xcrun",
+      ["simctl", "terminate", device.id, appId],
+      60,
+    );
+  } catch {}
+}
+
 // Returns the app's pid. Brings the app forward if it is already running.
 export async function launchApp(
   device: Device,
@@ -124,6 +140,24 @@ export async function launchApp(
   const pid = Number(stdout.trim().split(":").pop());
   if (!Number.isInteger(pid)) throw new Error(`unexpected output: ${stdout}`);
   return pid;
+}
+
+// True when the app is installed on the device.
+export async function appInstalled(
+  device: Device,
+  appId: string,
+): Promise<boolean> {
+  try {
+    await runTool(
+      "simctl get_app_container",
+      "xcrun",
+      ["simctl", "get_app_container", device.id, appId],
+      60,
+    );
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // A new simulator with the same type and runtime as `base`; returns its UDID.

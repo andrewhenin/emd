@@ -1,6 +1,7 @@
 import { mkdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
+import { readBuildRecord, whyBuild, writeBuildRecord } from "./buildrecord.js";
 import { detect } from "./detect.js";
 import {
   derivedDataPath,
@@ -17,6 +18,7 @@ import { inspectProject } from "./project.js";
 import { loadAdapter } from "./registry.js";
 import type { LaunchResult } from "./result.js";
 import {
+  appInstalled,
   boot,
   cloneDevice,
   type Device,
@@ -26,6 +28,7 @@ import {
   pickDevice,
   removeSimulator,
   simulatorSdk,
+  terminateApp,
 } from "./simulator.js";
 import { stateDir } from "./state.js";
 import { runTool } from "./tool.js";
@@ -136,6 +139,35 @@ async function withTimeout(
 
 const logTail = async (path: string): Promise<string[]> =>
   firstErrors(await readFile(path, "utf8").catch(() => ""));
+
+// Runs the build and install. Returns why it failed; undefined when the app is
+// installed.
+async function runBuild(
+  command: string,
+  cwd: string,
+  logPath: string,
+  env: Record<string, string>,
+  options: LaunchOptions,
+): Promise<{ reason: string; errors: string[] } | undefined> {
+  const seconds = options.timeoutSeconds ?? defaultTimeoutSeconds;
+  const build = startLogged(command, { cwd, logPath, env });
+  const outcome = await withTimeout(build.exited, seconds);
+  if (outcome === 0) return undefined;
+  build.kill();
+  const text = await readFile(logPath, "utf8").catch(() => "");
+  // Expo's own open step timed out after the install; EMD opens the app next.
+  if (outcome !== "timeout" && onlyOpenFailed(text)) return undefined;
+  const fix = knownFix(text);
+  let reason = `The build failed (exit ${outcome}).`;
+  if (outcome === "timeout") {
+    reason = `The build did not finish in ${seconds}s.`;
+  } else if (fix) {
+    reason = fix;
+  } else if (text.includes("\u203a Build Succeeded")) {
+    reason = `The app compiled, but the install or open step failed (exit ${outcome}).`;
+  }
+  return { reason, errors: firstErrors(text) };
+}
 
 export async function launch(
   options: LaunchOptions = {},
@@ -306,28 +338,39 @@ export async function launch(
   }
 
   confirm(root, "port");
-  report("building and installing the app");
-  const build = startLogged(plan.build, { cwd: root, logPath: buildLog, env });
-  const outcome = await withTimeout(
-    build.exited,
-    options.timeoutSeconds ?? defaultTimeoutSeconds,
-  );
-  if (outcome !== 0) {
-    build.kill();
-    const text = await readFile(buildLog, "utf8").catch(() => "");
-    // Expo's own open step timed out after the install; EMD opens the app next.
-    if (outcome === "timeout" || !onlyOpenFailed(text)) {
+  // Reuse the installed build when nothing native changed. A fingerprint that
+  // cannot be computed means a normal build.
+  let fingerprint: string | undefined;
+  let why: string | undefined;
+  try {
+    fingerprint = await (await loadAdapter(detected.stack)).fingerprint(
+      root,
+      "ios",
+    );
+  } catch (error) {
+    why = `fingerprint failed: ${String(error).split("\n")[0]}`;
+  }
+  if (fingerprint !== undefined) {
+    why = whyBuild(
+      readBuildRecord(derivedData),
+      { fingerprint, port },
+      await appInstalled(device, appId),
+    );
+  }
+  const reused = why === undefined;
+  if (reused) {
+    report("reusing the installed build");
+  } else {
+    report("building and installing the app");
+    const failure = await runBuild(plan.build, root, buildLog, env, options);
+    if (failure) {
       metro.kill();
-      const fix = knownFix(text);
-      let reason = `The build failed (exit ${outcome}).`;
-      if (outcome === "timeout") {
-        reason = `The build did not finish in ${options.timeoutSeconds ?? defaultTimeoutSeconds}s.`;
-      } else if (fix) {
-        reason = fix;
-      } else if (text.includes("\u203a Build Succeeded")) {
-        reason = `The app compiled, but the install or open step failed (exit ${outcome}).`;
-      }
-      return stuck(reason, { errors: firstErrors(text) });
+      return stuck(failure.reason, { errors: failure.errors });
+    }
+    if (fingerprint !== undefined) {
+      try {
+        writeBuildRecord(derivedData, { fingerprint, port });
+      } catch {}
     }
   }
 
@@ -337,19 +380,28 @@ export async function launch(
     capture = await startCapture(device.id, appId, logDir);
   } catch (error) {
     metro.kill();
-    return stuck("Built, but could not capture the app's log.", {
-      errors: String(error).split("\n").slice(0, 3),
-    });
+    return stuck(
+      `${reused ? "Reused the build" : "Built"}, but could not capture the app's log.`,
+      {
+        errors: String(error).split("\n").slice(0, 3),
+      },
+    );
   }
   let appPid: number;
   try {
+    // A running app still talks to the dev server it started with; a restart
+    // makes it load the new JavaScript from this one.
+    if (reused) await terminateApp(device, appId);
     appPid = await launchApp(device, appId);
   } catch (error) {
     capture.kill();
     metro.kill();
-    return stuck(`Built, but launching ${appId} failed.`, {
-      errors: String(error).split("\n").slice(0, 3),
-    });
+    return stuck(
+      `${reused ? "Reused the build" : "Built"}, but launching ${appId} failed.`,
+      {
+        errors: String(error).split("\n").slice(0, 3),
+      },
+    );
   }
 
   return {
@@ -358,6 +410,7 @@ export async function launch(
     ...where,
     appId,
     appPid,
+    build: reused ? { action: "reused" } : { action: "built", reason: why },
     metro: { pid: metro.pid, port },
     logStream: { pid: capture.pid },
     derivedData,

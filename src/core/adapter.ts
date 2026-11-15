@@ -40,4 +40,7 @@ export interface StackAdapter {
     project: ProjectInfo,
     request: { platform: Platform; deviceId: string; port: number },
   ): LaunchPlan | undefined;
+  // A hash of everything that needs a new native build when it changes. Throws
+  // when it cannot be computed.
+  fingerprint(projectDir: string, platform: Platform): Promise<string>;
 }
