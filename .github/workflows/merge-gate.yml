@@ -1,0 +1,49 @@
+name: merge-gate
+
+# Posts the `merge-gate` commit status: whether a PR may merge without a person
+# (decision 0012). Both triggers run the default branch's workflow and
+# scripts, so a PR can't change its own gate. Never check out or run PR code
+# here: pull_request_target has a write token.
+on:
+  pull_request_target:
+    types:
+      [
+        opened,
+        synchronize,
+        reopened,
+        ready_for_review,
+        converted_to_draft,
+        labeled,
+        unlabeled,
+        edited,
+      ]
+  workflow_run:
+    workflows: [CI, PR title, e2e]
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: read
+  checks: read
+  pull-requests: read
+  issues: read
+  statuses: write
+
+# The newest event reads the newest state, so an older run can stop.
+concurrency:
+  group: merge-gate-${{ github.event.pull_request.number || github.event.workflow_run.pull_requests[0].number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Post the merge-gate status
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PRS: ${{ github.event.pull_request.number || join(github.event.workflow_run.pull_requests.*.number, ' ') }}
+        run: node --experimental-strip-types scripts/merge-gate.ts $PRS
