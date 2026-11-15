@@ -28,6 +28,21 @@ async function readExpoConfig(dir: string): Promise<ExpoConfig> {
   }
 }
 
+// Expo's own fingerprint, from the project's installed Expo (never downloaded).
+async function expoFingerprint(
+  dir: string,
+  platform: Platform,
+): Promise<string> {
+  const fromExpo = createRequire(
+    createRequire(join(dir, "package.json")).resolve("expo/bin/cli"),
+  );
+  const { createFingerprintAsync } = fromExpo("@expo/fingerprint");
+  const { hash } = await createFingerprintAsync(dir, {
+    platforms: [platform],
+  });
+  return hash;
+}
+
 const isPlatform = (value: unknown): value is Platform =>
   value === "ios" || value === "android";
 
@@ -69,6 +84,7 @@ const adapter: StackAdapter = {
       build: `${expo} run:ios --device ${deviceId} --no-bundler`,
     };
   },
+  fingerprint: expoFingerprint,
 };
 
 export default adapter;

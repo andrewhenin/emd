@@ -32,6 +32,7 @@ type View = {
     device: { id: string; name: string };
     appId: string;
     appPid: number;
+    build: { action: string; reason?: string };
     metro: { pid: number; port: number };
     logDir: string;
   };
@@ -347,6 +348,8 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
         again = await finish(await call("launch", { dir: sandbox }), new Set());
         expect(again.status, again.result?.reason).toBe("succeeded");
         expect(again.result?.metro.port).toBe(left?.port);
+        // Nothing native changed and the app is installed (#174).
+        expect(again.result?.build).toEqual({ action: "reused" });
         expect(() => process.kill(-(left?.pid ?? 0), 0)).toThrow();
         const later = await readLogs(again.jobId, { tag: "smoke" });
         expect(later).toMatchObject({ verdict: "ok", total: 0, lines: [] });

@@ -126,6 +126,24 @@ export async function launchApp(
   return pid;
 }
 
+// True when the app is installed on the device.
+export async function appInstalled(
+  device: Device,
+  appId: string,
+): Promise<boolean> {
+  try {
+    await runTool(
+      "simctl get_app_container",
+      "xcrun",
+      ["simctl", "get_app_container", device.id, appId],
+      60,
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // A new simulator with the same type and runtime as `base`; returns its UDID.
 // The base must be shut down.
 export async function cloneDevice(base: Device, name: string): Promise<string> {
