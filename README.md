@@ -97,6 +97,8 @@ Run `npx -y emd-agents@latest setup` again, then restart your agents. Setup regi
 
 Remove the server from each agent, then the skill:
 
+<!-- Use exact-name commands only. `add-mcp remove emd -y` also removes every server whose name contains "emd" (it removed decoys named remdy and emd-old in a test). -->
+
 ```sh
 claude mcp remove emd -s user
 codex mcp remove emd
