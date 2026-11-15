@@ -76,13 +76,16 @@ const run = async (
   );
 };
 
-// By testID (AXUniqueId) or label (AXLabel), AXe waits up to 5 s for the
-// element to appear, then taps its activation point.
+// By testID (AXUniqueId) or label (AXLabel), AXe waits up to 10 s for the
+// element to appear (the limit `check` reads again for), then taps its
+// activation point.
+const elementWaitSeconds = 10;
+
 const targetArgs = (target: Target): string[] =>
   "id" in target
-    ? ["--id", target.id, "--wait-timeout", "5"]
+    ? ["--id", target.id, "--wait-timeout", String(elementWaitSeconds)]
     : "text" in target
-      ? ["--label", target.text, "--wait-timeout", "5"]
+      ? ["--label", target.text, "--wait-timeout", String(elementWaitSeconds)]
       : ["-x", String(target.x), "-y", String(target.y)];
 
 export const axeBackend: DeviceBackend = {

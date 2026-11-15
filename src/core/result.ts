@@ -126,6 +126,9 @@ export const inputResultSchema = z.object({
   reason: z.string().optional(),
   backend: z.enum(backendIds).optional(),
   fellBack: fellBackSchema,
+  // A tap by testID or text: seconds from start to finish, which includes
+  // the wait for the element.
+  seconds: z.number().optional(),
 });
 
 export type InputResult = z.infer<typeof inputResultSchema>;
