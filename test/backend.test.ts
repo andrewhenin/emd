@@ -144,25 +144,53 @@ test("when every backend reads nothing, the read fails and names each", async ()
   );
 });
 
+const ui = nodesFrom("axe");
+
 test("waits until the screen can be read, and says how long", async () => {
   let reads = 0;
-  const slow: Reader = {
-    id: "axe",
-    readScreen: async () => (++reads < 3 ? [] : nodesFrom("axe")),
-  };
-  const result = await untilReadable("udid", env(), [slow], 5, 1);
+  const result = await untilReadable(
+    async () => (++reads < 3 ? [] : ui),
+    5,
+    undefined,
+    1,
+  );
   expect(reads).toBe(3);
   expect(result.error).toBeUndefined();
-  expect(result.waited).toBeGreaterThanOrEqual(0);
 });
 
-test("gives AXe's error when the screen stays unreadable", async () => {
+test("gives AXe's first sentence when the screen stays unreadable", async () => {
   const result = await untilReadable(
-    "udid",
-    env(),
-    [breaks("axe", "No translation object")],
+    async () => {
+      throw new Error("No translation object returned. More text.");
+    },
     0.05,
+    undefined,
     10,
   );
-  expect(result.error).toContain("No translation object");
+  expect(result.error).toBe("No translation object returned");
+});
+
+test("acts once on an empty tree, never on an error", async () => {
+  let acts = 0;
+  let reads = 0;
+  const act = async () => {
+    acts++;
+  };
+  await untilReadable(
+    async () => (++reads < 4 ? [] : ui),
+    5,
+    { afterSeconds: 0, act },
+    1,
+  );
+  expect(acts).toBe(1);
+  acts = 0;
+  await untilReadable(
+    async () => {
+      throw new Error("No translation object");
+    },
+    0.05,
+    { afterSeconds: 0, act },
+    10,
+  );
+  expect(acts).toBe(0);
 });

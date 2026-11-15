@@ -110,10 +110,34 @@ export async function boot(device: Device): Promise<void> {
   );
 }
 
-// Turns on application accessibility on a simulator EMD made. An app that
-// starts while it is off shows AXe an empty tree; one that starts after the
-// write shows the tree at once (docs/findings.md). Write only after boot, and
-// before the app starts. The setting stays on the device.
+const accessibilityKey = "ApplicationAccessibilityEnabled";
+
+// Whether application accessibility is on. An app that starts while it is off
+// can show AXe an empty tree on some iOS versions (docs/findings.md).
+export async function appAccessibilityOn(device: Device): Promise<boolean> {
+  try {
+    const { stdout } = await runTool(
+      "simctl spawn defaults read",
+      "xcrun",
+      [
+        "simctl",
+        "spawn",
+        device.id,
+        "defaults",
+        "read",
+        "com.apple.Accessibility",
+        accessibilityKey,
+      ],
+      60,
+    );
+    return stdout.trim() === "1";
+  } catch {
+    return false;
+  }
+}
+
+// Turns it on, on a simulator EMD made. The setting stays on the device; an
+// app that is already running must restart to see it.
 export async function enableAppAccessibility(device: Device): Promise<void> {
   await runTool(
     "simctl spawn defaults write",
@@ -125,7 +149,7 @@ export async function enableAppAccessibility(device: Device): Promise<void> {
       "defaults",
       "write",
       "com.apple.Accessibility",
-      "ApplicationAccessibilityEnabled",
+      accessibilityKey,
       "-bool",
       "true",
     ],

@@ -115,6 +115,11 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
           appId: "com.emd.sandbox",
           build: { action: "built" },
         });
+        // #131: the first launch returns only when AXe can read the screen.
+        console.log(
+          `first launch: screen readable after ${result?.screen?.waited} s`,
+        );
+        expect(result?.screen?.error).toBeUndefined();
         const apps = execFileSync(
           "xcrun",
           ["simctl", "listapps", result?.device.id ?? ""],

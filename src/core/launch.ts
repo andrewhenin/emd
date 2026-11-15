@@ -20,6 +20,7 @@ import { inspectProject } from "./project.js";
 import { loadAdapter } from "./registry.js";
 import type { LaunchResult } from "./result.js";
 import {
+  appAccessibilityOn,
   appInstalled,
   boot,
   cloneDevice,
@@ -41,6 +42,8 @@ const stopSeconds = 10;
 const defaultTimeoutSeconds = 900;
 // With accessibility on, AXe read the screen 1 to 5 s after the app started.
 const screenReadSeconds = 30;
+// An empty tree this long after the app started means accessibility is off.
+const emptyTreeSeconds = 5;
 
 export type LaunchOptions = {
   dir?: string;
@@ -313,10 +316,6 @@ export async function launch(
     });
   }
 
-  // This device is EMD's own clone. A failed write shows up as an unreadable
-  // screen below.
-  await enableAppAccessibility(device).catch(() => {});
-
   await stopEarlierServer(root, port);
   if (await metroRunning(port)) {
     return stuck(
@@ -415,8 +414,23 @@ export async function launch(
 
   const axe = (await detectEnvironment()).axe;
   report("waiting for the screen");
+  // This device is EMD's own clone. On some iOS versions AXe reads an empty
+  // tree until application accessibility is on, and only an app that starts
+  // after the write sees it. An AXe error never triggers the write.
   const screen = axe
-    ? await untilReadable(device.id, { axe }, [axeBackend], screenReadSeconds)
+    ? await untilReadable(
+        () => axeBackend.readScreen(device.id, axe),
+        screenReadSeconds,
+        {
+          afterSeconds: emptyTreeSeconds,
+          act: async () => {
+            if (await appAccessibilityOn(device)) return;
+            await enableAppAccessibility(device);
+            await terminateApp(device, appId);
+            appPid = await launchApp(device, appId);
+          },
+        },
+      )
     : undefined;
 
   return {

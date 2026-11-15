@@ -101,25 +101,47 @@ export async function readScreen(
   return { nodes: value, ...rest };
 }
 
-// Reads the screen again until a read works or `limitSeconds` pass. Returns the
-// seconds it took, and the last error when time ran out.
+// Reads the screen again until a read gives nodes or `limitSeconds` pass.
+// Returns the seconds it took, and the last problem (in one short sentence)
+// when time ran out. When every read so far gave an empty tree, not an error,
+// `whenEmpty.act` runs once after `whenEmpty.afterSeconds` (the first sign of
+// the shape that application accessibility fixes).
 export async function untilReadable(
-  device: string,
-  env: Environment,
-  backends: Pick<DeviceBackend, "id" | "readScreen">[],
+  read: () => Promise<UiNode[]>,
   limitSeconds: number,
+  whenEmpty?: { afterSeconds: number; act: () => Promise<void> },
   pauseMs = 1000,
 ): Promise<{ waited: number; error?: string }> {
   const start = Date.now();
-  const waited = () => Math.round((Date.now() - start) / 100) / 10;
+  const elapsed = () => Date.now() - start;
+  const short = (text: string) =>
+    text
+      .replace(/^Error: /, "")
+      .split(/[.\n]/)[0]
+      ?.slice(0, 80) ?? "";
+  let error = "returned an empty tree";
+  let onlyEmpty = true;
+  let acted = false;
   for (;;) {
     try {
-      await readScreen(device, env, backends);
-      return { waited: waited() };
-    } catch (error) {
-      if (Date.now() - start >= limitSeconds * 1000) {
-        return { waited: waited(), error: firstLine(error) };
+      if ((await read()).length > 0) {
+        return { waited: Math.round(elapsed() / 100) / 10 };
       }
+    } catch (failure) {
+      onlyEmpty = false;
+      error = short(firstLine(failure));
+    }
+    if (
+      whenEmpty &&
+      !acted &&
+      onlyEmpty &&
+      elapsed() >= whenEmpty.afterSeconds * 1000
+    ) {
+      acted = true;
+      await whenEmpty.act().catch(() => {});
+    }
+    if (elapsed() >= limitSeconds * 1000) {
+      return { waited: Math.round(elapsed() / 100) / 10, error };
     }
     await new Promise((resolve) => setTimeout(resolve, pauseMs));
   }
