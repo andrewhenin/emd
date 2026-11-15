@@ -82,6 +82,15 @@ test("an unknown job is an error over MCP and the CLI", async () => {
   expect(cli("job", "status", "../../etc/passwd").status).toBe(1);
 });
 
+test("one job_status call waits until the job ends", async () => {
+  const job = await call("launch", { dir: makeDir() });
+  const reply = await client.callTool({
+    name: "job_status",
+    arguments: { jobId: job.jobId },
+  });
+  expect(reply.structuredContent).toMatchObject({ status: "failed" });
+});
+
 test("rejects a bad --timeout", () => {
   const run = cli("launch", makeDir(), "--timeout", "soon");
   expect(run.status).toBe(2);

@@ -15,7 +15,7 @@ export { type DoctorResult, doctor } from "./doctor.js";
 export { evidence } from "./evidence.js";
 export { type GcResult, gc } from "./gc.js";
 export { swipe, tap, typeText } from "./input.js";
-export { jobStatus, runJob, startJob } from "./jobs.js";
+export { jobStatus, runJob, startJob, waitForJob } from "./jobs.js";
 export { launch } from "./launch.js";
 export { logs } from "./logs.js";
 export { loadedAdapters } from "./registry.js";
