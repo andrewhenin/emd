@@ -40,8 +40,9 @@ import { runTool } from "./tool.js";
 const metroStartSeconds = 120;
 const stopSeconds = 10;
 const defaultTimeoutSeconds = 900;
-// With accessibility on, AXe read the screen 1 to 5 s after the app started.
-const screenReadSeconds = 30;
+// How long AXe may take to read the screen after the app started. e2e relaunch
+// reads on iOS 26 took 5.9, 19.4 and 31.3 s; 60 s is about twice the slowest.
+const screenReadSeconds = 60;
 // An empty tree this long after the app started means accessibility is off.
 const emptyTreeSeconds = 5;
 
