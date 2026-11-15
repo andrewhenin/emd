@@ -18,6 +18,8 @@ Run `npx -y emd-agents@latest setup --dry-run` and show the user its plan. Run i
 
 ## The loop
 
+After you change code, call `launch` again before you `check` or `tap`. The dev server does not reload edits, and a relaunch takes seconds when nothing native changed.
+
 1. `launch` with `dir` set to the app folder. It returns a `jobId` at once.
 2. `job_status` every 5 to 10 seconds, until `succeeded` or `failed`. A first build takes minutes. A failed launch gives the reason and the first error lines: fix the cause and launch again.
 3. `tap` with the `jobId`, and a testID (`id`) or a visible `text`. Use a point only when the element has neither. `type` types into the field that has focus, so tap the field first. `swipe` scrolls. A result of `ok` means the gesture was sent; the next `check` shows what the app did.

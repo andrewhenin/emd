@@ -62,7 +62,16 @@ export function tap(options: TapOptions): Promise<InputResult> {
       reason: "Give one target: id, text, or both x and y.",
     });
   }
-  return act("tap", options, (b, where, bin) => b.tap(where, bin, target));
+  const started = Date.now();
+  const done = act("tap", options, (b, where, bin) =>
+    b.tap(where, bin, target),
+  );
+  if ("x" in target) return done;
+  // The backends wait for an element: AXe up to 10 s, Maestro its own limit.
+  return done.then((result) => ({
+    ...result,
+    seconds: Math.round((Date.now() - started) / 100) / 10,
+  }));
 }
 
 export function typeText(

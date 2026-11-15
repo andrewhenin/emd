@@ -205,7 +205,7 @@ function buildServer(): McpServer {
     "tap",
     {
       description:
-        "Tap the launched app: an element by testID or by visible text, or a point. Give one target. Waits up to 5 s for the element. A result of ok means the tap was sent; call check to see what the app did.",
+        "Tap the launched app: an element by testID or by visible text, or a point. Give one target. Waits up to 10 s for the element, and the result's seconds says how long the tap took. If it never appears, nothing is tapped. A result of ok means the tap was sent; call check to see what the app did.",
       inputSchema: z.object({
         jobId,
         id: z.string().optional().describe("The element's testID."),
