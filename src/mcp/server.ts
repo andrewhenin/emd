@@ -56,7 +56,7 @@ function buildServer(): McpServer {
     "launch",
     {
       description:
-        "Start building the app, installing it on an iOS simulator and launching it, leaving its dev server running. Returns a job within seconds; the work takes up to minutes. Then call job_status with the jobId: it waits up to 50 s and returns when the job ends. Call it again until status is succeeded or failed. Do not sleep or poll in between.",
+        "Start building the app, installing it on an iOS simulator and launching it, leaving its dev server running. Returns a job within seconds; the work takes up to minutes. Then call job_status with the jobId until status is succeeded or failed.",
       inputSchema: z.object({
         dir: z
           .string()
@@ -94,14 +94,7 @@ function buildServer(): McpServer {
         "Where a job is: queued, running (with the current step and seconds), succeeded or failed. Waits up to waitSeconds (default 50) and returns as soon as the job ends, so call it again right away if it is still running; do not sleep or poll in between. When finished, includes the result. For launch: the device, app ID and log directory, or on failure the reason and the first relevant error lines, not the log. For check: the verdict, which expectations were found, and a screenshot path.",
       inputSchema: z.object({
         jobId: z.string().describe("The jobId a tool such as launch returned."),
-        waitSeconds: z
-          .number()
-          .min(0)
-          .max(110)
-          .optional()
-          .describe(
-            "How long to wait for the job to end. Default 50. 0 answers at once.",
-          ),
+        waitSeconds: z.number().min(0).max(110).optional(),
       }),
       outputSchema: jobViewSchema,
     },
@@ -154,7 +147,7 @@ function buildServer(): McpServer {
     "check",
     {
       description:
-        "Check a run against what you expect, from signals a machine can read, not your own judgment: tagged log events the app wrote ([EMD:<tag>] lines) and elements on the simulator's screen (by testID or by text). After a tap, type or swipe, check right away; a check reads again for up to 10 s what is still missing. Starts a job and returns it within seconds; call job_status until it finishes, which can take a minute. Do not sleep or poll in between. The result's verdict is passed, failed (fix the cause and check again), stopped (the retry limit is reached: stop and report what is missing) or error (the check could not run; not counted). Your reading of the returned screenshot may be passed as agentReading; it is recorded as a second opinion and never changes the verdict.",
+        "Check a run against what you expect, from signals a machine can read, not your own judgment: tagged log events the app wrote ([EMD:<tag>] lines) and elements on the simulator's screen (by testID or by text). After a tap, type or swipe, check right away; a check reads again for up to 10 s what is still missing. Starts a job and returns it within seconds; call job_status until it finishes, which can take a minute. The result's verdict is passed, failed (fix the cause and check again), stopped (the retry limit is reached: stop and report what is missing) or error (the check could not run; not counted). Your reading of the returned screenshot may be passed as agentReading; it is recorded as a second opinion and never changes the verdict.",
       inputSchema: z.object({
         jobId: z.string().describe("The launch job whose run to check."),
         logs: z

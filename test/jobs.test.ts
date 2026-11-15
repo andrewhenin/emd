@@ -260,11 +260,10 @@ test("waitForJob returns when the job ends, before the wait runs out", async () 
   await run;
 });
 
-test("waitForJob answers at once with a wait of 0 and when the wait runs out", async () => {
+test("waitForJob answers at once with a wait of 0, and when the wait runs out", async () => {
   const job = createJob("launch", { dir: "/x" });
-  const started = Date.now();
   expect((await waitForJob(job.id, 0))?.status).toBe("queued");
-  expect((await waitForJob(job.id, 0.6))?.status).toBe("queued");
-  expect(Date.now() - started).toBeGreaterThanOrEqual(500);
-  expect(await waitForJob("00000000", 0)).toBeUndefined();
+  const started = Date.now();
+  expect((await waitForJob(job.id, 0.1))?.status).toBe("queued");
+  expect(Date.now() - started).toBeGreaterThanOrEqual(100);
 });

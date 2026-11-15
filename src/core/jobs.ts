@@ -171,9 +171,7 @@ export async function waitForJob(
     (job.status === "queued" || job.status === "running") &&
     Date.now() < deadline
   ) {
-    await new Promise((resolve) =>
-      setTimeout(resolve, Math.min(500, Math.max(0, deadline - Date.now()))),
-    );
+    await new Promise((resolve) => setTimeout(resolve, 500));
     job = jobStatus(id);
   }
   return job;
