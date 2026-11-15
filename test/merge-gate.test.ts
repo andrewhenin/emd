@@ -97,7 +97,13 @@ test("mentor:ready must be newer than the last push", () => {
 test('"Needs you" and "Weakened checks" must say none', () => {
   const body = (needs: string, weakened = "none") =>
     `## Needs you\n\n${needs}\n\n## Weakened checks\n\n${weakened}\n`;
-  expect(evaluate(pr({ body: body("") }))).toBeUndefined();
+  expect(evaluate(pr({ body: body("None.") }))).toBeUndefined();
+  // An untouched template: only comments under the heading.
+  expect(evaluate(pr({ body: body("<!-- Write none -->") }))).toBe(
+    '"Needs you" is not "none"',
+  );
+  // Nested markers: one pass would leave "<!-- -->none".
+  expect(evaluate(pr({ body: body("<!-<!---->- -->none") }))).toBeUndefined();
   expect(evaluate(pr({ body: body("- Merge gate: check e2e") }))).toBe(
     '"Needs you" is not "none"',
   );

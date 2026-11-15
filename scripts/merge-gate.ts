@@ -39,7 +39,13 @@ const newest = <T>(items: T[], at: (item: T) => string): T | undefined =>
 // The text under a `## <heading>` line, without HTML comments; undefined if
 // the heading is missing.
 function section(body: string, heading: string): string | undefined {
-  const lines = body.replace(/<!--[\s\S]*?-->/g, "").split(/\r?\n/);
+  // Repeat until nothing changes, so nested markers can't leave a comment.
+  let text = body;
+  for (let prev = ""; prev !== text; ) {
+    prev = text;
+    text = text.replace(/<!--[\s\S]*?-->/g, "");
+  }
+  const lines = text.split(/\r?\n/);
   const start = lines.findIndex(
     (line) => line.trim().toLowerCase() === `## ${heading.toLowerCase()}`,
   );
@@ -51,8 +57,9 @@ function section(body: string, heading: string): string | undefined {
     .trim();
 }
 
+// An empty section fails: an untouched template must not pass.
 const saysNone = (text: string | undefined) =>
-  text !== undefined && /^(none\.?)?$/i.test(text);
+  text !== undefined && /^none\.?$/i.test(text);
 
 // The first rule the PR fails, or undefined when it may merge.
 export function evaluate(pr: GateInput): string | undefined {
@@ -159,7 +166,9 @@ async function main(number: string) {
   let failed: string | undefined;
   try {
     const [files, runs, checks, events] = await Promise.all([
-      pages<{ filename: string }>(`/pulls/${number}/files`),
+      pages<{ filename: string; previous_filename?: string }>(
+        `/pulls/${number}/files`,
+      ),
       pages<Run>(`/actions/runs?head_sha=${sha}`, "workflow_runs"),
       pages<Check>(`/commits/${sha}/check-runs`, "check_runs"),
       pages<Event>(`/issues/${number}/events`),
@@ -171,7 +180,11 @@ async function main(number: string) {
       labels: pr.labels.map((l) => l.name),
       body: pr.body ?? "",
       changedLines: pr.additions + pr.deletions,
-      files: files.map((f) => f.filename),
+      // A rename counts under both names, so nothing leaves a protected path.
+      files: files.flatMap((f) => [
+        f.filename,
+        f.previous_filename ?? f.filename,
+      ]),
       runs: runs.map((r) => ({
         name: r.name,
         status: r.status,

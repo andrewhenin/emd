@@ -46,7 +46,4 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           PRS: ${{ github.event.pull_request.number || join(github.event.workflow_run.pull_requests.*.number, ' ') }}
-        run: |
-          for pr in $PRS; do
-            node --experimental-strip-types scripts/merge-gate.ts "$pr"
-          done
+        run: node --experimental-strip-types scripts/merge-gate.ts $PRS
