@@ -47,18 +47,16 @@ test("a tap by id or text gives AXe 10 s to wait and reports its seconds", async
   expect(calls).toMatch(/--label Save --wait-timeout 10/);
 });
 
-test("an element that never appears is not tapped, and the result names it and the seconds", async () => {
+test("an element that never appears is not tapped, and the result gives the backend's reason and the seconds", async () => {
   const jobId = await launchedJob(state);
   const never = fromCli("tap", jobId, "--id", "missing");
   expect(never.status).toBe(1);
   expect(never.result.verdict).toBe("failed");
-  expect(never.result.reason).toMatch(
-    /^Element id "missing" did not appear in [\d.]+ s\. Nothing was tapped\./,
-  );
+  expect(never.result.reason).toContain("No accessibility element matched");
   expect(typeof never.result.seconds).toBe("number");
   expect(await mcp({ jobId, id: "missing" })).toMatchObject({
     verdict: "failed",
-    reason: expect.stringContaining('Element id "missing"'),
+    reason: expect.stringContaining("No accessibility element matched"),
   });
 });
 

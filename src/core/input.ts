@@ -68,18 +68,10 @@ export function tap(options: TapOptions): Promise<InputResult> {
   );
   if ("x" in target) return done;
   // The backends wait for an element: AXe up to 10 s, Maestro its own limit.
-  return done.then((result) => {
-    const seconds = Math.round((Date.now() - started) / 100) / 10;
-    if (result.verdict === "ok") return { ...result, seconds };
-    if (!result.reason?.includes("no backend could tap")) return result;
-    const element =
-      "id" in target ? `id "${target.id}"` : `text "${target.text}"`;
-    return {
-      ...result,
-      seconds,
-      reason: `Element ${element} did not appear in ${seconds} s. Nothing was tapped. ${result.reason}`,
-    };
-  });
+  return done.then((result) => ({
+    ...result,
+    seconds: Math.round((Date.now() - started) / 100) / 10,
+  }));
 }
 
 export function typeText(
