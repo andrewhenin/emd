@@ -62,6 +62,6 @@ Flag code that can be deleted or simplified while still meeting the linked issue
 ## Definition of done
 
 1. `npm run lint`, `npm run typecheck`, `npm test` and `npm run check:sizes` pass locally.
-2. Mobile behavior changes include evidence from a real run of the change's main promise: steps, screenshots, matching log lines. A branch that falls back to the old behavior can rely on unit tests; say so in the PR.
+2. Mobile behavior changes include evidence from a real run of the change's main promise: steps, screenshots, matching log lines. A code path that only falls back to the old behavior (for example: fingerprint failed, so build as before) can rely on unit tests; list those paths in the PR.
 3. Notes updated in the same PR per docs/logging.md (finding, decision or rule), or the PR says nothing needed one.
 4. PR opened ready for review, linked to its issue, with the PR template filled in honestly.
