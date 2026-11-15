@@ -101,6 +101,30 @@ export async function readScreen(
   return { nodes: value, ...rest };
 }
 
+// Reads the screen again until a read works or `limitSeconds` pass. Returns the
+// seconds it took, and the last error when time ran out.
+export async function untilReadable(
+  device: string,
+  env: Environment,
+  backends: Pick<DeviceBackend, "id" | "readScreen">[],
+  limitSeconds: number,
+  pauseMs = 1000,
+): Promise<{ waited: number; error?: string }> {
+  const start = Date.now();
+  const waited = () => Math.round((Date.now() - start) / 100) / 10;
+  for (;;) {
+    try {
+      await readScreen(device, env, backends);
+      return { waited: waited() };
+    } catch (error) {
+      if (Date.now() - start >= limitSeconds * 1000) {
+        return { waited: waited(), error: firstLine(error) };
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, pauseMs));
+  }
+}
+
 function findExecutable(name: string, extraDirs: string[]): string | undefined {
   const dirs = [
     ...(process.env.PATH ?? "").split(delimiter),

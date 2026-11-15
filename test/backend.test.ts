@@ -4,6 +4,7 @@ import {
   type DeviceBackend,
   type Environment,
   readScreen,
+  untilReadable,
 } from "../src/core/device/backend.ts";
 import type { UiNode } from "../src/core/device/screen.ts";
 
@@ -141,4 +142,27 @@ test("when every backend reads nothing, the read fails and names each", async ()
   ).rejects.toThrow(
     "no backend could read the screen (axe: Error: returned an empty tree; maestro: Error: returned an empty tree)",
   );
+});
+
+test("waits until the screen can be read, and says how long", async () => {
+  let reads = 0;
+  const slow: Reader = {
+    id: "axe",
+    readScreen: async () => (++reads < 3 ? [] : nodesFrom("axe")),
+  };
+  const result = await untilReadable("udid", env(), [slow], 5, 1);
+  expect(reads).toBe(3);
+  expect(result.error).toBeUndefined();
+  expect(result.waited).toBeGreaterThanOrEqual(0);
+});
+
+test("gives AXe's error when the screen stays unreadable", async () => {
+  const result = await untilReadable(
+    "udid",
+    env(),
+    [breaks("axe", "No translation object")],
+    0.05,
+    10,
+  );
+  expect(result.error).toContain("No translation object");
 });

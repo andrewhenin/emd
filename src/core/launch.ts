@@ -3,6 +3,8 @@ import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import { readBuildRecord, whyBuild, writeBuildRecord } from "./buildrecord.js";
 import { detect } from "./detect.js";
+import { axeBackend } from "./device/axe.js";
+import { detectEnvironment, untilReadable } from "./device/backend.js";
 import {
   derivedDataPath,
   diskMB,
@@ -22,6 +24,7 @@ import {
   boot,
   cloneDevice,
   type Device,
+  enableAppAccessibility,
   launchApp,
   listDevices,
   newerThan,
@@ -36,6 +39,8 @@ import { runTool } from "./tool.js";
 const metroStartSeconds = 120;
 const stopSeconds = 10;
 const defaultTimeoutSeconds = 900;
+// With accessibility on, AXe read the screen 1 to 5 s after the app started.
+const screenReadSeconds = 30;
 
 export type LaunchOptions = {
   dir?: string;
@@ -308,6 +313,10 @@ export async function launch(
     });
   }
 
+  // This device is EMD's own clone. A failed write shows up as an unreadable
+  // screen below.
+  await enableAppAccessibility(device).catch(() => {});
+
   await stopEarlierServer(root, port);
   if (await metroRunning(port)) {
     return stuck(
@@ -404,11 +413,18 @@ export async function launch(
     );
   }
 
+  const axe = (await detectEnvironment()).axe;
+  report("waiting for the screen");
+  const screen = axe
+    ? await untilReadable(device.id, { axe }, [axeBackend], screenReadSeconds)
+    : undefined;
+
   return {
     verdict: "launched",
     root,
     ...where,
     appId,
+    ...(screen && { screen }),
     appPid,
     build: reused ? { action: "reused" } : { action: "built", reason: why },
     metro: { pid: metro.pid, port },
