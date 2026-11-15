@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.15.0](https://github.com/andrewhenin/emd/compare/emd-agents-v0.14.0...emd-agents-v0.15.0) (2026-11-15)
+
+
+### Features
+
+* job_status waits for the job to end ([#187](https://github.com/andrewhenin/emd/issues/187)) ([e89d2b8](https://github.com/andrewhenin/emd/commit/e89d2b850f4d60dd3421c9156c5134cd7432e456))
+* launch skips the Xcode build when no native input changed ([#181](https://github.com/andrewhenin/emd/issues/181)) ([e7f7764](https://github.com/andrewhenin/emd/commit/e7f7764f13e4edb77108004daca74570381d51e1))
+* tap waits for its element before it taps ([#184](https://github.com/andrewhenin/emd/issues/184)) ([b2eeecb](https://github.com/andrewhenin/emd/commit/b2eeecb53913191e2e936b4fbd429656009584b8))
+
+
+### Bug Fixes
+
+* launch returns only when the app's screen can be read ([#185](https://github.com/andrewhenin/emd/issues/185)) ([43c04e8](https://github.com/andrewhenin/emd/commit/43c04e89aeee8c702ba73ef79395d0eb8176732c))
+
 ## [0.14.0](https://github.com/andrewhenin/emd/compare/emd-agents-v0.13.0...emd-agents-v0.14.0) (2026-11-14)
 
 
