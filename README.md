@@ -85,7 +85,7 @@ Each project's README says what it does. [agent-device](https://github.com/calls
 
 - One check reads the app's own tagged log lines and the elements on screen, and passes or fails on both.
 - A check name keeps its first expectations, so the agent can't pass it by dropping one.
-- After 3 failed checks, EMD stops the agent. Only a person can reset.
+- After 3 failed checks, every later check returns `stopped` until a person resets the count.
 
 For taps and screen reads, EMD uses AXe, with Maestro as the fallback.
 
