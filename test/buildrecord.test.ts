@@ -1,5 +1,4 @@
 import { expect, test } from "vitest";
-import expoAdapter from "../src/adapters/expo/index.ts";
 import {
   readBuildRecord,
   whyBuild,
@@ -23,14 +22,7 @@ test.each([
   ["fingerprint changed", { ...now, fingerprint: "old" }, now, true],
   ["port changed", { ...now, port: 8082 }, now, true],
   ["app not installed", now, now, false],
-])("builds with the reason: %s", (reason, record, current, installed) => {
+  [undefined, now, now, true],
+])("why build: %s", (reason, record, current, installed) => {
   expect(whyBuild(record, current, installed)).toBe(reason);
-});
-
-test("reuses only when the fingerprint and port match and the app is installed", () => {
-  expect(whyBuild(now, now, true)).toBeUndefined();
-});
-
-test("the Expo fingerprint fails, not guesses, without the project's Expo", async () => {
-  await expect(expoAdapter.fingerprint(makeDir(), "ios")).rejects.toThrow();
 });

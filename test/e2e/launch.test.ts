@@ -112,6 +112,7 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
         expect(result).toMatchObject({
           verdict: "launched",
           appId: "com.emd.sandbox",
+          build: { action: "built" },
         });
         const apps = execFileSync(
           "xcrun",

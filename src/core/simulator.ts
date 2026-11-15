@@ -110,6 +110,22 @@ export async function boot(device: Device): Promise<void> {
   );
 }
 
+// Stops the app if it runs; a later launch then starts it fresh. Not running is
+// not a failure.
+export async function terminateApp(
+  device: Device,
+  appId: string,
+): Promise<void> {
+  try {
+    await runTool(
+      "simctl terminate",
+      "xcrun",
+      ["simctl", "terminate", device.id, appId],
+      60,
+    );
+  } catch {}
+}
+
 // Returns the app's pid. Brings the app forward if it is already running.
 export async function launchApp(
   device: Device,
