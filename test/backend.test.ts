@@ -4,6 +4,7 @@ import {
   type DeviceBackend,
   type Environment,
   readScreen,
+  untilReadable,
 } from "../src/core/device/backend.ts";
 import type { UiNode } from "../src/core/device/screen.ts";
 
@@ -141,4 +142,55 @@ test("when every backend reads nothing, the read fails and names each", async ()
   ).rejects.toThrow(
     "no backend could read the screen (axe: Error: returned an empty tree; maestro: Error: returned an empty tree)",
   );
+});
+
+const ui = nodesFrom("axe");
+
+test("waits until the screen can be read, and says how long", async () => {
+  let reads = 0;
+  const result = await untilReadable(
+    async () => (++reads < 3 ? [] : ui),
+    5,
+    undefined,
+    1,
+  );
+  expect(reads).toBe(3);
+  expect(result.error).toBeUndefined();
+});
+
+test("gives AXe's first sentence when the screen stays unreadable", async () => {
+  const result = await untilReadable(
+    async () => {
+      throw new Error("No translation object returned. More text.");
+    },
+    0.05,
+    undefined,
+    10,
+  );
+  expect(result.error).toBe("No translation object returned");
+});
+
+test("acts once on an empty tree, never on an error", async () => {
+  let acts = 0;
+  let reads = 0;
+  const act = async () => {
+    acts++;
+  };
+  await untilReadable(
+    async () => (++reads < 4 ? [] : ui),
+    5,
+    { afterSeconds: 0, act },
+    1,
+  );
+  expect(acts).toBe(1);
+  acts = 0;
+  await untilReadable(
+    async () => {
+      throw new Error("No translation object");
+    },
+    0.05,
+    { afterSeconds: 0, act },
+    10,
+  );
+  expect(acts).toBe(0);
 });

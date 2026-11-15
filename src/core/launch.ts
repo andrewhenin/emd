@@ -3,6 +3,8 @@ import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import { readBuildRecord, whyBuild, writeBuildRecord } from "./buildrecord.js";
 import { detect } from "./detect.js";
+import { axeBackend } from "./device/axe.js";
+import { detectEnvironment, untilReadable } from "./device/backend.js";
 import {
   derivedDataPath,
   diskMB,
@@ -18,10 +20,12 @@ import { inspectProject } from "./project.js";
 import { loadAdapter } from "./registry.js";
 import type { LaunchResult } from "./result.js";
 import {
+  appAccessibilityOn,
   appInstalled,
   boot,
   cloneDevice,
   type Device,
+  enableAppAccessibility,
   launchApp,
   listDevices,
   newerThan,
@@ -36,6 +40,12 @@ import { runTool } from "./tool.js";
 const metroStartSeconds = 120;
 const stopSeconds = 10;
 const defaultTimeoutSeconds = 900;
+// How long AXe may take to read the screen after the app started, about twice
+// the slowest measurement: first launch 7.8 to 51.4 s on CI iOS 26 and up to
+// 86 s on iOS 27.1; relaunch 5.9 to 31.3 s.
+const screenReadSeconds = 180;
+// An empty tree this long after the app started means accessibility is off.
+const emptyTreeSeconds = 5;
 
 export type LaunchOptions = {
   dir?: string;
@@ -404,11 +414,33 @@ export async function launch(
     );
   }
 
+  const axe = (await detectEnvironment()).axe;
+  report("waiting for the screen");
+  // This device is EMD's own clone. On some iOS versions AXe reads an empty
+  // tree until application accessibility is on, and only an app that starts
+  // after the write sees it. An AXe error never triggers the write.
+  const screen = axe
+    ? await untilReadable(
+        () => axeBackend.readScreen(device.id, axe),
+        screenReadSeconds,
+        {
+          afterSeconds: emptyTreeSeconds,
+          act: async () => {
+            if (await appAccessibilityOn(device)) return;
+            await enableAppAccessibility(device);
+            await terminateApp(device, appId);
+            appPid = await launchApp(device, appId);
+          },
+        },
+      )
+    : undefined;
+
   return {
     verdict: "launched",
     root,
     ...where,
     appId,
+    ...(screen && { screen }),
     appPid,
     build: reused ? { action: "reused" } : { action: "built", reason: why },
     metro: { pid: metro.pid, port },

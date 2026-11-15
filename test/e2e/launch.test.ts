@@ -34,6 +34,7 @@ type View = {
     appPid: number;
     build: { action: string; reason?: string };
     metro: { pid: number; port: number };
+    screen?: { waited: number; error?: string };
     logDir: string;
   };
 };
@@ -114,6 +115,11 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
           appId: "com.emd.sandbox",
           build: { action: "built" },
         });
+        // #131: the first launch returns only when AXe can read the screen.
+        console.log(
+          `first launch: screen readable after ${result?.screen?.waited} s`,
+        );
+        expect(result?.screen?.error).toBeUndefined();
         const apps = execFileSync(
           "xcrun",
           ["simctl", "listapps", result?.device.id ?? ""],
@@ -351,6 +357,11 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
         expect(again.result?.metro.port).toBe(left?.port);
         // Nothing native changed and the app is installed (#174).
         expect(again.result?.build).toEqual({ action: "reused" });
+        // #131: the relaunch returns only when AXe can read the screen.
+        expect(again.result?.screen?.error).toBeUndefined();
+        console.log(
+          `relaunch: screen readable after ${again.result?.screen?.waited} s`,
+        );
         expect(() => process.kill(-(left?.pid ?? 0), 0)).toThrow();
         const later = await readLogs(again.jobId, { tag: "smoke" });
         expect(later).toMatchObject({ verdict: "ok", total: 0, lines: [] });

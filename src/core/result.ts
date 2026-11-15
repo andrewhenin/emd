@@ -50,6 +50,12 @@ export const launchResultSchema = z.object({
       reason: z.string().optional(),
     })
     .optional(),
+  // Set when AXe is installed: seconds `launch` waited until AXe could read the
+  // app's screen, and AXe's last error when the time ran out (the verdict stays
+  // launched).
+  screen: z
+    .object({ waited: z.number(), error: z.string().optional() })
+    .optional(),
   // This worktree's own build folder, and what it and its simulator weigh.
   derivedData: z.string().optional(),
   diskMB: z
