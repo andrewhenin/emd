@@ -22,6 +22,10 @@ Closes #
 
 <!-- Removed log tags, loosened assertions, skipped tests or Maestro steps. Write "none" if none. -->
 
+## Needs you
+
+<!-- What a person must do or decide before merge. Write "none" if none. The merge-gate reads this section and "Weakened checks" (decision 0012). -->
+
 ## Notes
 
 - [ ] Finding, decision or rule added per docs/logging.md, or none needed
