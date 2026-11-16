@@ -260,6 +260,14 @@ test("waitForJob returns when the job ends, before the wait runs out", async () 
   await run;
 });
 
+test("waitForJob starts no read after its deadline", async () => {
+  const job = createJob("launch", { dir: "/x" });
+  const started = Date.now();
+  expect((await waitForJob(job.id, 1.2))?.status).toBe("queued");
+  // Reads every 500 ms: the old loop slept past 1.2 s and read at 1.5 s.
+  expect(Date.now() - started).toBeLessThan(1400);
+});
+
 test("waitForJob answers at once with a wait of 0, and when the wait runs out", async () => {
   const job = createJob("launch", { dir: "/x" });
   expect((await waitForJob(job.id, 0))?.status).toBe("queued");
