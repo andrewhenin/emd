@@ -17,12 +17,13 @@ export async function detect(dir = "."): Promise<DetectResult> {
   const { maestroFlows, notes, ...project } = await inspectProject(root);
   const found = await (await loadAdapter(id)).detect(root, project);
   if (!found) return { verdict: "none", root };
+  const { notes: appNotes = [], ...rest } = found;
   return {
     verdict: "detected",
     root,
-    ...found,
+    ...rest,
     packageManager: project.packageManager,
     maestroFlows,
-    notes,
+    notes: [...appNotes, ...notes],
   };
 }

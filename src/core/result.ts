@@ -14,6 +14,10 @@ export const detectResultSchema = z.object({
   stack: z.enum(stackIds).optional(),
   platforms: z.array(z.enum(platforms)).optional(),
   appIds: perPlatform.optional(),
+  // Why `launch` cannot go on: the app config could not be read (for example,
+  // dependencies are not installed), or an ios/ folder exists with no iOS app ID
+  // in the config.
+  problem: z.string().optional(),
   commands: z.object({ run: perPlatform, server: z.string() }).optional(),
   packageManager: z.enum(packageManagers).optional(),
   maestroFlows: z.array(z.string()).optional(),
@@ -35,6 +39,9 @@ export const launchResultSchema = z.object({
   device: z.object({ id: z.string(), name: z.string() }).optional(),
   appId: z.string().optional(),
   appPid: z.number().optional(),
+  // The iOS app ID that Expo's build wrote to the app config (ios.bundleIdentifier)
+  // because the app had none. Absent when the app already had one.
+  appIdSet: z.string().optional(),
   // The Metro port reserved for this worktree; set on a failure after it was.
   port: z.number().optional(),
   // The dev server left running for the app; the next launch in this worktree

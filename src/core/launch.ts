@@ -202,12 +202,10 @@ export async function launch(
   if (!detected.platforms?.includes("ios")) {
     return unsupported("The project does not target iOS.");
   }
-  const appId = detected.appIds?.ios;
-  if (!appId) {
-    return unsupported(
-      "No iOS app ID found; install the app's dependencies and set ios.bundleIdentifier in the app config.",
-    );
-  }
+  // Without an ID, Expo's own build sets one (ios.bundleIdentifier) and the
+  // ID is read again after it. EMD writes nothing to the app config.
+  if (detected.problem) return unsupported(detected.problem);
+  let appId = detected.appIds?.ios;
   if (process.platform !== "darwin") {
     return unsupported("iOS simulators need macOS.");
   }
@@ -364,7 +362,7 @@ export async function launch(
     why = whyBuild(
       readBuildRecord(derivedData),
       { fingerprint, port },
-      await appInstalled(device, appId),
+      appId !== undefined && (await appInstalled(device, appId)),
     );
   }
   const reused = why === undefined;
@@ -382,6 +380,28 @@ export async function launch(
         writeBuildRecord(derivedData, { fingerprint, port });
       } catch {}
     }
+  }
+
+  let appIdSet: string | undefined;
+  if (appId === undefined) {
+    appId = (await detect(root)).appIds?.ios;
+    if (appId === undefined) {
+      metro.kill();
+      return stuck(
+        "The build finished, but the app config still has no iOS app ID. Expo may have built from an existing ios/ project.",
+        { errors: await logTail(buildLog) },
+      );
+    }
+    appIdSet = appId;
+    // The config changed, so the fingerprint did too. A failure here only costs
+    // one rebuild on the next launch.
+    try {
+      fingerprint = await (await loadAdapter(detected.stack)).fingerprint(
+        root,
+        "ios",
+      );
+      writeBuildRecord(derivedData, { fingerprint, port });
+    } catch {}
   }
 
   report("launching the app");
@@ -440,6 +460,7 @@ export async function launch(
     root,
     ...where,
     appId,
+    ...(appIdSet && { appIdSet }),
     ...(screen && { screen }),
     appPid,
     build: reused ? { action: "reused" } : { action: "built", reason: why },

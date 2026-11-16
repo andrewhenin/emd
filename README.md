@@ -14,7 +14,7 @@ Status: early. Expo apps on the iOS simulator only.
 
 - A Mac with Xcode 26 or 27 and at least one iPhone simulator.
 - Node 22 or newer.
-- An Expo app with its dependencies installed and an iOS app ID. [Check your app](#check-your-app) shows how to check both.
+- An Expo app with its dependencies installed. [Check your app](#check-your-app) shows how to check it.
 
 Tested: Expo SDK 58 on Xcode 26 and 27. On Xcode 27, apps below Expo SDK 56 can't build (Expo's bug). Use Xcode 26, or upgrade the app to SDK 56 or newer.
 
@@ -41,10 +41,7 @@ Run this yourself before you ask your agent:
 npx -y emd-agents@latest detect /path/to/my-app
 ```
 
-It must print `"verdict":"detected"` and an iOS app ID, for example `"appIds":{"ios":"com.example.myapp"}`. Without the ID, `launch` stops. If the ID is missing:
-
-- Add one. New Expo apps (from `create-expo-app`) have none. In `app.json`, under `expo.ios`, add `"bundleIdentifier": "com.example.myapp"`.
-- If the app config already has one, install the app's dependencies. EMD reads the config with the app's own Expo CLI.
+It must print `"verdict":"detected"` and no `problem`. For example, `"appIds":{"ios":"com.example.myapp"}`. If the app has no iOS app ID, `detect` says so in `notes`: new Expo apps (from `create-expo-app`) have none, and `launch` lets Expo's build set one in the app config (`ios.bundleIdentifier`). EMD writes nothing to the config. Expo's first `run:ios` also creates the `ios/` folder and points the `ios` and `android` scripts in package.json at `expo run:ios` and `expo run:android`. If `problem` appears, install the app's dependencies: EMD reads the config with the app's own Expo CLI.
 
 ## First run
 
@@ -157,7 +154,7 @@ Run them as `npx -y emd-agents@latest <command>`, or `node dist/bin.js <command>
 
 ### Requirements in detail
 
-- An Expo app with `expo` in package.json and `ios.bundleIdentifier` in its app config (app.json, app.config.js or app.config.ts). EMD reads it with the app's own `expo config`. Without the ID, `launch` stops: "No iOS app ID found".
+- An Expo app with `expo` in package.json. EMD reads its app config (app.json, app.config.js or app.config.ts) with the app's own `expo config`. Without `ios.bundleIdentifier`, Expo's build sets one and `launch` reports it (`appIdSet`).
 - The app's dependencies, installed. EMD does not install them.
 - macOS. On other systems `detect` works, and `launch` returns "iOS simulators need macOS."
 - Xcode, tested with Xcode 26 and 27. Expo SDK 58 apps need Xcode 26 or newer. Without Xcode, `launch` fails: "Could not set up this worktree's simulator and build folders."

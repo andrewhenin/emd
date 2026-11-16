@@ -17,6 +17,10 @@ export type StackDetection = {
   stack: StackId;
   platforms: Platform[];
   appIds: Partial<Record<Platform, string>>;
+  // Why `launch` cannot go on; it stops on it before building.
+  problem?: string;
+  // What an agent should know about this app, in one line each.
+  notes?: string[];
   commands: {
     // Build, install and launch on a simulator or emulator.
     run: Partial<Record<Platform, string>>;

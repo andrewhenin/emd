@@ -156,3 +156,46 @@ test("loads no adapter until a stack is detected", async () => {
   await detect(expoProject());
   expect(loadedAdapters()).toEqual(["expo"]);
 });
+
+test("an app without an iOS app ID says what launch does about it", async () => {
+  const { detect } = await loadCore();
+  const result = await detect(expoProject(expoConfig({ name: "x" })));
+  expect(result.appIds).toEqual({});
+  expect(result.problem).toBeUndefined();
+  expect(result.notes?.[0]).toContain("Expo's build sets ios.bundleIdentifier");
+});
+
+test("an ID set directly under expo is named as the reason", async () => {
+  const { detect } = await loadCore();
+  const result = await detect(
+    expoProject(expoConfig({ bundleIdentifier: "com.emd.misplaced" })),
+  );
+  expect(result.appIds).toEqual({});
+  expect(result.notes?.[0]).toContain("directly under expo");
+});
+
+test.each([
+  ["no Expo CLI installed", {}],
+  [
+    "an Expo CLI that fails",
+    { "node_modules/expo/bin/cli": 'console.error("boom");process.exit(1);' },
+  ],
+])(
+  "a config that cannot be read is a problem, with %s",
+  async (_name, files) => {
+    const { detect } = await loadCore();
+    const result = await detect(expoProject(files));
+    expect(result.problem).toContain("The app config could not be read");
+    expect(result.notes?.join(" ")).not.toContain("sets ios.bundleIdentifier");
+  },
+);
+
+test("an ios/ folder and no iOS app ID in the config is a problem before the build", async () => {
+  const { detect } = await loadCore();
+  const result = await detect(
+    expoProject({ ...expoConfig({ name: "x" }), "ios/Podfile": "" }),
+  );
+  expect(result.appIds).toEqual({});
+  expect(result.problem).toContain("Set ios.bundleIdentifier");
+  expect(result.notes?.join(" ")).not.toContain("At launch, Expo's build sets");
+});
