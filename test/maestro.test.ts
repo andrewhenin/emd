@@ -100,3 +100,18 @@ test("does not find what is not there", () => {
   expect(hasElement(nodes, { text: "Tap" })).toBe(false);
   expect(hasElement([], { id: "smoke-button" })).toBe(false);
 });
+
+test("text matches whole and ignores case; ids stay exact (#194)", () => {
+  const nodes = [
+    { id: "", texts: ["GET STARTED"] },
+    { id: "", texts: ["Saved"] },
+  ];
+  expect(hasElement(nodes, { text: "get started" })).toBe(true);
+  expect(hasElement(nodes, { text: "Save" })).toBe(false);
+  expect(hasElement([{ id: "", texts: ["STRASSE"] }], { text: "Straße" })).toBe(
+    true,
+  );
+  expect(
+    hasElement([{ id: "Save-Button", texts: [] }], { id: "save-button" }),
+  ).toBe(false);
+});

@@ -170,7 +170,9 @@ function buildServer(): McpServer {
               text: z
                 .string()
                 .optional()
-                .describe("Its visible text or accessibility label, exactly."),
+                .describe(
+                  "Its whole visible text or accessibility label. Case is ignored.",
+                ),
             }),
           )
           .max(20)
