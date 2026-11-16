@@ -393,7 +393,8 @@ export async function launch(
       );
     }
     appIdSet = appId;
-    // The config changed, so the fingerprint did too.
+    // The config changed, so the fingerprint did too. A failure here only costs
+    // one rebuild on the next launch.
     try {
       fingerprint = await (await loadAdapter(detected.stack)).fingerprint(
         root,

@@ -41,6 +41,11 @@ test.each([
     () => expoProject(),
     /could not be read/,
   ],
+  [
+    "an ios/ folder and no iOS app ID in the config",
+    () => expoProject({ ...expoConfig({ name: "x" }), "ios/Podfile": "" }),
+    /ios\/ folder and no ios\.bundleIdentifier/,
+  ],
   ["a project that does not target iOS", androidOnly, /does not target iOS/],
 ])(
   "%s is unsupported: the CLI blocks, MCP starts a job that ends the same",

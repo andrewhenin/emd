@@ -14,8 +14,9 @@ export const detectResultSchema = z.object({
   stack: z.enum(stackIds).optional(),
   platforms: z.array(z.enum(platforms)).optional(),
   appIds: perPlatform.optional(),
-  // Why the app config could not be read (for example, dependencies are not
-  // installed). `launch` stops on it.
+  // Why `launch` cannot go on: the app config could not be read (for example,
+  // dependencies are not installed), or an ios/ folder exists with no iOS app ID
+  // in the config.
   problem: z.string().optional(),
   commands: z.object({ run: perPlatform, server: z.string() }).optional(),
   packageManager: z.enum(packageManagers).optional(),

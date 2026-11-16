@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { type Platform, runTool, type StackAdapter } from "../../core/index.js";
@@ -72,12 +73,18 @@ const adapter: StackAdapter = {
     if (ios && platforms.includes("ios")) appIds.ios = ios;
     if (android && platforms.includes("android")) appIds.android = android;
 
+    // Expo sets the ID only when it generates ios/, so with ios/ and no ID
+    // the build would run for minutes and still find none.
+    const noId = platforms.includes("ios") && !appIds.ios && !error;
+    const hasIos = existsSync(join(dir, "ios"));
+    const atLaunch =
+      "At launch, Expo's build sets ios.bundleIdentifier in the app config.";
     const notes: string[] = [];
-    if (platforms.includes("ios") && !appIds.ios && !error) {
+    if (noId && !hasIos) {
       notes.push(
         typeof config.bundleIdentifier === "string"
-          ? "bundleIdentifier is set directly under expo; Expo reads ios.bundleIdentifier, so the app has no iOS app ID. At launch, Expo's build sets ios.bundleIdentifier in the app config."
-          : "The app has no iOS app ID. At launch, Expo's build sets ios.bundleIdentifier in the app config.",
+          ? `bundleIdentifier is set directly under expo; Expo reads ios.bundleIdentifier, so the app has no iOS app ID. ${atLaunch}`
+          : `The app has no iOS app ID. ${atLaunch}`,
       );
     }
 
@@ -92,6 +99,11 @@ const adapter: StackAdapter = {
       ...(error && {
         problem: `The app config could not be read: ${error}. Install the app's dependencies.`,
       }),
+      ...(noId &&
+        hasIos && {
+          problem:
+            "The app has an ios/ folder and no ios.bundleIdentifier in the app config. Expo sets the ID only when it creates ios/. Set ios.bundleIdentifier in the app config.",
+        }),
       ...(notes.length > 0 && { notes }),
       commands: { run, server: `${expo} start` },
     };

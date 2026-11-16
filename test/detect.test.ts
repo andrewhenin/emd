@@ -189,3 +189,13 @@ test.each([
     expect(result.notes?.join(" ")).not.toContain("sets ios.bundleIdentifier");
   },
 );
+
+test("an ios/ folder and no iOS app ID in the config is a problem before the build", async () => {
+  const { detect } = await loadCore();
+  const result = await detect(
+    expoProject({ ...expoConfig({ name: "x" }), "ios/Podfile": "" }),
+  );
+  expect(result.appIds).toEqual({});
+  expect(result.problem).toContain("Set ios.bundleIdentifier");
+  expect(result.notes?.join(" ")).not.toContain("At launch, Expo's build sets");
+});
