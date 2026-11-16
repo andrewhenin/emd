@@ -6,12 +6,20 @@ export type Device = {
   state: string;
   // iOS version from the runtime id, e.g. [26, 5].
   version: number[];
+  // simctl's device type, e.g. com.apple.CoreSimulator.SimDeviceType.iPhone-17.
+  type?: string;
 };
 
 type SimctlList = {
   devices: Record<
     string,
-    { udid: string; name: string; state: string; isAvailable?: boolean }[]
+    {
+      udid: string;
+      name: string;
+      state: string;
+      isAvailable?: boolean;
+      deviceTypeIdentifier?: string;
+    }[]
   >;
 };
 
@@ -29,7 +37,13 @@ export async function listDevices(): Promise<Device[]> {
     const version = match[1].split("-").map(Number);
     return list
       .filter((d) => d.isAvailable !== false)
-      .map((d) => ({ id: d.udid, name: d.name, state: d.state, version }));
+      .map((d) => ({
+        id: d.udid,
+        name: d.name,
+        state: d.state,
+        version,
+        type: d.deviceTypeIdentifier,
+      }));
   });
 }
 
@@ -43,7 +57,8 @@ const newest = (a: Device, b: Device): number => {
 
 // A named device wins; otherwise a booted iPhone; otherwise the newest iPhone.
 // With no device named, only runtimes that `sdk` (the selected Xcode's iOS
-// simulator SDK) can build for.
+// simulator SDK) can build for, and a foldable only when no other iPhone is
+// left (#179: EMD's taps and screen reads are untested on two displays).
 export function pickDevice(
   devices: Device[],
   wanted?: string,
@@ -59,8 +74,13 @@ export function pickDevice(
   const iphones = sorted.filter(
     (d) => d.name.startsWith("iPhone") && !(sdk && newerThan(d, sdk)),
   );
-  return iphones.find((d) => d.state === "Booted") ?? iphones[0];
+  const single = iphones.filter((d) => !foldable(d));
+  const pool = single.length > 0 ? single : iphones;
+  return pool.find((d) => d.state === "Booted") ?? pool[0];
 }
+
+// By simctl's device type, not the display name, which a user can change.
+const foldable = (d: Device) => /\.iPhone-Duo(-|$)/.test(d.type ?? "");
 
 // True when the device's iOS major.minor is newer than `sdk`'s. A patch
 // runtime (26.6.1) builds with its SDK (26.6).

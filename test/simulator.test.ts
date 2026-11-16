@@ -36,6 +36,25 @@ test("a named device wins by name or UDID, case-insensitively", () => {
   expect(pickDevice(devices, "iPad Pro 13-inch")?.id).toBe("c");
 });
 
+test("skips a foldable unless it is named or the only iPhone (#179)", () => {
+  // The case from #179: the only device on the newest runtime is the Duo.
+  const duo = {
+    ...device("f", "iPhone Duo", [27, 1]),
+    type: "com.apple.CoreSimulator.SimDeviceType.iPhone-Duo",
+  };
+  const plain = {
+    ...device("g", "iPhone Duo", [26, 5]),
+    type: "com.apple.CoreSimulator.SimDeviceType.iPhone-17",
+  };
+  const shutdown = devices.filter((d) => d.state !== "Booted");
+  expect(pickDevice([...shutdown, duo])?.name).toBe("iPhone 17");
+  expect(pickDevice([...shutdown, duo], "iPhone Duo")?.id).toBe("f");
+  expect(pickDevice([...shutdown, { ...duo, state: "Booted" }])?.id).toBe("b");
+  expect(pickDevice([duo])?.id).toBe("f");
+  // The type decides, not the name: a renamed iPhone 17 is not skipped.
+  expect(pickDevice([plain])?.id).toBe("g");
+});
+
 test("returns nothing when no device matches", () => {
   expect(pickDevice(devices, "iPhone 99")).toBeUndefined();
   expect(pickDevice([device("c", "iPad", [26, 5])])).toBeUndefined();
