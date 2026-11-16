@@ -43,11 +43,3 @@ Per trial (`experiments/agent-baseline/`):
 The five groups are #14's. Their model and arm, and the pinned versions, are
 set only in `.github/workflows/agent-baseline.yml`. The primed group's app gets
 `agent-baseline/primed-AGENTS.md` and AXe on PATH.
-
-## Results
-
-None yet.
-
-## Invalid and negative results
-
-None yet.
