@@ -69,12 +69,14 @@ primed)
 esac
 
 # Warm build: each arm builds the way its agent will, so the trial's first
-# build reuses the cache. A failed warm-up is recorded, not fatal: the trial
-# then starts cold.
+# build reuses the cache. A failed warm-up stops the job before the trial (see
+# the end), because a cold trial is not the planned condition.
 start=$(date +%s)
 warmup=0
 if [ "$ARM" = emd ]; then
-  npx -y "emd-agents@$EMD_VERSION" launch "$APP_DIR" >"$OUT_DIR/warmup.json" 2>"$OUT_DIR/warmup.log" || warmup=$?
+  # From the app folder: in this repo, npx resolves emd-agents to the repo's
+  # own package, which has no linked bin (exit 127).
+  (cd "$APP_DIR" && npx -y "emd-agents@$EMD_VERSION" launch .) >"$OUT_DIR/warmup.json" 2>"$OUT_DIR/warmup.log" || warmup=$?
 else
   (cd "$APP_DIR" && npx expo run:ios --device "$udid" --no-bundler) >"$OUT_DIR/warmup.log" 2>&1 || warmup=$?
 fi
@@ -92,3 +94,7 @@ jq -n \
     macos: $macos, node: $node, claudeCode: $claude,
     warmup: {exit: $warmupExit, seconds: $warmupSeconds}}' >"$OUT_DIR/prepare.json"
 cat "$OUT_DIR/prepare.json"
+if [ "$warmup" -ne 0 ]; then
+  echo "The warm-up failed (exit $warmup), so the trial would start cold. Its output is in the records."
+  exit 1
+fi
