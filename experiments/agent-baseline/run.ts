@@ -32,10 +32,37 @@ const args = [
   "--dangerously-skip-permissions",
 ];
 
+// The agent's environment: the runner's, minus what a developer's terminal
+// lacks. GitHub sets CI=true in every step, which turns off Metro's file
+// watching; in the pilot, both agents without EMD lost turns to it. The
+// GITHUB_, RUNNER_ and ACTIONS_ variables and the harness's own (ARM=raw,
+// LABEL=pilot) tell the agent it is being evaluated.
+const harnessVars = new Set([
+  "CI",
+  "APP_DIR",
+  "OUT_DIR",
+  "HARNESS",
+  "MODEL",
+  "ARM",
+  "GROUP",
+  "LABEL",
+  "TRIAL_MINUTES",
+  "EMD_VERSION",
+  "CLAUDE_CODE_VERSION",
+  "DEVICE_NAME",
+]);
+const env = Object.fromEntries(
+  Object.entries(process.env).filter(
+    ([name]) =>
+      !harnessVars.has(name) && !/^(GITHUB|RUNNER|ACTIONS)_/.test(name),
+  ),
+);
+
 const started = new Date();
 // Its own process group, so the time limit stops the servers it started too.
 const child = spawn("claude", args, {
   cwd: need("APP_DIR"),
+  env,
   stdio: ["ignore", "pipe", "pipe"],
   detached: true,
 });
