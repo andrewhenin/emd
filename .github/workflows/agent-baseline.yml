@@ -1,0 +1,134 @@
+name: agent-baseline
+
+# The raw-agent baseline (#14): one trial per job, each on a fresh macOS VM, so
+# no trial inherits another's state. Started by hand only. How to run it, and
+# the results: experiments/agent-baseline.md
+on:
+  workflow_dispatch:
+    inputs:
+      label:
+        description: "pilot, round-1, round-2 or round-3"
+        required: true
+      groups:
+        description: "Groups to run, as a JSON array"
+        default: "[1,2,3,4,5]"
+      trial_minutes:
+        description: "Time limit per trial, in minutes"
+        default: "60"
+
+permissions:
+  contents: read
+
+# Rounds run one after another: a second start waits for the first.
+concurrency:
+  group: agent-baseline
+  cancel-in-progress: false
+
+jobs:
+  trial:
+    strategy:
+      fail-fast: false
+      matrix:
+        group: ${{ fromJSON(inputs.groups) }}
+    runs-on: macos-26
+    timeout-minutes: 300
+    env:
+      GROUP: ${{ matrix.group }}
+      LABEL: ${{ inputs.label }}
+      TRIAL_MINUTES: ${{ inputs.trial_minutes }}
+      CLAUDE_CODE_VERSION: 2.1.325
+      EMD_VERSION: 0.15.0
+      DEVICE_NAME: iPhone 17
+      DISABLE_AUTOUPDATER: "1"
+    steps:
+      - uses: actions/checkout@v7
+
+      # No npm cache: a saved ~/.npm could carry an EMD group's npx copy of
+      # emd-agents into a raw group's job.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      # The five groups of #14. Their model and arm are set only here.
+      - name: Pick the group
+        shell: bash
+        run: |
+          case "$GROUP" in
+            1) model=claude-sonnet-5-5 arm=raw ;;
+            2) model=claude-sonnet-5-5 arm=primed ;;
+            3) model=claude-sonnet-5-5 arm=emd ;;
+            4) model=claude-haiku-5-5 arm=raw ;;
+            5) model=claude-haiku-5-5 arm=emd ;;
+            *) echo "Unknown group $GROUP"; exit 1 ;;
+          esac
+          {
+            echo "MODEL=$model"
+            echo "ARM=$arm"
+            echo "HARNESS=$RUNNER_TEMP/harness"
+            echo "APP_DIR=$HOME/app"
+            echo "OUT_DIR=$RUNNER_TEMP/trial"
+          } >> "$GITHUB_ENV"
+
+      - name: Prepare the trial
+        id: prepare
+        shell: bash
+        run: |
+          npm ci
+          npm run build
+          bash experiments/agent-baseline/prepare.sh
+
+      # So a raw agent can't find EMD on disk. prepare.sh copied what the
+      # later steps need to $HARNESS.
+      - name: Remove the repo checkout
+        shell: bash
+        run: find "$GITHUB_WORKSPACE" -mindepth 1 -delete
+
+      - name: Run the trial
+        shell: bash
+        working-directory: ${{ runner.temp }}
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.EVAL_ANTHROPIC_API_KEY }}
+        run: node --experimental-strip-types "$HARNESS/run.ts"
+
+      - name: Grade the outcome
+        if: always() && steps.prepare.outcome == 'success'
+        shell: bash
+        working-directory: ${{ runner.temp }}
+        run: |
+          bash "$HARNESS/stop.sh"
+          bash "$HARNESS/install-axe.sh" "$RUNNER_TEMP/grader-axe"
+          AXE="$RUNNER_TEMP/grader-axe/axe" node --experimental-strip-types "$HARNESS/grade.ts"
+
+      - name: Score the transcript
+        if: always() && steps.prepare.outcome == 'success'
+        shell: bash
+        working-directory: ${{ runner.temp }}
+        run: node --experimental-strip-types "$HARNESS/score.ts"
+
+      # GitHub hides the key in logs, not in uploaded files. Nothing is
+      # uploaded unless this step succeeds.
+      - name: Remove the API key from the records
+        id: redact
+        if: always()
+        shell: bash
+        env:
+          KEY: ${{ secrets.EVAL_ANTHROPIC_API_KEY }}
+        run: |
+          test -n "$KEY"
+          mkdir -p "$OUT_DIR"
+          { grep -rlF -- "$KEY" "$OUT_DIR" || true; } | while IFS= read -r file; do
+            perl -pi -e 's/\Q$ENV{KEY}\E/[REDACTED]/g' "$file"
+          done
+          if grep -rqF -- "$KEY" "$OUT_DIR"; then
+            echo "The key is still in the records."
+            exit 1
+          fi
+
+      - name: Upload the records
+        if: always() && steps.redact.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          name: baseline-${{ inputs.label }}-group-${{ matrix.group }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/trial
+          retention-days: 90
+          if-no-files-found: warn
