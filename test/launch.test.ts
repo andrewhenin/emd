@@ -19,7 +19,6 @@ const state = makeDir();
 process.env.EMD_STATE_DIR = state;
 const { client, call, finished } = mcpSession(state);
 
-const noAppId = () => expoProject(expoConfig({ name: "x" }));
 const androidOnly = () =>
   expoProject(
     expoConfig({
@@ -37,7 +36,11 @@ test("MCP server exposes launch and job_status", async () => {
 
 test.each([
   ["a directory that is not a mobile project", () => makeDir(), /No supported/],
-  ["a project without an iOS app ID", noAppId, /No iOS app ID/],
+  [
+    "a project whose app config cannot be read",
+    () => expoProject(),
+    /could not be read/,
+  ],
   ["a project that does not target iOS", androidOnly, /does not target iOS/],
 ])(
   "%s is unsupported: the CLI blocks, MCP starts a job that ends the same",

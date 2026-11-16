@@ -4,6 +4,7 @@ import { type Platform, runTool, type StackAdapter } from "../../core/index.js";
 
 type ExpoConfig = {
   platforms?: unknown;
+  bundleIdentifier?: unknown;
   ios?: { bundleIdentifier?: unknown };
   android?: { package?: unknown };
 };
@@ -11,7 +12,9 @@ type ExpoConfig = {
 // The config as Expo resolves it (app.json, app.config.js or app.config.ts),
 // from the project's installed Expo CLI. Node's resolution finds a hoisted
 // install and never downloads one, as `npx expo` would.
-async function readExpoConfig(dir: string): Promise<ExpoConfig> {
+async function readExpoConfig(
+  dir: string,
+): Promise<{ config: ExpoConfig; error?: string }> {
   try {
     const cli = createRequire(join(dir, "package.json")).resolve(
       "expo/bin/cli",
@@ -22,9 +25,13 @@ async function readExpoConfig(dir: string): Promise<ExpoConfig> {
       [cli, "config", dir, "--json"],
       60,
     );
-    return JSON.parse(stdout) ?? {};
-  } catch {
-    return {};
+    return { config: JSON.parse(stdout) ?? {} };
+  } catch (error) {
+    const line =
+      String(error)
+        .split("\n")[0]
+        ?.replace(/^Error: /, "") ?? "";
+    return { config: {}, error: line.slice(0, 200) };
   }
 }
 
@@ -52,7 +59,7 @@ const nonEmpty = (value: unknown): string | undefined =>
 const adapter: StackAdapter = {
   id: "expo",
   async detect(dir, project) {
-    const config = await readExpoConfig(dir);
+    const { config, error } = await readExpoConfig(dir);
     const declared = Array.isArray(config.platforms)
       ? [...new Set(config.platforms.filter(isPlatform))]
       : [];
@@ -65,6 +72,15 @@ const adapter: StackAdapter = {
     if (ios && platforms.includes("ios")) appIds.ios = ios;
     if (android && platforms.includes("android")) appIds.android = android;
 
+    const notes: string[] = [];
+    if (platforms.includes("ios") && !appIds.ios && !error) {
+      notes.push(
+        typeof config.bundleIdentifier === "string"
+          ? "bundleIdentifier is set directly under expo; Expo reads ios.bundleIdentifier, so the app has no iOS app ID. At launch, Expo's build sets ios.bundleIdentifier in the app config."
+          : "The app has no iOS app ID. At launch, Expo's build sets ios.bundleIdentifier in the app config.",
+      );
+    }
+
     const expo = `${project.exec} expo`;
     const run: Partial<Record<Platform, string>> = {};
     for (const platform of platforms) run[platform] = `${expo} run:${platform}`;
@@ -73,6 +89,10 @@ const adapter: StackAdapter = {
       stack: "expo",
       platforms,
       appIds,
+      ...(error && {
+        problem: `The app config could not be read: ${error}. Install the app's dependencies.`,
+      }),
+      ...(notes.length > 0 && { notes }),
       commands: { run, server: `${expo} start` },
     };
   },

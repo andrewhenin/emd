@@ -17,6 +17,10 @@ export type StackDetection = {
   stack: StackId;
   platforms: Platform[];
   appIds: Partial<Record<Platform, string>>;
+  // Why the app config could not be read; `launch` stops on it.
+  problem?: string;
+  // What an agent should know about this app, in one line each.
+  notes?: string[];
   commands: {
     // Build, install and launch on a simulator or emulator.
     run: Partial<Record<Platform, string>>;
