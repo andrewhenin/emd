@@ -16,6 +16,7 @@ function rig() {
   const calls = join(bin, "calls.log");
   const container = join(bin, "container");
   const writePlist = join(bin, "write-plist");
+  const failInstall = join(bin, "fail-install");
   const script = (name: string, body: string) => {
     writeFileSync(join(bin, name), `#!/bin/sh\n${body}\n`);
     chmodSync(join(bin, name), 0o755);
@@ -26,6 +27,9 @@ function rig() {
   "simctl list devices available --json") echo '{"devices":{"com.apple.CoreSimulator.SimRuntime.iOS-26-5":[{"udid":"BASE","name":"iPhone 17","state":"Shutdown"},{"udid":"CLONE","name":"clone","state":"Shutdown"}]}}' ;;
   "simctl clone"*) echo CLONE ;;
   "simctl get_app_container"*) [ -d "${container}" ] && echo "${container}" || exit 1 ;;
+  "simctl install"*) echo "$*" >> "${calls}"
+    [ -f "${failInstall}" ] && exit 1
+    mkdir -p "${container}" && echo '${plist}' > "${container}/Info.plist" ;;
   "simctl launch"*) echo "com.emd.sandbox: 4242" ;;
   "--sdk"*) exit 1 ;;
 esac
@@ -74,6 +78,19 @@ else if (command === "run:ios" && fs.existsSync(${JSON.stringify(writePlist)})) 
         writeFileSync(join(container, "Info.plist"), plistText);
       }
     },
+    installs: () =>
+      readFileSync(calls, "utf8")
+        .split("\n")
+        .filter((line) => line.startsWith("simctl install")).length,
+    failInstalls: () => writeFileSync(failInstall, ""),
+    // Leaves a built app in the worktree's DerivedData.
+    leaveBuiltApp: (derivedData: string) =>
+      mkdirSync(
+        join(derivedData, "Build/Products/Debug-iphonesimulator/emd.app"),
+        {
+          recursive: true,
+        },
+      ),
     // Whether the build writes a valid Info.plist into the container.
     buildWritesPlist: (on: boolean) => {
       if (on) writeFileSync(writePlist, "");
@@ -126,6 +143,45 @@ onMac(
     expect(second).toMatchObject({
       verdict: "failed",
       reason: "Built, but could not capture the app's log.",
+    });
+    expect(builds()).toBe(2);
+  },
+  120_000,
+);
+
+onMac(
+  "the app is gone but the build is in DerivedData: it installs, no build runs",
+  () => {
+    const { launch, builds, installs, leaveBuiltApp } = rig();
+    const first = launch();
+    leaveBuiltApp(first.derivedData);
+    const second = launch();
+    expect(second.verdict).toBe("launched");
+    expect(second.build).toEqual({
+      action: "installed",
+      reason: "app not installed",
+    });
+    expect(second.phases).toHaveProperty("install");
+    expect(second.phases).not.toHaveProperty("build");
+    expect(installs()).toBe(1);
+    expect(builds()).toBe(1);
+  },
+  120_000,
+);
+
+onMac(
+  "the install fails: it builds as before",
+  () => {
+    const { launch, builds, leaveBuiltApp, failInstalls, buildWritesPlist } =
+      rig();
+    const first = launch();
+    leaveBuiltApp(first.derivedData);
+    failInstalls();
+    buildWritesPlist(true);
+    const second = launch();
+    expect(second.build).toEqual({
+      action: "built",
+      reason: "app not installed",
     });
     expect(builds()).toBe(2);
   },

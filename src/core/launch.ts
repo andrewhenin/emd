@@ -1,7 +1,12 @@
 import { mkdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
-import { readBuildRecord, whyBuild, writeBuildRecord } from "./buildrecord.js";
+import {
+  builtApp,
+  readBuildRecord,
+  whyBuild,
+  writeBuildRecord,
+} from "./buildrecord.js";
 import { detect } from "./detect.js";
 import { axeBackend } from "./device/axe.js";
 import { detectEnvironment, untilReadable } from "./device/backend.js";
@@ -26,6 +31,7 @@ import {
   cloneDevice,
   type Device,
   enableAppAccessibility,
+  installApp,
   launchApp,
   listDevices,
   newerThan,
@@ -192,8 +198,9 @@ export async function launch(
   let current: { name: string; at: number } | undefined;
   const endPhase = () => {
     if (current) {
-      phases[current.name] =
-        (phases[current.name] ?? 0) + tenths(Date.now() - current.at);
+      phases[current.name] = tenths(
+        (phases[current.name] ?? 0) * 1000 + Date.now() - current.at,
+      );
     }
     current = undefined;
     return phases;
@@ -406,9 +413,23 @@ export async function launch(
       } catch {}
     }
   };
+  // The fingerprint and port match but the app is gone from the simulator: the
+  // build in DerivedData installs in seconds. A missing or failing install builds.
+  let installedAgain = false;
+  const earlierApp =
+    why === "app not installed" && appId !== undefined
+      ? builtApp(derivedData)
+      : undefined;
+  if (earlierApp) {
+    phase("install", "installing the earlier build");
+    try {
+      await installApp(device, earlierApp);
+      installedAgain = true;
+    } catch {}
+  }
   if (reused) {
     phase("reuse", "reusing the installed build");
-  } else {
+  } else if (!installedAgain) {
     const failure = await buildApp();
     if (failure) return failure;
   }
@@ -507,7 +528,7 @@ export async function launch(
     build:
       why === undefined
         ? { action: "reused" }
-        : { action: "built", reason: why },
+        : { action: installedAgain ? "installed" : "built", reason: why },
     metro: { pid: metro.pid, port },
     logStream: { pid: capture.pid },
     derivedData,

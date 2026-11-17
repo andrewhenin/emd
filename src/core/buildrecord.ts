@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 // What the last successful build of a worktree was made from. It sits in the
@@ -39,4 +39,22 @@ export function whyBuild(
   if (record.port !== now.port) return "port changed";
   if (!installed) return "app not installed";
   return undefined;
+}
+
+// The newest simulator `.app` an earlier build left in DerivedData, or
+// undefined when there is none.
+export function builtApp(derivedData: string): string | undefined {
+  const products = join(derivedData, "Build/Products");
+  const apps: { path: string; time: number }[] = [];
+  try {
+    for (const dir of readdirSync(products)) {
+      if (!dir.endsWith("-iphonesimulator")) continue;
+      for (const name of readdirSync(join(products, dir))) {
+        if (!name.endsWith(".app")) continue;
+        const path = join(products, dir, name);
+        apps.push({ path, time: statSync(path).mtimeMs });
+      }
+    }
+  } catch {}
+  return apps.sort((a, b) => b.time - a.time)[0]?.path;
 }

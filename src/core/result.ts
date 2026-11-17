@@ -50,10 +50,11 @@ export const launchResultSchema = z.object({
   // The log stream that captures the app's tagged lines; the next launch in
   // this worktree stops it.
   logStream: z.object({ pid: z.number() }).optional(),
-  // Whether the Xcode build ran or an installed build was reused; why it ran.
+  // Whether the Xcode build ran, an installed build was reused, or an earlier
+  // build was installed again; why it was not reused.
   build: z
     .object({
-      action: z.enum(["built", "reused"]),
+      action: z.enum(["built", "reused", "installed"]),
       reason: z.string().optional(),
     })
     .optional(),

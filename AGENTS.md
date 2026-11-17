@@ -44,6 +44,7 @@ Notes, findings and decisions: follow [docs/logging.md](docs/logging.md) exactly
 - Fix problems where they originate. Remove replaced code in the same change.
 - Check every issue against docs/vision.md before you file or start it.
 - Prefer tests through the real CLI and MCP tools over mocks.
+- A test that skips off macOS doesn't run in CI. Also test the core check in a test that runs on Linux.
 - Don't run `npm run test:e2e` unless the user asks; the e2e workflow runs it. It is slow and starts real simulators. Write "e2e: left to CI" in the PR.
 - Put behavior in `src/core/`. CLI and MCP import core only through `core/index.ts`, never each other. Adapters never import each other and load only through `core/registry.ts`.
 - `setup` installs only what the detected stack needs. Never install unrelated software.

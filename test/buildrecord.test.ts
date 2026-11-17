@@ -1,5 +1,8 @@
+import { mkdirSync, utimesSync } from "node:fs";
+import { join } from "node:path";
 import { expect, test } from "vitest";
 import {
+  builtApp,
   readBuildRecord,
   whyBuild,
   writeBuildRecord,
@@ -25,4 +28,17 @@ test.each([
   [undefined, now, now, true],
 ])("why build: %s", (reason, record, current, installed) => {
   expect(whyBuild(record, current, installed)).toBe(reason);
+});
+
+test("the built app is the newest simulator .app; none when there is no build", () => {
+  const dir = makeDir();
+  expect(builtApp(dir)).toBeUndefined();
+  const products = join(dir, "Build/Products");
+  const old = join(products, "Debug-iphonesimulator/old.app");
+  const fresh = join(products, "Release-iphonesimulator/new.app");
+  const device = join(products, "Debug-iphoneos/device.app");
+  for (const app of [old, fresh, device]) mkdirSync(app, { recursive: true });
+  utimesSync(old, 1000, 1000);
+  utimesSync(device, 5000, 5000);
+  expect(builtApp(dir)).toBe(fresh);
 });
