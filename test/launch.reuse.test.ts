@@ -64,24 +64,29 @@ const builds = () =>
     .split("\n")
     .filter((line) => line === "expo run:ios").length;
 
-test("launch builds when the installed app has no Info.plist", () => {
-  // First launch: not installed, so it builds and records the build.
-  expect(launch().phases).toHaveProperty("build");
-  expect(builds()).toBe(1);
+// launch refuses to run off macOS, so the Linux CI job skips this test.
+test.skipIf(process.platform !== "darwin")(
+  "launch builds when the installed app has no Info.plist",
+  () => {
+    // First launch: not installed, so it builds and records the build.
+    expect(launch().phases).toHaveProperty("build");
+    expect(builds()).toBe(1);
 
-  // simctl names a container, but the app's files are gone.
-  mkdirSync(container);
-  const second = launch();
-  expect(second.phases).toHaveProperty("build");
-  expect(second.phases).not.toHaveProperty("reuse");
-  expect(builds()).toBe(2);
+    // simctl names a container, but the app's files are gone.
+    mkdirSync(container);
+    const second = launch();
+    expect(second.phases).toHaveProperty("build");
+    expect(second.phases).not.toHaveProperty("reuse");
+    expect(builds()).toBe(2);
 
-  // An Info.plist that cannot be read after a reuse: build once, no failure
-  // for the reuse itself.
-  writeFileSync(join(container, "Info.plist"), "");
-  const third = launch();
-  expect(third.phases).toHaveProperty("reuse");
-  expect(third.phases).toHaveProperty("build");
-  expect(third.reason).toContain("Built, but");
-  expect(builds()).toBe(3);
-}, 120_000);
+    // An Info.plist that cannot be read after a reuse: build once, no failure
+    // for the reuse itself.
+    writeFileSync(join(container, "Info.plist"), "");
+    const third = launch();
+    expect(third.phases).toHaveProperty("reuse");
+    expect(third.phases).toHaveProperty("build");
+    expect(third.reason).toContain("Built, but");
+    expect(builds()).toBe(3);
+  },
+  120_000,
+);
