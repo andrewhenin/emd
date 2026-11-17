@@ -184,8 +184,27 @@ export async function launch(
   report: (step: string) => void = () => {},
 ): Promise<LaunchResult> {
   const started = Date.now();
-  const seconds = () => Math.round((Date.now() - started) / 100) / 10;
-  report("checking the project");
+  const tenths = (ms: number) => Math.round(ms / 100) / 10;
+  const seconds = () => tenths(Date.now() - started);
+  // Seconds each phase took, in order, under a short name (#203). A phase ends
+  // when the next one starts or the launch returns.
+  const phases: Record<string, number> = {};
+  let current: { name: string; at: number } | undefined;
+  const endPhase = () => {
+    if (current) {
+      phases[current.name] = tenths(
+        (phases[current.name] ?? 0) * 1000 + Date.now() - current.at,
+      );
+    }
+    current = undefined;
+    return phases;
+  };
+  const phase = (name: string, step: string) => {
+    endPhase();
+    current = { name, at: Date.now() };
+    report(step);
+  };
+  phase("project", "checking the project");
   const detected = await detect(options.dir);
   const { root } = detected;
   const unsupported = (reason: string): LaunchResult => ({
@@ -194,7 +213,14 @@ export async function launch(
     reason,
   });
   const failed = (reason: string, rest: Partial<LaunchResult> = {}) =>
-    ({ verdict: "failed", root, reason, seconds: seconds(), ...rest }) as const;
+    ({
+      verdict: "failed",
+      root,
+      reason,
+      seconds: seconds(),
+      phases: endPhase(),
+      ...rest,
+    }) as const;
 
   if (detected.verdict !== "detected" || !detected.stack) {
     return unsupported("No supported mobile project found here.");
@@ -228,7 +254,8 @@ export async function launch(
     // A clone on a runtime newer than the selected Xcode's SDK does not build
     // (#122). It is EMD's own, so it is replaced, not reused.
     if (device && sdk && newerThan(device, sdk)) {
-      report(
+      phase(
+        "replace",
         `replacing the simulator: iOS ${device.version.join(".")} is newer than Xcode's iOS ${sdk.join(".")} SDK`,
       );
       await removeSimulator(device);
@@ -249,7 +276,7 @@ export async function launch(
             : "No shut-down iPhone simulator is available to clone.",
         );
       }
-      report("cloning a simulator");
+      phase("clone", "cloning a simulator");
       const id = await cloneDevice(base, name);
       device = {
         id,
@@ -307,7 +334,7 @@ export async function launch(
       ...rest,
     });
 
-  report("booting the simulator");
+  phase("boot", "booting the simulator");
   try {
     await boot(device);
   } catch (error) {
@@ -323,7 +350,7 @@ export async function launch(
     );
   }
   await stopCaptures(root);
-  report("starting the dev server");
+  phase("server", "starting the dev server");
   const env = {
     CI: "1",
     RCT_METRO_PORT: String(port),
@@ -367,9 +394,9 @@ export async function launch(
   }
   const reused = why === undefined;
   if (reused) {
-    report("reusing the installed build");
+    phase("reuse", "reusing the installed build");
   } else {
-    report("building and installing the app");
+    phase("build", "building and installing the app");
     const failure = await runBuild(plan.build, root, buildLog, env, options);
     if (failure) {
       metro.kill();
@@ -404,7 +431,7 @@ export async function launch(
     } catch {}
   }
 
-  report("launching the app");
+  phase("open", "launching the app");
   let capture: LoggedProcess;
   try {
     capture = await startCapture(device.id, appId, logDir);
@@ -435,7 +462,7 @@ export async function launch(
   }
 
   const axe = (await detectEnvironment()).axe;
-  report("waiting for the screen");
+  phase("screen", "waiting for the screen");
   // This device is EMD's own clone. On some iOS versions AXe reads an empty
   // tree until application accessibility is on, and only an app that starts
   // after the write sees it. An AXe error never triggers the write.
@@ -469,5 +496,6 @@ export async function launch(
     derivedData,
     diskMB: await sizes(),
     seconds: seconds(),
+    phases: endPhase(),
   };
 }
