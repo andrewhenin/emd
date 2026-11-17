@@ -191,11 +191,7 @@ export async function launch(
   const phases: Record<string, number> = {};
   let current: { name: string; at: number } | undefined;
   const endPhase = () => {
-    if (current) {
-      phases[current.name] = tenths(
-        (phases[current.name] ?? 0) * 1000 + Date.now() - current.at,
-      );
-    }
+    if (current) phases[current.name] = tenths(Date.now() - current.at);
     current = undefined;
     return phases;
   };
