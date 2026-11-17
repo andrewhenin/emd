@@ -1,10 +1,14 @@
+import { chmodSync, writeFileSync } from "node:fs";
+import { delimiter, join } from "node:path";
 import { expect, test } from "vitest";
 import {
+  appInstalled,
   type Device,
   newerThan,
   parseSdkVersion,
   pickDevice,
 } from "../src/core/simulator.ts";
+import { makeDir } from "./helpers.ts";
 
 const device = (
   id: string,
@@ -65,4 +69,21 @@ test("reads the SDK version that xcrun prints", () => {
   expect(parseSdkVersion("26.6\n")).toEqual([26, 6]);
   expect(parseSdkVersion("27.2.1\n")).toEqual([27, 2]);
   expect(parseSdkVersion("xcrun: error: SDK not found\n")).toBeUndefined();
+});
+
+// `appInstalled` with a stub `xcrun` that names a container folder.
+test("appInstalled needs the container's Info.plist", async () => {
+  const container = makeDir();
+  const bin = makeDir({ xcrun: `#!/bin/sh\necho "${container}"\n` });
+  chmodSync(join(bin, "xcrun"), 0o755);
+  const path = process.env.PATH;
+  process.env.PATH = `${bin}${delimiter}${path}`;
+  try {
+    const device = { id: "D", name: "d", state: "Booted", version: [26, 5] };
+    expect(await appInstalled(device, "com.emd.sandbox")).toBe(false);
+    writeFileSync(join(container, "Info.plist"), "");
+    expect(await appInstalled(device, "com.emd.sandbox")).toBe(true);
+  } finally {
+    process.env.PATH = path;
+  }
 });

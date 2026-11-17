@@ -1,0 +1,133 @@
+import { spawnSync } from "node:child_process";
+import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { delimiter, join } from "node:path";
+import { expect, test } from "vitest";
+import { expoProject, makeDir } from "./helpers.ts";
+
+// `emd launch` through the built CLI, with stubs for everything native: `xcrun`
+// (simctl), `axe`, `npx` and the project's Expo CLI. The stubs log each call to
+// calls.log. Launch refuses to run off macOS, so the Linux CI job skips these.
+const plist = `<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0"><dict><key>CFBundleExecutable</key><string>emd</string></dict></plist>`;
+
+function rig() {
+  const bin = makeDir();
+  const state = makeDir();
+  const calls = join(bin, "calls.log");
+  const container = join(bin, "container");
+  const writePlist = join(bin, "write-plist");
+  const script = (name: string, body: string) => {
+    writeFileSync(join(bin, name), `#!/bin/sh\n${body}\n`);
+    chmodSync(join(bin, name), 0o755);
+  };
+  script(
+    "xcrun",
+    `case "$*" in
+  "simctl list devices available --json") echo '{"devices":{"com.apple.CoreSimulator.SimRuntime.iOS-26-5":[{"udid":"BASE","name":"iPhone 17","state":"Shutdown"},{"udid":"CLONE","name":"clone","state":"Shutdown"}]}}' ;;
+  "simctl clone"*) echo CLONE ;;
+  "simctl get_app_container"*) [ -d "${container}" ] && echo "${container}" || exit 1 ;;
+  "simctl launch"*) echo "com.emd.sandbox: 4242" ;;
+  "--sdk"*) exit 1 ;;
+esac
+exit 0`,
+  );
+  script("axe", `echo '[{"AXLabel":"Home"}]'`);
+  script("npx", `shift\nexec node "$PWD/node_modules/expo/bin/cli" "$@"`);
+  const config = {
+    sdkVersion: "58.0.0",
+    platforms: ["ios"],
+    ios: { bundleIdentifier: "com.emd.sandbox" },
+  };
+  const project = expoProject({
+    "node_modules/expo/bin/cli": `const fs = require("fs");
+const [, , command, ...rest] = process.argv;
+fs.appendFileSync(${JSON.stringify(calls)}, "expo " + command + "\\n");
+if (command === "config") process.stdout.write(${JSON.stringify(JSON.stringify(config))});
+else if (command === "start") require("http").createServer((_, r) => r.end("packager-status:running")).listen(Number(rest[rest.indexOf("--port") + 1]));
+else if (command === "run:ios" && fs.existsSync(${JSON.stringify(writePlist)})) {
+  fs.mkdirSync(${JSON.stringify(container)}, { recursive: true });
+  fs.writeFileSync(${JSON.stringify(join(container, "Info.plist"))}, ${JSON.stringify(plist)});
+} else if (command !== "run:ios") process.exit(1);`,
+    "node_modules/@expo/fingerprint/index.js":
+      'exports.createFingerprintAsync = async () => ({ hash: "same" });',
+  });
+  return {
+    launch: () => {
+      const run = spawnSync("node", ["dist/bin.js", "launch", project], {
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          EMD_STATE_DIR: state,
+          PATH: `${bin}${delimiter}${process.env.PATH}`,
+        },
+      });
+      return JSON.parse(run.stdout);
+    },
+    builds: () =>
+      readFileSync(calls, "utf8")
+        .split("\n")
+        .filter((line) => line === "expo run:ios").length,
+    // simctl names a container; `plistText` is its Info.plist, if any.
+    install: (plistText?: string) => {
+      mkdirSync(container, { recursive: true });
+      if (plistText !== undefined) {
+        writeFileSync(join(container, "Info.plist"), plistText);
+      }
+    },
+    // Whether the build writes a valid Info.plist into the container.
+    buildWritesPlist: (on: boolean) => {
+      if (on) writeFileSync(writePlist, "");
+    },
+  };
+}
+
+const onMac = test.skipIf(process.platform !== "darwin");
+
+onMac(
+  "a container with no Info.plist is built, not reused",
+  () => {
+    const { launch, builds, install } = rig();
+    launch(); // not installed: builds and records the build
+    install();
+    const second = launch();
+    expect(second.phases).toHaveProperty("build");
+    expect(second.phases).not.toHaveProperty("reuse");
+    expect(builds()).toBe(2);
+  },
+  120_000,
+);
+
+onMac(
+  "an Info.plist that cannot be read: one build, then it launches",
+  () => {
+    const { launch, builds, install, buildWritesPlist } = rig();
+    launch();
+    install("");
+    buildWritesPlist(true);
+    const second = launch();
+    expect(second.verdict).toBe("launched");
+    expect(second.build).toEqual({
+      action: "built",
+      reason: "installed app could not be read",
+    });
+    expect(second.phases).toHaveProperty("reuse");
+    expect(builds()).toBe(2);
+  },
+  120_000,
+);
+
+onMac(
+  "the app still cannot be read after the build: launch fails",
+  () => {
+    const { launch, builds, install } = rig();
+    launch();
+    install("");
+    const second = launch();
+    expect(second).toMatchObject({
+      verdict: "failed",
+      reason: "Built, but could not capture the app's log.",
+    });
+    expect(builds()).toBe(2);
+  },
+  120_000,
+);

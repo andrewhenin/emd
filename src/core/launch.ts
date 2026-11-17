@@ -187,11 +187,14 @@ export async function launch(
   const tenths = (ms: number) => Math.round(ms / 100) / 10;
   const seconds = () => tenths(Date.now() - started);
   // Seconds each phase took, in order, under a short name (#203). A phase ends
-  // when the next one starts or the launch returns.
+  // when the next one starts or the launch returns. A phase that runs twice adds up.
   const phases: Record<string, number> = {};
   let current: { name: string; at: number } | undefined;
   const endPhase = () => {
-    if (current) phases[current.name] = tenths(Date.now() - current.at);
+    if (current) {
+      phases[current.name] =
+        (phases[current.name] ?? 0) + tenths(Date.now() - current.at);
+    }
     current = undefined;
     return phases;
   };
@@ -389,9 +392,8 @@ export async function launch(
     );
   }
   const reused = why === undefined;
-  if (reused) {
-    phase("reuse", "reusing the installed build");
-  } else {
+  // Builds and installs the app; returns the launch result when it fails.
+  const buildApp = async (): Promise<LaunchResult | undefined> => {
     phase("build", "building and installing the app");
     const failure = await runBuild(plan.build, root, buildLog, env, options);
     if (failure) {
@@ -403,6 +405,12 @@ export async function launch(
         writeBuildRecord(derivedData, { fingerprint, port });
       } catch {}
     }
+  };
+  if (reused) {
+    phase("reuse", "reusing the installed build");
+  } else {
+    const failure = await buildApp();
+    if (failure) return failure;
   }
 
   let appIdSet: string | undefined;
@@ -427,30 +435,40 @@ export async function launch(
     } catch {}
   }
 
+  const captureFailed = (error: unknown) => {
+    metro.kill();
+    return stuck("Built, but could not capture the app's log.", {
+      errors: String(error).split("\n").slice(0, 3),
+    });
+  };
   phase("open", "launching the app");
   let capture: LoggedProcess;
   try {
     capture = await startCapture(device.id, appId, logDir);
   } catch (error) {
-    metro.kill();
-    return stuck(
-      `${reused ? "Reused the build" : "Built"}, but could not capture the app's log.`,
-      {
-        errors: String(error).split("\n").slice(0, 3),
-      },
-    );
+    if (!reused) return captureFailed(error);
+    // The reused build's app cannot be read: build once and try again.
+    why = "installed app could not be read";
+    const failure = await buildApp();
+    if (failure) return failure;
+    phase("open", "launching the app");
+    try {
+      capture = await startCapture(device.id, appId, logDir);
+    } catch (again) {
+      return captureFailed(again);
+    }
   }
   let appPid: number;
   try {
     // A running app still talks to the dev server it started with; a restart
     // makes it load the new JavaScript from this one.
-    if (reused) await terminateApp(device, appId);
+    if (why === undefined) await terminateApp(device, appId);
     appPid = await launchApp(device, appId);
   } catch (error) {
     capture.kill();
     metro.kill();
     return stuck(
-      `${reused ? "Reused the build" : "Built"}, but launching ${appId} failed.`,
+      `${why === undefined ? "Reused the build" : "Built"}, but launching ${appId} failed.`,
       {
         errors: String(error).split("\n").slice(0, 3),
       },
@@ -486,7 +504,10 @@ export async function launch(
     ...(appIdSet && { appIdSet }),
     ...(screen && { screen }),
     appPid,
-    build: reused ? { action: "reused" } : { action: "built", reason: why },
+    build:
+      why === undefined
+        ? { action: "reused" }
+        : { action: "built", reason: why },
     metro: { pid: metro.pid, port },
     logStream: { pid: capture.pid },
     derivedData,

@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { runTool } from "./tool.js";
 
 export type Device = {
@@ -189,19 +191,20 @@ export async function launchApp(
   return pid;
 }
 
-// True when the app is installed on the device.
+// True when the app is installed on the device. `simctl` can name a container
+// whose app files are gone, so the app's Info.plist must exist.
 export async function appInstalled(
   device: Device,
   appId: string,
 ): Promise<boolean> {
   try {
-    await runTool(
+    const { stdout } = await runTool(
       "simctl get_app_container",
       "xcrun",
       ["simctl", "get_app_container", device.id, appId],
       60,
     );
-    return true;
+    return existsSync(join(stdout.trim(), "Info.plist"));
   } catch {
     return false;
   }
