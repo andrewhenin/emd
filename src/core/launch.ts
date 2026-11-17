@@ -388,21 +388,26 @@ export async function launch(
       appId !== undefined && (await appInstalled(device, appId)),
     );
   }
-  const reused = why === undefined;
-  if (reused) {
-    phase("reuse", "reusing the installed build");
-  } else {
+  let reused = why === undefined;
+  // Builds and installs the app; returns the launch result when it fails.
+  const buildApp = async (): Promise<LaunchResult | undefined> => {
     phase("build", "building and installing the app");
-    const failure = await runBuild(plan.build, root, buildLog, env, options);
-    if (failure) {
+    const problem = await runBuild(plan.build, root, buildLog, env, options);
+    if (problem) {
       metro.kill();
-      return stuck(failure.reason, { errors: failure.errors });
+      return stuck(problem.reason, { errors: problem.errors });
     }
     if (fingerprint !== undefined) {
       try {
         writeBuildRecord(derivedData, { fingerprint, port });
       } catch {}
     }
+  };
+  if (reused) {
+    phase("reuse", "reusing the installed build");
+  } else {
+    const failure = await buildApp();
+    if (failure) return failure;
   }
 
   let appIdSet: string | undefined;
@@ -427,18 +432,25 @@ export async function launch(
     } catch {}
   }
 
-  phase("open", "launching the app");
   let capture: LoggedProcess;
-  try {
-    capture = await startCapture(device.id, appId, logDir);
-  } catch (error) {
-    metro.kill();
-    return stuck(
-      `${reused ? "Reused the build" : "Built"}, but could not capture the app's log.`,
-      {
+  for (;;) {
+    phase("open", "launching the app");
+    try {
+      capture = await startCapture(device.id, appId, logDir);
+      break;
+    } catch (error) {
+      // A reused build whose app cannot be read is built once.
+      if (reused) {
+        reused = false;
+        const failure = await buildApp();
+        if (failure) return failure;
+        continue;
+      }
+      metro.kill();
+      return stuck("Built, but could not capture the app's log.", {
         errors: String(error).split("\n").slice(0, 3),
-      },
-    );
+      });
+    }
   }
   let appPid: number;
   try {
