@@ -71,6 +71,9 @@ export const launchResultSchema = z.object({
   // Full build and server logs live here; read them only when needed.
   logDir: z.string().optional(),
   seconds: z.number().optional(),
+  // Seconds each phase took, in order (#203): project, replace, clone, boot,
+  // server, reuse or build, open, screen. Only the phases that ran.
+  phases: z.record(z.string(), z.number()).optional(),
 });
 
 export type LaunchResult = z.infer<typeof launchResultSchema>;

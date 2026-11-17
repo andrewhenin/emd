@@ -36,6 +36,8 @@ type View = {
     metro: { pid: number; port: number };
     screen?: { waited: number; error?: string };
     logDir: string;
+    seconds: number;
+    phases?: Record<string, number>;
   };
 };
 
@@ -140,6 +142,26 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
       const port = final.result?.metro.port;
       const response = await fetch(`http://localhost:${port}/status`);
       expect(await response.text()).toContain("packager-status:running");
+    });
+
+    // #203: how long each phase took, adding up to the launch's own seconds.
+    test("the result says how long each phase took", () => {
+      const phases = final.result?.phases ?? {};
+      console.log(`first launch phases: ${JSON.stringify(phases)}`);
+      expect(Object.keys(phases)).toEqual(
+        expect.arrayContaining([
+          "project",
+          "boot",
+          "server",
+          "build",
+          "open",
+          "screen",
+        ]),
+      );
+      const sum = Object.values(phases).reduce((a, b) => a + b, 0);
+      expect(Math.abs(sum - (final.result?.seconds ?? 0))).toBeLessThanOrEqual(
+        1,
+      );
     });
 
     test("the answer stays small and the logs stay on disk", () => {
@@ -360,7 +382,7 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
         // #131: the relaunch returns only when AXe can read the screen.
         expect(again.result?.screen?.error).toBeUndefined();
         console.log(
-          `relaunch: screen readable after ${again.result?.screen?.waited} s`,
+          `relaunch: screen readable after ${again.result?.screen?.waited} s; phases ${JSON.stringify(again.result?.phases)}`,
         );
         expect(() => process.kill(-(left?.pid ?? 0), 0)).toThrow();
         const later = await readLogs(again.jobId, { tag: "smoke" });
