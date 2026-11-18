@@ -5,16 +5,20 @@ import {
   detectEnvironment,
   directions,
   firstWorking,
+  readScreen,
   type Target,
   type Where,
 } from "./device/backend.js";
 import { maestroBackend } from "./device/maestro.js";
+import { typeUntilShown } from "./device/typing.js";
 import { firstLine } from "./log.js";
 import type { InputResult } from "./result.js";
 import { type RunRef, resolveRun } from "./run.js";
 
 // Taps, typing and swipes on a launched app (decision 0009). Each acts once
 // and says which backend did it; whether the app reacted is for `check`.
+
+const backends = [axeBackend, maestroBackend];
 
 async function act(
   what: string,
@@ -29,7 +33,7 @@ async function act(
     const { backend, fellBack } = await firstWorking(
       what,
       await detectEnvironment(),
-      [axeBackend, maestroBackend],
+      backends,
       (b, bin) => gesture(b, where, bin),
     );
     return { verdict: "ok", backend, ...(fellBack ? { fellBack } : {}) };
@@ -81,7 +85,63 @@ export function typeText(
   if (text.length === 0) {
     return Promise.resolve({ verdict: "failed", reason: "Give text to type." });
   }
-  return act("type", options, (b, where, bin) => b.type(where, bin, text));
+  return confirmedType(options, text);
+}
+
+// Types, then reads the screen until the text shows (issue 163): `ok` means
+// the text is on the screen. Secure fields show bullets, so for those `ok`
+// means bullets at least as long as the text showed.
+async function confirmedType(
+  { jobId }: RunRef,
+  text: string,
+): Promise<InputResult> {
+  const resolved = resolveRun({ jobId });
+  if ("reason" in resolved)
+    return { verdict: "failed", reason: resolved.reason };
+  const { device, appId } = resolved.run;
+  const where = { device, appId };
+  const env = await detectEnvironment();
+  let first: Pick<InputResult, "backend" | "fellBack"> = {};
+  try {
+    const typed = await typeUntilShown(
+      {
+        type: async (part) => {
+          const { backend, fellBack } = await firstWorking(
+            "type",
+            env,
+            backends,
+            (b, bin) => b.type(where, bin, part),
+          );
+          if (!first.backend) {
+            first = { backend, ...(fellBack ? { fellBack } : {}) };
+          }
+        },
+        read: () => readScreen(device, env, backends).then((r) => r.nodes),
+        sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+      },
+      text,
+    );
+    const done = { ...first, seconds: typed.seconds };
+    if (typed.verdict === "missing") {
+      return {
+        verdict: "failed",
+        reason: `The text did not show on screen after ${typed.seconds} s${typed.retyped ? " and one retype" : ""}; ${typed.screen}.`,
+        ...done,
+      };
+    }
+    return {
+      verdict: "ok",
+      ...done,
+      ...(typed.verdict === "secure"
+        ? {
+            note: "Secure field: bullets showed, the text itself cannot be read.",
+          }
+        : {}),
+      ...(typed.retyped ? { retyped: typed.retyped } : {}),
+    };
+  } catch (error) {
+    return { verdict: "failed", reason: firstLine(error) };
+  }
 }
 
 const isDirection = (value: string): value is Direction =>

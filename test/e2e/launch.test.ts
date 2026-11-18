@@ -277,7 +277,13 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
       );
 
     // An agent taps, types and swipes through EMD's own tools (decision 0009).
-    type Input = { verdict: string; reason?: string; backend?: string };
+    type Input = {
+      verdict: string;
+      reason?: string;
+      backend?: string;
+      seconds?: number;
+      retyped?: string;
+    };
     const input = async (name: string, args: Record<string, unknown>) => {
       const result = (
         await client.callTool({
@@ -286,7 +292,7 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
         })
       ).structuredContent as Input;
       inputs.push(
-        `${new Date().toISOString()} ${name} ${JSON.stringify(args)}: ${result.verdict} (${result.backend})`,
+        `${new Date().toISOString()} ${name} ${JSON.stringify(args)}: ${result.verdict} (${result.backend}, ${result.seconds ?? "-"} s${result.retyped ? `, retyped ${JSON.stringify(result.retyped)}` : ""})`,
       );
       expect(result.verdict, result.reason).toBe("ok");
       expect(["axe", "maestro"]).toContain(result.backend);
