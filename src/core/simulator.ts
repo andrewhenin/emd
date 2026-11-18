@@ -210,6 +210,19 @@ export async function appInstalled(
   }
 }
 
+// Installs a built `.app` on the device.
+export async function installApp(
+  device: Device,
+  appPath: string,
+): Promise<void> {
+  await runTool(
+    "simctl install",
+    "xcrun",
+    ["simctl", "install", device.id, appPath],
+    120,
+  );
+}
+
 // A new simulator with the same type and runtime as `base`; returns its UDID.
 // The base must be shut down.
 export async function cloneDevice(base: Device, name: string): Promise<string> {

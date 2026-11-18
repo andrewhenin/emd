@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 // What the last successful build of a worktree was made from. It sits in the
@@ -39,4 +39,17 @@ export function whyBuild(
   if (record.port !== now.port) return "port changed";
   if (!installed) return "app not installed";
   return undefined;
+}
+
+// The one `.app` an earlier Debug build left in DerivedData (launch builds
+// Debug). Undefined when there is none or more than one.
+export function builtApp(derivedData: string): string | undefined {
+  const dir = join(derivedData, "Build/Products/Debug-iphonesimulator");
+  try {
+    const apps = readdirSync(dir).filter((name) => name.endsWith(".app"));
+    return apps.length === 1 ? join(dir, apps[0] ?? "") : undefined;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw error;
+  }
 }

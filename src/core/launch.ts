@@ -1,7 +1,12 @@
 import { mkdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
-import { readBuildRecord, whyBuild, writeBuildRecord } from "./buildrecord.js";
+import {
+  builtApp,
+  readBuildRecord,
+  whyBuild,
+  writeBuildRecord,
+} from "./buildrecord.js";
 import { detect } from "./detect.js";
 import { axeBackend } from "./device/axe.js";
 import { detectEnvironment, untilReadable } from "./device/backend.js";
@@ -26,6 +31,7 @@ import {
   cloneDevice,
   type Device,
   enableAppAccessibility,
+  installApp,
   launchApp,
   listDevices,
   newerThan,
@@ -192,8 +198,9 @@ export async function launch(
   let current: { name: string; at: number } | undefined;
   const endPhase = () => {
     if (current) {
-      phases[current.name] =
-        (phases[current.name] ?? 0) + tenths(Date.now() - current.at);
+      phases[current.name] = tenths(
+        (phases[current.name] ?? 0) * 1000 + Date.now() - current.at,
+      );
     }
     current = undefined;
     return phases;
@@ -406,11 +413,29 @@ export async function launch(
       } catch {}
     }
   };
+  // The fingerprint and port match but the app is gone from the simulator: the
+  // build in DerivedData installs in seconds. Build only if that is not possible.
+  let installedAgain = false;
   if (reused) {
     phase("reuse", "reusing the installed build");
   } else {
-    const failure = await buildApp();
-    if (failure) return failure;
+    const earlierApp =
+      why === "app not installed" && appId !== undefined
+        ? builtApp(derivedData)
+        : undefined;
+    if (earlierApp) {
+      phase("install", "installing the earlier build");
+      try {
+        await installApp(device, earlierApp);
+        installedAgain = true;
+      } catch (error) {
+        why = `app not installed; install failed: ${String(error).split("\n")[0]}`;
+      }
+    }
+    if (!installedAgain) {
+      const failure = await buildApp();
+      if (failure) return failure;
+    }
   }
 
   let appIdSet: string | undefined;
@@ -446,9 +471,10 @@ export async function launch(
   try {
     capture = await startCapture(device.id, appId, logDir);
   } catch (error) {
-    if (!reused) return captureFailed(error);
-    // The reused build's app cannot be read: build once and try again.
+    if (!reused && !installedAgain) return captureFailed(error);
+    // The reused or installed build's app cannot be read: build once and try again.
     why = "installed app could not be read";
+    installedAgain = false;
     const failure = await buildApp();
     if (failure) return failure;
     phase("open", "launching the app");
@@ -507,7 +533,7 @@ export async function launch(
     build:
       why === undefined
         ? { action: "reused" }
-        : { action: "built", reason: why },
+        : { action: installedAgain ? "installed" : "built", reason: why },
     metro: { pid: metro.pid, port },
     logStream: { pid: capture.pid },
     derivedData,
