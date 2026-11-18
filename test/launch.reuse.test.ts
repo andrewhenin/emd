@@ -1,5 +1,4 @@
 import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
 import {
   chmodSync,
   mkdirSync,
@@ -7,8 +6,10 @@ import {
   realpathSync,
   writeFileSync,
 } from "node:fs";
+import { type AddressInfo, createServer } from "node:net";
 import { delimiter, join } from "node:path";
 import { expect, test } from "vitest";
+import { type KeyedLedger, worktreeKey } from "../src/core/owned.ts";
 import { expoProject, makeDir } from "./helpers.ts";
 
 // `emd launch` through the built CLI, with stubs for everything native: `xcrun`
@@ -17,7 +18,18 @@ import { expoProject, makeDir } from "./helpers.ts";
 const plist = `<?xml version="1.0" encoding="UTF-8"?>
 <plist version="1.0"><dict><key>CFBundleExecutable</key><string>emd</string></dict></plist>`;
 
-function rig() {
+// A port the OS just handed out, so parallel test runs never share one.
+const freePort = () =>
+  new Promise<number>((resolve, reject) => {
+    const server = createServer();
+    server.once("error", reject);
+    server.listen(0, () => {
+      const { port } = server.address() as AddressInfo;
+      server.close(() => resolve(port));
+    });
+  });
+
+async function rig() {
   const bin = makeDir();
   const state = makeDir();
   const calls = join(bin, "calls.log");
@@ -64,26 +76,19 @@ else if (command === "run:ios" && fs.existsSync(${JSON.stringify(writePlist)})) 
     "node_modules/@expo/fingerprint/index.js":
       'exports.createFingerprintAsync = async () => ({ hash: "same" });',
   });
-  // Each rig holds its own Metro port. Two test runs have separate state dirs,
-  // so without this both pick the first free port and see each other's stub.
+  // Each rig holds its own Metro port. Parallel test runs have separate state
+  // dirs, so without this they can pick the same port and see each other's stub.
   const root = realpathSync(project);
+  const ledger: Omit<KeyedLedger, "key"> = {
+    root,
+    resources: [
+      { kind: "port", id: String(await freePort()), state: "creating" },
+    ],
+  };
   mkdirSync(join(state, "owned"), { recursive: true });
   writeFileSync(
-    join(
-      state,
-      "owned",
-      `${createHash("sha1").update(root).digest("hex").slice(0, 12)}.json`,
-    ),
-    JSON.stringify({
-      root,
-      resources: [
-        {
-          kind: "port",
-          id: String(20_000 + Math.floor(Math.random() * 40_000)),
-          state: "creating",
-        },
-      ],
-    }),
+    join(state, "owned", `${worktreeKey(root)}.json`),
+    JSON.stringify(ledger),
   );
   return {
     launch: () => {
@@ -134,8 +139,8 @@ const onMac = test.skipIf(process.platform !== "darwin");
 
 onMac(
   "a container with no Info.plist is built, not reused",
-  () => {
-    const { launch, builds, install } = rig();
+  async () => {
+    const { launch, builds, install } = await rig();
     launch(); // not installed: builds and records the build
     install();
     const second = launch();
@@ -148,8 +153,8 @@ onMac(
 
 onMac(
   "an Info.plist that cannot be read: one build, then it launches",
-  () => {
-    const { launch, builds, install, buildWritesPlist } = rig();
+  async () => {
+    const { launch, builds, install, buildWritesPlist } = await rig();
     launch();
     install("");
     buildWritesPlist(true);
@@ -167,8 +172,8 @@ onMac(
 
 onMac(
   "the app still cannot be read after the build: launch fails",
-  () => {
-    const { launch, builds, install } = rig();
+  async () => {
+    const { launch, builds, install } = await rig();
     launch();
     install("");
     const second = launch();
@@ -183,8 +188,8 @@ onMac(
 
 onMac(
   "the app is gone but the build is in DerivedData: it installs, no build runs",
-  () => {
-    const { launch, builds, installs, leaveBuiltApp } = rig();
+  async () => {
+    const { launch, builds, installs, leaveBuiltApp } = await rig();
     const first = launch();
     leaveBuiltApp(first.derivedData);
     const second = launch();
@@ -203,9 +208,9 @@ onMac(
 
 onMac(
   "the install fails: it builds as before",
-  () => {
+  async () => {
     const { launch, builds, leaveBuiltApp, failInstalls, buildWritesPlist } =
-      rig();
+      await rig();
     const first = launch();
     leaveBuiltApp(first.derivedData);
     failInstalls();
@@ -222,14 +227,14 @@ onMac(
 
 onMac(
   "the installed app cannot be read: one build, then it launches",
-  () => {
+  async () => {
     const {
       launch,
       builds,
       leaveBuiltApp,
       unreadableInstalls,
       buildWritesPlist,
-    } = rig();
+    } = await rig();
     const first = launch();
     leaveBuiltApp(first.derivedData);
     unreadableInstalls();
