@@ -72,7 +72,7 @@ export function evaluate(pr: GateInput): string | undefined {
   }
 
   if (pr.files.some((file) => pr.e2ePaths.test(file))) {
-    // A label event's run is skipped; it says nothing about the code.
+    // A skipped run (a Release Please or draft PR) says nothing about the code.
     const e2e = newest(
       pr.runs.filter((r) => r.name === "e2e" && r.conclusion !== "skipped"),
       (r) => r.createdAt,
