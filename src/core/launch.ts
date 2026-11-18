@@ -414,24 +414,28 @@ export async function launch(
     }
   };
   // The fingerprint and port match but the app is gone from the simulator: the
-  // build in DerivedData installs in seconds. A missing or failing install builds.
+  // build in DerivedData installs in seconds. Build only if that is not possible.
   let installedAgain = false;
-  const earlierApp =
-    why === "app not installed" && appId !== undefined
-      ? builtApp(derivedData)
-      : undefined;
-  if (earlierApp) {
-    phase("install", "installing the earlier build");
-    try {
-      await installApp(device, earlierApp);
-      installedAgain = true;
-    } catch {}
-  }
   if (reused) {
     phase("reuse", "reusing the installed build");
-  } else if (!installedAgain) {
-    const failure = await buildApp();
-    if (failure) return failure;
+  } else {
+    const earlierApp =
+      why === "app not installed" && appId !== undefined
+        ? builtApp(derivedData)
+        : undefined;
+    if (earlierApp) {
+      phase("install", "installing the earlier build");
+      try {
+        await installApp(device, earlierApp);
+        installedAgain = true;
+      } catch (error) {
+        why = `app not installed; install failed: ${String(error).split("\n")[0]}`;
+      }
+    }
+    if (!installedAgain) {
+      const failure = await buildApp();
+      if (failure) return failure;
+    }
   }
 
   let appIdSet: string | undefined;
@@ -467,9 +471,10 @@ export async function launch(
   try {
     capture = await startCapture(device.id, appId, logDir);
   } catch (error) {
-    if (!reused) return captureFailed(error);
-    // The reused build's app cannot be read: build once and try again.
+    if (!reused && !installedAgain) return captureFailed(error);
+    // The reused or installed build's app cannot be read: build once and try again.
     why = "installed app could not be read";
+    installedAgain = false;
     const failure = await buildApp();
     if (failure) return failure;
     phase("open", "launching the app");

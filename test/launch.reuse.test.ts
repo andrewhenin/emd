@@ -17,6 +17,7 @@ function rig() {
   const container = join(bin, "container");
   const writePlist = join(bin, "write-plist");
   const failInstall = join(bin, "fail-install");
+  const badInstall = join(bin, "bad-install");
   const script = (name: string, body: string) => {
     writeFileSync(join(bin, name), `#!/bin/sh\n${body}\n`);
     chmodSync(join(bin, name), 0o755);
@@ -29,7 +30,8 @@ function rig() {
   "simctl get_app_container"*) [ -d "${container}" ] && echo "${container}" || exit 1 ;;
   "simctl install"*) echo "$*" >> "${calls}"
     [ -f "${failInstall}" ] && exit 1
-    mkdir -p "${container}" && echo '${plist}' > "${container}/Info.plist" ;;
+    mkdir -p "${container}"
+    if [ -f "${badInstall}" ]; then : > "${container}/Info.plist"; else echo '${plist}' > "${container}/Info.plist"; fi ;;
   "simctl launch"*) echo "com.emd.sandbox: 4242" ;;
   "--sdk"*) exit 1 ;;
 esac
@@ -83,6 +85,8 @@ else if (command === "run:ios" && fs.existsSync(${JSON.stringify(writePlist)})) 
         .split("\n")
         .filter((line) => line.startsWith("simctl install")).length,
     failInstalls: () => writeFileSync(failInstall, ""),
+    // The install leaves an Info.plist that cannot be read.
+    unreadableInstalls: () => writeFileSync(badInstall, ""),
     // Leaves a built app in the worktree's DerivedData.
     leaveBuiltApp: (derivedData: string) =>
       mkdirSync(
@@ -179,9 +183,34 @@ onMac(
     failInstalls();
     buildWritesPlist(true);
     const second = launch();
+    expect(second.build).toMatchObject({ action: "built" });
+    expect(second.build?.reason).toMatch(
+      /^app not installed; install failed: .+/,
+    );
+    expect(builds()).toBe(2);
+  },
+  120_000,
+);
+
+onMac(
+  "the installed app cannot be read: one build, then it launches",
+  () => {
+    const {
+      launch,
+      builds,
+      leaveBuiltApp,
+      unreadableInstalls,
+      buildWritesPlist,
+    } = rig();
+    const first = launch();
+    leaveBuiltApp(first.derivedData);
+    unreadableInstalls();
+    buildWritesPlist(true);
+    const second = launch();
+    expect(second.verdict).toBe("launched");
     expect(second.build).toEqual({
       action: "built",
-      reason: "app not installed",
+      reason: "installed app could not be read",
     });
     expect(builds()).toBe(2);
   },
