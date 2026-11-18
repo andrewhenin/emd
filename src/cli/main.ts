@@ -7,7 +7,7 @@ import {
   evidence,
   gc,
   jobStatus,
-  launch,
+  launchInline,
   logs,
   resetChecks,
   runJob,
@@ -95,7 +95,7 @@ export async function run(argv: string[]): Promise<number> {
         console.error(`emd: --timeout must be a number of seconds. ${usage}`);
         return 2;
       }
-      const result = await launch({
+      const result = await launchInline({
         dir: positionals[0],
         device: values.device,
         timeoutSeconds,

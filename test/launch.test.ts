@@ -1,7 +1,7 @@
 import { createServer } from "node:net";
 import { join } from "node:path";
 import { expect, test } from "vitest";
-import { write } from "../src/core/jobstore.ts";
+import { launchesIn, write } from "../src/core/jobstore.ts";
 import { stopEarlierServer } from "../src/core/launch.ts";
 import { startLogged } from "../src/core/process.ts";
 import {
@@ -71,6 +71,12 @@ test.each([
     expect(done.result).toEqual(fromCli);
   },
 );
+
+test("a CLI launch leaves a launch record that the next launch in the worktree reads", () => {
+  const dir = androidOnly();
+  const run = cli("launch", dir);
+  expect(launchesIn(dir)).toEqual([JSON.parse(run.stdout)]);
+});
 
 test("any process can read a job another process started", async () => {
   const job = await call("launch", { dir: makeDir() });
