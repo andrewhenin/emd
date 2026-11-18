@@ -144,8 +144,7 @@ export const inputResultSchema = z.object({
   backend: z.enum(backendIds).optional(),
   fellBack: fellBackSchema,
   // A tap by testID or text: seconds from start to finish, which includes
-  // the wait for the element.
-  // `type` also counts the wait for the text to show on screen.
+  // the wait for the element. `type`: seconds until the text showed.
   seconds: z.number().optional(),
   // `type`: the rest of the text, when it had to be typed a second time.
   retyped: z.string().optional(),

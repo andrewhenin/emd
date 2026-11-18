@@ -10,6 +10,7 @@ import {
   type Where,
 } from "./device/backend.js";
 import { maestroBackend } from "./device/maestro.js";
+import type { UiNode } from "./device/screen.js";
 import { typeUntilShown } from "./device/typing.js";
 import { firstLine } from "./log.js";
 import type { InputResult } from "./result.js";
@@ -20,23 +21,47 @@ import { type RunRef, resolveRun } from "./run.js";
 
 const backends = [axeBackend, maestroBackend];
 
+type Gesture = (
+  backend: DeviceBackend,
+  where: Where,
+  bin: string,
+) => Promise<void>;
+
+type Act = {
+  // Sends one gesture through the first backend that works.
+  send(gesture: Gesture): Promise<void>;
+  read(): Promise<UiNode[]>;
+};
+
+// Runs `run` against the launched app. `run` returns extra result fields, or
+// a `reason` when it failed.
 async function act(
   what: string,
   { jobId }: RunRef,
-  gesture: (backend: DeviceBackend, where: Where, bin: string) => Promise<void>,
+  run: (io: Act) => Promise<Partial<InputResult>>,
 ): Promise<InputResult> {
   const resolved = resolveRun({ jobId });
   if ("reason" in resolved)
     return { verdict: "failed", reason: resolved.reason };
-  const where = { device: resolved.run.device, appId: resolved.run.appId };
+  const { device, appId } = resolved.run;
+  let first: Pick<InputResult, "backend" | "fellBack"> = {};
   try {
-    const { backend, fellBack } = await firstWorking(
-      what,
-      await detectEnvironment(),
-      backends,
-      (b, bin) => gesture(b, where, bin),
-    );
-    return { verdict: "ok", backend, ...(fellBack ? { fellBack } : {}) };
+    const env = await detectEnvironment();
+    const extra = await run({
+      send: async (gesture) => {
+        const { backend, fellBack } = await firstWorking(
+          what,
+          env,
+          backends,
+          (b, bin) => gesture(b, { device, appId }, bin),
+        );
+        if (!first.backend) {
+          first = { backend, ...(fellBack ? { fellBack } : {}) };
+        }
+      },
+      read: () => readScreen(device, env, backends).then((r) => r.nodes),
+    });
+    return { verdict: extra.reason ? "failed" : "ok", ...first, ...extra };
   } catch (error) {
     return { verdict: "failed", reason: firstLine(error) };
   }
@@ -67,8 +92,8 @@ export function tap(options: TapOptions): Promise<InputResult> {
     });
   }
   const started = Date.now();
-  const done = act("tap", options, (b, where, bin) =>
-    b.tap(where, bin, target),
+  const done = act("tap", options, ({ send }) =>
+    send((b, where, bin) => b.tap(where, bin, target)).then(() => ({})),
   );
   if ("x" in target) return done;
   // The backends wait for an element: AXe up to 10 s, Maestro its own limit.
@@ -85,63 +110,28 @@ export function typeText(
   if (text.length === 0) {
     return Promise.resolve({ verdict: "failed", reason: "Give text to type." });
   }
-  return confirmedType(options, text);
-}
-
-// Types, then reads the screen until the text shows (issue 163): `ok` means
-// the text is on the screen. Secure fields show bullets, so for those `ok`
-// means bullets at least as long as the text showed.
-async function confirmedType(
-  { jobId }: RunRef,
-  text: string,
-): Promise<InputResult> {
-  const resolved = resolveRun({ jobId });
-  if ("reason" in resolved)
-    return { verdict: "failed", reason: resolved.reason };
-  const { device, appId } = resolved.run;
-  const where = { device, appId };
-  const env = await detectEnvironment();
-  let first: Pick<InputResult, "backend" | "fellBack"> = {};
-  try {
+  // `ok` means the text shows on screen (issue 163, decision 0013). Tap and
+  // swipe cannot say that.
+  return act("type", options, async ({ send, read }) => {
     const typed = await typeUntilShown(
       {
-        type: async (part) => {
-          const { backend, fellBack } = await firstWorking(
-            "type",
-            env,
-            backends,
-            (b, bin) => b.type(where, bin, part),
-          );
-          if (!first.backend) {
-            first = { backend, ...(fellBack ? { fellBack } : {}) };
-          }
-        },
-        read: () => readScreen(device, env, backends).then((r) => r.nodes),
+        type: (part) => send((b, where, bin) => b.type(where, bin, part)),
+        read,
         sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
       },
       text,
     );
-    const done = { ...first, seconds: typed.seconds };
-    if (typed.verdict === "missing") {
-      return {
-        verdict: "failed",
-        reason: `The text did not show on screen after ${typed.seconds} s${typed.retyped ? " and one retype" : ""}; ${typed.screen}.`,
-        ...done,
-      };
-    }
     return {
-      verdict: "ok",
-      ...done,
+      seconds: typed.seconds,
+      ...(typed.retyped ? { retyped: typed.retyped } : {}),
+      ...(typed.verdict === "failed" ? { reason: typed.reason } : {}),
       ...(typed.verdict === "secure"
         ? {
-            note: "Secure field: bullets showed, the text itself cannot be read.",
+            note: "Secure field: bullets grew by the text length; the text itself cannot be read.",
           }
         : {}),
-      ...(typed.retyped ? { retyped: typed.retyped } : {}),
     };
-  } catch (error) {
-    return { verdict: "failed", reason: firstLine(error) };
-  }
+  });
 }
 
 const isDirection = (value: string): value is Direction =>
@@ -157,7 +147,7 @@ export function swipe(
       reason: `Give a direction: ${directions.join(", ")}.`,
     });
   }
-  return act("swipe", options, (b, where, bin) =>
-    b.swipe(where, bin, direction),
+  return act("swipe", options, ({ send }) =>
+    send((b, where, bin) => b.swipe(where, bin, direction)).then(() => ({})),
   );
 }
