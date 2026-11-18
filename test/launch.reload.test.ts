@@ -1,7 +1,9 @@
 import { spawnSync } from "node:child_process";
 import {
+  appendFileSync,
   chmodSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   realpathSync,
   writeFileSync,
@@ -121,6 +123,8 @@ exit 0`,
     launch: () => {
       const run = spawnSync("node", ["dist/bin.js", "launch", project], {
         encoding: "utf8",
+        // A hang fails in seconds, not at the test's own limit.
+        timeout: 30_000,
         env: {
           ...process.env,
           CI: "true",
@@ -137,6 +141,33 @@ exit 0`,
       return result;
     },
     calls: () => readFileSync(calls, "utf8").split("\n"),
+    // `emd logs` for the run of a launch result, by its job record.
+    logs: (result: { logDir: string }, tag: string) => {
+      const dir = join(state, "jobs");
+      const job = readdirSync(dir)
+        .filter((name) => name.endsWith(".json"))
+        .find(
+          (name) =>
+            JSON.parse(readFileSync(join(dir, name), "utf8")).result?.logDir ===
+            result.logDir,
+        );
+      const run = spawnSync(
+        "node",
+        [
+          "dist/bin.js",
+          "logs",
+          String(job?.replace(".json", "")),
+          "--tag",
+          tag,
+        ],
+        {
+          encoding: "utf8",
+          timeout: 30_000,
+          env: { ...process.env, EMD_STATE_DIR: state },
+        },
+      );
+      return JSON.parse(run.stdout);
+    },
   };
 }
 
@@ -156,11 +187,35 @@ onMac(
     expect(second.reason ?? second.verdict).toBe("launched");
     expect(second.build).toEqual({ action: "reloaded" });
     expect(second.metro).toEqual(first.metro);
-    expect(second.logStream).toEqual(first.logStream);
+    expect(second.logStream).not.toEqual(first.logStream);
     expect(second.phases).toHaveProperty("reload");
     expect(calls().filter((line) => line === "reload")).toHaveLength(1);
     expect(calls().filter((line) => line === "expo start")).toHaveLength(1);
     expect(calls().filter((line) => line === "expo run:ios")).toHaveLength(1);
+  },
+  120_000,
+);
+
+onMac(
+  "a reload starts a new run: a log line from before it does not count after it",
+  async () => {
+    const { launch, logs } = await rig();
+    const first = launch();
+    const line = JSON.stringify({
+      timestamp: "2026-01-01 00:00:00.000000+0000",
+      eventMessage: "[EMD:smoke] tapped",
+    });
+    appendFileSync(join(first.logDir, "app.ndjson"), `${line}\n`);
+    expect(logs(first, "smoke").total).toBe(1);
+    const second = launch();
+    expect(second.build).toEqual({ action: "reloaded" });
+    expect(second.logDir).not.toBe(first.logDir);
+    expect(second.logStream.pid).not.toBe(first.logStream.pid);
+    expect(logs(second, "smoke")).toMatchObject({ verdict: "ok", total: 0 });
+    // The dev server log of the first run still counts the next reload.
+    const third = launch();
+    expect(third.build).toEqual({ action: "reloaded" });
+    expect(third.logDir).not.toBe(second.logDir);
   },
   120_000,
 );

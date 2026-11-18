@@ -1,4 +1,4 @@
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir, readFile, realpath, rm, symlink } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import {
@@ -391,7 +391,17 @@ export async function launch(
     if (pid !== undefined) {
       phase("reload", "reloading the app");
       const before = await bundlesServed(earlier.logDir);
+      // The reload starts a new run, as a relaunch does: its own folder and log
+      // window, open before the message so no line of the reloaded app is missed.
+      let reloadCapture: LoggedProcess | undefined;
       try {
+        await mkdir(logDir, { recursive: true });
+        await stopCaptures(root);
+        reloadCapture = await startCapture(device.id, earlier.appId, logDir);
+        await symlink(
+          await realpath(join(earlier.logDir, "metro.log")),
+          metroLog,
+        );
         await sendReload(port);
         if (await untilBundled(earlier.logDir, before, bundleSeconds)) {
           const axe = (await detectEnvironment()).axe;
@@ -406,13 +416,12 @@ export async function launch(
             verdict: "launched",
             root,
             ...where,
-            logDir: earlier.logDir,
             appId: earlier.appId,
             ...(screen && { screen }),
             appPid: pid,
             build: { action: "reloaded" },
             ...(earlier.metro && { metro: earlier.metro }),
-            ...(earlier.logStream && { logStream: earlier.logStream }),
+            logStream: { pid: reloadCapture.pid },
             derivedData,
             diskMB: await sizes(),
             seconds: seconds(),
@@ -423,9 +432,15 @@ export async function launch(
       } catch (error) {
         reloadFailed = `the reload message failed: ${String(error).split("\n")[0]}`;
       }
+      reloadCapture?.kill();
     }
   }
 
+  if (reloadFailed !== undefined) {
+    // The relaunch writes its own dev server log in the same folder.
+    await rm(metroLog, { force: true });
+    await rm(join(logDir, "app.ndjson"), { force: true });
+  }
   await stopEarlierServer(root, port);
   if (await metroRunning(port)) {
     return stuck(

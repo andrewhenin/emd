@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { launchesIn } from "./jobstore.js";
 import type { LaunchResult } from "./result.js";
 import type { Device } from "./simulator.js";
@@ -58,14 +58,20 @@ export const earlierLaunch = (
   port: number,
   listening: number[],
 ): LaunchResult | undefined =>
-  launchesIn(root).find(
-    ({ verdict, metro, device, logDir }) =>
-      verdict === "launched" &&
-      metro?.port === port &&
-      listening.includes(metro.pid) &&
-      device &&
-      logDir,
-  );
+  // Reloads share one dev server, so the newest run (its folder name starts
+  // with its start time) is the one whose log window is open.
+  launchesIn(root)
+    .filter(
+      ({ verdict, metro, device, logDir }) =>
+        verdict === "launched" &&
+        metro?.port === port &&
+        listening.includes(metro.pid) &&
+        device &&
+        logDir,
+    )
+    .sort((a, b) =>
+      basename(b.logDir ?? "").localeCompare(basename(a.logDir ?? "")),
+    )[0];
 
 const bundled = /Bundled \d+ms/g;
 const count = async (path: string) =>
