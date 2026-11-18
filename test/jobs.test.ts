@@ -6,11 +6,12 @@ import {
   createJob,
   type Handlers,
   jobStatus,
+  launchInline,
   runJob,
   startJob,
   waitForJob,
 } from "../src/core/jobs.ts";
-import { readJob } from "../src/core/jobstore.ts";
+import { launchesIn, readJob } from "../src/core/jobstore.ts";
 import type { CheckResult, LaunchResult } from "../src/core/result.ts";
 import { makeDir } from "./helpers.ts";
 
@@ -266,4 +267,22 @@ test("waitForJob answers at once with a wait of 0, and when the wait runs out", 
   const started = Date.now();
   expect((await waitForJob(job.id, 0.1))?.status).toBe("queued");
   expect(Date.now() - started).toBeGreaterThanOrEqual(100);
+});
+
+test("an inline launch leaves the same record as a started job", async () => {
+  const result: LaunchResult = {
+    verdict: "launched",
+    root: "/inline",
+    metro: { pid: 1, port: 8081 },
+  };
+  expect(
+    await launchInline(
+      { dir: "/inline" },
+      handlers(
+        async () => result,
+        () => "",
+      ),
+    ),
+  ).toEqual(result);
+  expect(launchesIn("/inline")).toEqual([result]);
 });

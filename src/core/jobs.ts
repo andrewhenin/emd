@@ -108,6 +108,17 @@ export function startJob<K extends JobKind>(
   return view(job);
 }
 
+// Runs a launch in this process and leaves the same job record as a started
+// job, so a later launch finds its dev server and log stream.
+export async function launchInline(
+  input: LaunchOptions,
+  run: Handlers = handlers,
+): Promise<LaunchResult> {
+  const { id } = createJob("launch", input);
+  await runJob(id, run);
+  return readJob(id)?.result as LaunchResult;
+}
+
 const execute = (
   job: Job,
   run: Handlers,
