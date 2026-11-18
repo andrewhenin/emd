@@ -18,7 +18,7 @@ Run `npx -y emd-agents@latest setup --dry-run` and show the user its plan. Run i
 
 ## The loop
 
-After you change code, call `launch` again before you `check` or `tap`. The dev server does not reload edits, and a relaunch takes seconds when nothing native changed.
+After you change code, call `launch` again before you `check` or `tap`. When nothing native changed, `launch` reloads the running app from the dev server in seconds (`build.action: "reloaded"`).
 
 1. `launch` with `dir` set to the app folder. It returns a `jobId` at once.
 2. `job_status` with the `jobId`, until `succeeded` or `failed`. A first build takes minutes. A failed launch gives the reason and the first error lines: fix the cause and launch again.

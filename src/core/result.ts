@@ -42,6 +42,8 @@ export const launchResultSchema = z.object({
   // The iOS app ID that Expo's build wrote to the app config (ios.bundleIdentifier)
   // because the app had none. Absent when the app already had one.
   appIdSet: z.string().optional(),
+  // Why a reload did not work and the app was relaunched instead.
+  reloadFailed: z.string().optional(),
   // The Metro port reserved for this worktree; set on a failure after it was.
   port: z.number().optional(),
   // The dev server left running for the app; the next launch in this worktree
@@ -50,11 +52,12 @@ export const launchResultSchema = z.object({
   // The log stream that captures the app's tagged lines; the next launch in
   // this worktree stops it.
   logStream: z.object({ pid: z.number() }).optional(),
-  // Whether the Xcode build ran, an installed build was reused, or an earlier
-  // build was installed again; why it was not reused.
+  // Whether the Xcode build ran, an installed build was reused, an earlier
+  // build was installed again, or the running app was reloaded from the dev
+  // server; why it was not reused.
   build: z
     .object({
-      action: z.enum(["built", "reused", "installed"]),
+      action: z.enum(["built", "reused", "installed", "reloaded"]),
       reason: z.string().optional(),
     })
     .optional(),
