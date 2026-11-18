@@ -1,8 +1,8 @@
 import type { UiNode } from "./screen.js";
 
 // AXe and Maestro return when they have sent the keys, not when the app has
-// them. On a busy simulator keys arrive 10 to 27 s late, or only the first
-// does (issue 163). So `type` reads the screen until the text shows.
+// them. On a busy simulator keys arrive 10 to 27 s late, or never (issue 163).
+// So `type` reads the screen until the text shows.
 //
 // Only nodes whose text changed since the read before typing count, so text
 // that was already on screen never confirms. A changed node confirms when its
@@ -10,10 +10,12 @@ import type { UiNode } from "./screen.js";
 // was empty or showed a placeholder).
 
 type Typing = {
-  // Types the text, as one backend call.
-  type(text: string): Promise<void>;
-  read(): Promise<UiNode[]>;
+  // Types the text, as one backend call that may take at most `seconds`.
+  type(text: string, seconds: number): Promise<void>;
+  // Reads the screen, in at most `seconds`.
+  read(seconds: number): Promise<UiNode[]>;
   sleep(ms: number): Promise<void>;
+  now(): number;
 };
 
 type Typed = { seconds: number; retyped?: string } & (
@@ -86,67 +88,84 @@ function describeScreen(nodes: UiNode[]): string {
     : "the screen shows no text";
 }
 
-// Types `text`, then reads until it shows, for up to `limitSeconds`. If some
-// keys arrived at a node and its text stays the same for two reads, types the
-// rest once. If no key arrived, never types again: the keys may be late.
+// Types `text`, then reads until it shows. The whole call, from the read before
+// typing, takes at most `limitSeconds`: each step gets only the time left, and
+// no step starts after the limit. The MCP client gives up at 60 s.
+//
+// If the screen stays the same for half the limit, types the missing rest once
+// (all of it when no key arrived). Late keys come 10 to 27 s late, so a shorter
+// wait doubles text. Doubled text fails the exact match, so a retype can never
+// give a false `ok`.
 export async function typeUntilShown(
   io: Typing,
   text: string,
-  limitSeconds = 30,
+  limitSeconds = 40,
   pauseMs = 1000,
 ): Promise<Typed> {
-  const before = keyed(await io.read());
-  const start = Date.now();
-  const seconds = () => Math.round((Date.now() - start) / 100) / 10;
-  await io.type(text);
-  let last: UiNode[] = [];
-  let lastError = "";
-  let previous = "";
+  const start = io.now();
+  const end = start + limitSeconds * 1000;
+  const left = () => Math.max(0, (end - io.now()) / 1000);
+  const seconds = () => Math.round((io.now() - start) / 100) / 10;
   let retyped: string | undefined;
-  const extra = () => (retyped ? { retyped } : {});
+  const failed = (reason: string): Typed => ({
+    verdict: "failed",
+    seconds: seconds(),
+    ...(retyped ? { retyped } : {}),
+    reason,
+  });
+
+  let last = await io.read(left());
+  const before = keyed(last);
+  if (left() === 0) {
+    return failed(`Reading the screen before typing took ${seconds()} s.`);
+  }
+  await io.type(text, left());
+  let lastError = "";
+  let state = "";
+  let since = io.now();
   for (;;) {
+    if (left() === 0) {
+      const error = lastError
+        ? `; the last read failed: ${lastError.split("\n")[0]}`
+        : "";
+      return failed(
+        `The text did not show on screen after ${seconds()} s${retyped ? " and one retype" : ""}; ${describeScreen(last)}${error}.`,
+      );
+    }
     let rest: string | undefined;
     try {
-      last = await io.read();
+      last = await io.read(left());
       lastError = "";
       const judged = judge(before, last, text);
       if (judged.kind === "shown" || judged.kind === "secure") {
-        return { verdict: judged.kind, seconds: seconds(), ...extra() };
+        return {
+          verdict: judged.kind,
+          seconds: seconds(),
+          ...(retyped ? { retyped } : {}),
+        };
       }
       if (judged.kind === "extra") {
-        return {
-          verdict: "failed",
-          seconds: seconds(),
-          ...extra(),
-          reason: `The field shows ${JSON.stringify(judged.shown.slice(0, 80))}: more than the typed text.`,
-        };
+        return failed(
+          `The field shows ${JSON.stringify(judged.shown.slice(0, 80))}: more than the typed text.`,
+        );
       }
       const now =
         judged.kind === "partial" ? `${judged.key}=${judged.shown}` : "";
-      if (judged.kind === "partial" && now === previous && !retyped) {
-        rest = text.slice(judged.have);
+      if (now !== state) {
+        state = now;
+        since = io.now();
+      } else if (!retyped && io.now() - since >= (end - start) / 2) {
+        rest = text.slice(judged.kind === "partial" ? judged.have : 0);
       }
-      previous = now;
     } catch (error) {
       // A failed read says nothing about the text; read again.
       lastError = error instanceof Error ? error.message : String(error);
     }
     // Outside the try: a failed retype must fail the call, not be read again.
-    if (rest) {
+    if (rest && left() > 0) {
       retyped = rest;
-      await io.type(rest);
+      await io.type(rest, left());
     }
-    if (Date.now() - start >= limitSeconds * 1000) {
-      const reading = lastError
-        ? `the last read failed: ${lastError.split("\n")[0]}`
-        : describeScreen(last);
-      return {
-        verdict: "failed",
-        seconds: seconds(),
-        ...extra(),
-        reason: `The text did not show on screen after ${seconds()} s${retyped ? " and one retype" : ""}; ${reading}.`,
-      };
-    }
-    await io.sleep(pauseMs);
+    if (left() > 0) await io.sleep(Math.min(pauseMs, left() * 1000));
   }
 }

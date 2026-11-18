@@ -6,6 +6,7 @@ import {
   directions,
   firstWorking,
   readScreen,
+  secondsTo,
   type Target,
   type Where,
 } from "./device/backend.js";
@@ -27,10 +28,13 @@ type Gesture = (
   bin: string,
 ) => Promise<void>;
 
+const until = (seconds: number) => Date.now() + seconds * 1000;
+
 type Act = {
   // Sends one gesture through the first backend that works.
   send(gesture: Gesture): Promise<void>;
-  read(): Promise<UiNode[]>;
+  // Reads the screen in at most `seconds`.
+  read(seconds: number): Promise<UiNode[]>;
 };
 
 // Runs `run` against the launched app. `run` returns extra result fields, or
@@ -59,7 +63,8 @@ async function act(
           first = { backend, ...(fellBack ? { fellBack } : {}) };
         }
       },
-      read: () => readScreen(device, env, backends).then((r) => r.nodes),
+      read: (seconds) =>
+        readScreen(device, env, backends, until(seconds)).then((r) => r.nodes),
     });
     return { verdict: extra.reason ? "failed" : "ok", ...first, ...extra };
   } catch (error) {
@@ -115,9 +120,15 @@ export function typeText(
   return act("type", options, async ({ send, read }) => {
     const typed = await typeUntilShown(
       {
-        type: (part) => send((b, where, bin) => b.type(where, bin, part)),
+        type: (part, seconds) => {
+          const end = until(seconds);
+          return send((b, where, bin) =>
+            b.type(where, bin, part, secondsTo(end)),
+          );
+        },
         read,
         sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+        now: Date.now,
       },
       text,
     );

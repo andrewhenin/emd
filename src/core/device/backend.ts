@@ -28,9 +28,15 @@ export type Where = { device: string; appId: string };
 // A tool that can act on a simulator: read its screen, tap, type and swipe.
 export interface DeviceBackend {
   id: BackendId;
-  readScreen(device: string, bin: string): Promise<UiNode[]>;
+  // `seconds`, when given, replaces the backend's own limit for the call.
+  readScreen(device: string, bin: string, seconds?: number): Promise<UiNode[]>;
   tap(where: Where, bin: string, target: Target): Promise<void>;
-  type(where: Where, bin: string, text: string): Promise<void>;
+  type(
+    where: Where,
+    bin: string,
+    text: string,
+    seconds?: number,
+  ): Promise<void>;
   swipe(where: Where, bin: string, direction: Direction): Promise<void>;
 }
 
@@ -78,6 +84,14 @@ export async function firstWorking<B extends { id: BackendId }, T>(
   );
 }
 
+// Seconds left until `until` (a Date.now() time), for one backend's call. When
+// none are left, it throws, so no backend starts after a caller's deadline.
+export function secondsTo(until: number): number {
+  const seconds = (until - Date.now()) / 1000;
+  if (seconds <= 0) throw new Error("no time left");
+  return seconds;
+}
+
 // A screen read, and which backend produced it.
 export type ScreenRead = Omit<Acted<UiNode[]>, "value"> & { nodes: UiNode[] };
 
@@ -85,13 +99,19 @@ export async function readScreen(
   device: string,
   env: Environment,
   backends: Pick<DeviceBackend, "id" | "readScreen">[],
+  // A Date.now() time that no backend's read may pass.
+  until?: number,
 ): Promise<ScreenRead> {
   const { value, ...rest } = await firstWorking(
     "read the screen",
     env,
     backends,
     async (backend, bin) => {
-      const nodes = await backend.readScreen(device, bin);
+      const nodes = await backend.readScreen(
+        device,
+        bin,
+        until === undefined ? undefined : secondsTo(until),
+      );
       // Every good read includes the app's root node, so none means the read
       // failed (AXe sometimes reads nothing right after a relaunch).
       if (nodes.length === 0) throw new Error("returned an empty tree");

@@ -45,13 +45,17 @@ const driverEnv = () => ({
 // The accessibility tree of what is on the simulator's screen now. Maestro
 // starts and stops its XCUITest driver on every call, which takes about 20 s,
 // and about 50 s for the first call after an app launch.
-async function readScreen(device: string, bin: string): Promise<UiNode[]> {
+async function readScreen(
+  device: string,
+  bin: string,
+  seconds = 240,
+): Promise<UiNode[]> {
   try {
     const { stdout } = await runTool(
       "maestro hierarchy",
       bin,
       ["--device", device, "hierarchy"],
-      240,
+      seconds,
       { env: driverEnv() },
     );
     return parseMaestro(stdout);
@@ -70,7 +74,12 @@ async function readScreen(device: string, bin: string): Promise<UiNode[]> {
 
 // One step as a Maestro flow for the app. JSON strings are valid YAML
 // strings. A run takes 80 to 100 s (experiments/tap-tools.md).
-async function runStep({ device, appId }: Where, bin: string, step: string) {
+async function runStep(
+  { device, appId }: Where,
+  bin: string,
+  step: string,
+  seconds = 240,
+) {
   const dir = mkdtempSync(join(tmpdir(), "emd-maestro-"));
   try {
     const flow = join(dir, "step.yaml");
@@ -79,7 +88,7 @@ async function runStep({ device, appId }: Where, bin: string, step: string) {
       "maestro test",
       bin,
       ["--device", device, "test", flow],
-      240,
+      seconds,
       {
         env: driverEnv(),
       },
@@ -104,8 +113,8 @@ export const maestroBackend: DeviceBackend = {
   id: "maestro",
   readScreen,
   tap: (where, bin, target) => runStep(where, bin, tapStep(target)),
-  type: (where, bin, text) =>
-    runStep(where, bin, `inputText: ${JSON.stringify(text)}`),
+  type: (where, bin, text, seconds) =>
+    runStep(where, bin, `inputText: ${JSON.stringify(text)}`, seconds),
   swipe: (where, bin, direction) =>
     runStep(where, bin, `swipe: { direction: ${direction.toUpperCase()} }`),
 };

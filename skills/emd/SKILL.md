@@ -22,7 +22,7 @@ After you change code, call `launch` again before you `check` or `tap`. The dev 
 
 1. `launch` with `dir` set to the app folder. It returns a `jobId` at once.
 2. `job_status` with the `jobId`, until `succeeded` or `failed`. A first build takes minutes. A failed launch gives the reason and the first error lines: fix the cause and launch again.
-3. `tap` with the `jobId`, and a testID (`id`) or a visible `text`. Use a point only when the element has neither. `type` types into the field that has focus, so tap the field first. `swipe` scrolls. For `tap` and `swipe`, `ok` means the gesture was sent; the next `check` shows what the app did. For `type`, `ok` means the text shows on screen; it can take up to 30 s. A secure field shows bullets, so `ok` there has a `note`.
+3. `tap` with the `jobId`, and a testID (`id`) or a visible `text`. Use a point only when the element has neither. `type` types into the field that has focus, so tap the field first. `swipe` scrolls. For `tap` and `swipe`, `ok` means the gesture was sent; the next `check` shows what the app did. For `type`, `ok` means the text shows on screen; it can take up to 40 s. A secure field shows bullets, so `ok` there has a `note`.
 4. `logs`, to read the tagged lines of this run.
 5. `check` with the expected log events and elements and a `name` for the moment, e.g. `after-save`. A later check under that name must keep the first expectations unchanged; it can add more. Then `job_status` until it ends:
    - `passed`: done.
