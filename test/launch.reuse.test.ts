@@ -1,5 +1,12 @@
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import {
+  chmodSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  writeFileSync,
+} from "node:fs";
 import { delimiter, join } from "node:path";
 import { expect, test } from "vitest";
 import { expoProject, makeDir } from "./helpers.ts";
@@ -57,6 +64,27 @@ else if (command === "run:ios" && fs.existsSync(${JSON.stringify(writePlist)})) 
     "node_modules/@expo/fingerprint/index.js":
       'exports.createFingerprintAsync = async () => ({ hash: "same" });',
   });
+  // Each rig holds its own Metro port. Two test runs have separate state dirs,
+  // so without this both pick the first free port and see each other's stub.
+  const root = realpathSync(project);
+  mkdirSync(join(state, "owned"), { recursive: true });
+  writeFileSync(
+    join(
+      state,
+      "owned",
+      `${createHash("sha1").update(root).digest("hex").slice(0, 12)}.json`,
+    ),
+    JSON.stringify({
+      root,
+      resources: [
+        {
+          kind: "port",
+          id: String(20_000 + Math.floor(Math.random() * 40_000)),
+          state: "creating",
+        },
+      ],
+    }),
+  );
   return {
     launch: () => {
       const run = spawnSync("node", ["dist/bin.js", "launch", project], {
