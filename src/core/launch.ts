@@ -1,4 +1,4 @@
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir, readFile, realpath, rm, symlink } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import {
@@ -23,6 +23,13 @@ import { confirm, reserve, worktreeKey } from "./owned.js";
 import { type LoggedProcess, startLogged } from "./process.js";
 import { inspectProject } from "./project.js";
 import { loadAdapter } from "./registry.js";
+import {
+  bundlesServed,
+  earlierLaunch,
+  runningPid,
+  sendReload,
+  untilBundled,
+} from "./reload.js";
 import type { LaunchResult } from "./result.js";
 import {
   appAccessibilityOn,
@@ -52,6 +59,8 @@ const defaultTimeoutSeconds = 900;
 const screenReadSeconds = 180;
 // An empty tree this long after the app started means accessibility is off.
 const emptyTreeSeconds = 5;
+// How long a reload may take to show a new bundle request in the dev server log.
+const bundleSeconds = 60;
 
 export type LaunchOptions = {
   dir?: string;
@@ -349,6 +358,89 @@ export async function launch(
     });
   }
 
+  // Reuse the installed build when nothing native changed. A fingerprint that
+  // cannot be computed means a normal build.
+  let fingerprint: string | undefined;
+  let why: string | undefined;
+  try {
+    fingerprint = await (await loadAdapter(detected.stack)).fingerprint(
+      root,
+      "ios",
+    );
+  } catch (error) {
+    why = `fingerprint failed: ${String(error).split("\n")[0]}`;
+  }
+
+  // A running app, a running dev server of this worktree and an unchanged
+  // fingerprint: reload the app. Without a new bundle request in the log the
+  // reload did not happen, and the launch goes on as a relaunch.
+  let reloadFailed: string | undefined;
+  const earlier =
+    fingerprint === undefined
+      ? undefined
+      : earlierLaunch(root, port, await listeningGroups(port));
+  if (
+    earlier?.appId &&
+    earlier.logDir &&
+    fingerprint !== undefined &&
+    whyBuild(readBuildRecord(derivedData), { fingerprint, port }, true) ===
+      undefined &&
+    (await metroRunning(port))
+  ) {
+    const pid = await runningPid(device, earlier.appId);
+    if (pid !== undefined) {
+      phase("reload", "reloading the app");
+      const before = await bundlesServed(earlier.logDir);
+      // The reload starts a new run, as a relaunch does: its own folder and log
+      // window, open before the message so no line of the reloaded app is missed.
+      let reloadCapture: LoggedProcess | undefined;
+      try {
+        await mkdir(logDir, { recursive: true });
+        await stopCaptures(root);
+        reloadCapture = await startCapture(device.id, earlier.appId, logDir);
+        await symlink(
+          await realpath(join(earlier.logDir, "metro.log")),
+          metroLog,
+        );
+        await sendReload(port);
+        if (await untilBundled(earlier.logDir, before, bundleSeconds)) {
+          const axe = (await detectEnvironment()).axe;
+          phase("screen", "waiting for the screen");
+          const screen = axe
+            ? await untilReadable(
+                () => axeBackend.readScreen(device.id, axe),
+                screenReadSeconds,
+              )
+            : undefined;
+          return {
+            verdict: "launched",
+            root,
+            ...where,
+            appId: earlier.appId,
+            ...(screen && { screen }),
+            appPid: pid,
+            build: { action: "reloaded" },
+            ...(earlier.metro && { metro: earlier.metro }),
+            logStream: { pid: reloadCapture.pid },
+            derivedData,
+            diskMB: await sizes(),
+            seconds: seconds(),
+            phases: endPhase(),
+          };
+        }
+        reloadFailed = `no new bundle request ${bundleSeconds}s after the reload message`;
+      } catch (error) {
+        reloadFailed = `the reload message failed: ${String(error).split("\n")[0]}`;
+      }
+      reloadCapture?.kill();
+    }
+  }
+
+  if (reloadFailed !== undefined) {
+    // The relaunch writes its own dev server log in the same folder.
+    await rm(metroLog, { force: true });
+    await rm(join(logDir, "app.ndjson"), { force: true });
+  }
   await stopEarlierServer(root, port);
   if (await metroRunning(port)) {
     return stuck(
@@ -362,7 +454,13 @@ export async function launch(
     RCT_METRO_PORT: String(port),
     PATH: `${shimDir}:${process.env.PATH}`,
   };
-  const metro = startLogged(plan.server, { cwd: root, logPath: metroLog, env });
+  // With CI set Metro does not watch files, so an edit never reaches the next
+  // bundle. The server has no terminal (stdin is closed), so it asks nothing.
+  const metro = startLogged(plan.server, {
+    cwd: root,
+    logPath: metroLog,
+    env: { ...env, CI: undefined },
+  });
   const metroState = await untilReady(
     () => metroRunning(port),
     metro.exited,
@@ -379,18 +477,6 @@ export async function launch(
   }
 
   confirm(root, "port");
-  // Reuse the installed build when nothing native changed. A fingerprint that
-  // cannot be computed means a normal build.
-  let fingerprint: string | undefined;
-  let why: string | undefined;
-  try {
-    fingerprint = await (await loadAdapter(detected.stack)).fingerprint(
-      root,
-      "ios",
-    );
-  } catch (error) {
-    why = `fingerprint failed: ${String(error).split("\n")[0]}`;
-  }
   if (fingerprint !== undefined) {
     why = whyBuild(
       readBuildRecord(derivedData),
@@ -528,6 +614,7 @@ export async function launch(
     ...where,
     appId,
     ...(appIdSet && { appIdSet }),
+    ...(reloadFailed && { reloadFailed }),
     ...(screen && { screen }),
     appPid,
     build:
