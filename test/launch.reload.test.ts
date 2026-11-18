@@ -24,6 +24,9 @@ else if (command === "start") {
     const key = crypto.createHash("sha1").update(req.headers["sec-websocket-key"] + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").digest("base64");
     socket.write("HTTP/1.1 101 Switching Protocols\\r\\nUpgrade: websocket\\r\\nConnection: Upgrade\\r\\nSec-WebSocket-Accept: " + key + "\\r\\n\\r\\n");
     socket.on("data", (data) => {
+      // A close frame is answered with a close frame; only text frames count.
+      if ((data[0] & 15) === 8) return socket.end(Buffer.from([0x88, 0]));
+      if ((data[0] & 15) !== 1) return;
       const length = data[1] & 127;
       const mask = data.subarray(2, 6);
       const text = Buffer.from(data.subarray(6, 6 + length).map((b, i) => b ^ mask[i % 4])).toString();
@@ -118,7 +121,7 @@ onMac(
       "CI=unset",
     );
     const second = launch();
-    expect(second.verdict).toBe("launched");
+    expect(second.reason ?? second.verdict).toBe("launched");
     expect(second.build).toEqual({ action: "reloaded" });
     expect(second.metro).toEqual(first.metro);
     expect(second.logStream).toEqual(first.logStream);

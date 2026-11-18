@@ -21,7 +21,12 @@ export async function sendReload(port: number): Promise<void> {
       reject(new Error("socket error"));
     };
   });
-  socket.close();
+  // The server answers the close; a silent one must not hold this process.
+  await new Promise<void>((resolve) => {
+    socket.onclose = () => resolve();
+    socket.close();
+    setTimeout(resolve, 1000).unref();
+  });
 }
 
 // The pid of the app when it runs on the device; undefined when it does not.
