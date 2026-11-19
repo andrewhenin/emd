@@ -2,17 +2,13 @@ import { spawnSync } from "node:child_process";
 import {
   appendFileSync,
   chmodSync,
-  mkdirSync,
   readdirSync,
   readFileSync,
-  realpathSync,
   writeFileSync,
 } from "node:fs";
-import { type AddressInfo, createServer } from "node:net";
 import { delimiter, join } from "node:path";
 import { afterEach, expect, test } from "vitest";
-import { type KeyedLedger, worktreeKey } from "../src/core/owned.ts";
-import { expoProject, makeDir } from "./helpers.ts";
+import { expoProject, holdPort, makeDir } from "./helpers.ts";
 
 // `emd launch` through the built CLI with a stub dev server. The stub answers
 // /status and reads a "reload" message on the /message websocket, as Expo's
@@ -62,17 +58,6 @@ afterEach(() => {
   }
 });
 
-// A port the OS just handed out, so parallel test runs never share one.
-const freePort = () =>
-  new Promise<number>((resolve, reject) => {
-    const server = createServer();
-    server.once("error", reject);
-    server.listen(0, () => {
-      const { port } = server.address() as AddressInfo;
-      server.close(() => resolve(port));
-    });
-  });
-
 async function rig() {
   const bin = makeDir();
   const state = makeDir();
@@ -106,19 +91,7 @@ exit 0`,
     "node_modules/@expo/fingerprint/index.js":
       'exports.createFingerprintAsync = async () => ({ hash: "same" });',
   });
-  // Parallel runs have separate state dirs; each rig holds its own Metro port.
-  const root = realpathSync(project);
-  const ledger: Omit<KeyedLedger, "key"> = {
-    root,
-    resources: [
-      { kind: "port", id: String(await freePort()), state: "creating" },
-    ],
-  };
-  mkdirSync(join(state, "owned"), { recursive: true });
-  writeFileSync(
-    join(state, "owned", `${worktreeKey(root)}.json`),
-    JSON.stringify(ledger),
-  );
+  await holdPort(state, project);
   return {
     launch: () => {
       const run = spawnSync("node", ["dist/bin.js", "launch", project], {

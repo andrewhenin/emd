@@ -1,11 +1,13 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
+import { type AddressInfo, createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { Client } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import { afterAll, beforeAll } from "vitest";
 import { createJob, runJob } from "../src/core/jobs.ts";
+import { type KeyedLedger, worktreeKey } from "../src/core/owned.ts";
 
 export function makeDir(files: Record<string, string> = {}): string {
   const dir = mkdtempSync(join(tmpdir(), "emd-test-"));
@@ -109,4 +111,33 @@ export function mcpSession(state: string) {
   };
 
   return { client, call, finished };
+}
+
+// A port the OS just handed out, so parallel test runs never share one.
+const freePort = () =>
+  new Promise<number>((resolve, reject) => {
+    const server = createServer();
+    server.once("error", reject);
+    server.listen(0, () => {
+      const { port } = server.address() as AddressInfo;
+      server.close(() => resolve(port));
+    });
+  });
+
+// Records a free Metro port as `project`'s own in `state`. Parallel test runs
+// have separate state dirs, so without this they can pick the same port and see
+// each other's stub server.
+export async function holdPort(state: string, project: string): Promise<void> {
+  const root = realpathSync(project);
+  const ledger: Omit<KeyedLedger, "key"> = {
+    root,
+    resources: [
+      { kind: "port", id: String(await freePort()), state: "creating" },
+    ],
+  };
+  mkdirSync(join(state, "owned"), { recursive: true });
+  writeFileSync(
+    join(state, "owned", `${worktreeKey(root)}.json`),
+    JSON.stringify(ledger),
+  );
 }
