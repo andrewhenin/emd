@@ -20,7 +20,7 @@ Run `npx -y emd-agents@latest setup --dry-run` and show the user its plan. Run i
 
 After you change code, call `launch` again before you `check` or `tap`. When nothing native changed, `launch` reloads the running app from the dev server in seconds (`build.action: "reloaded"`).
 
-1. `launch` with `dir` set to the app folder. It waits up to 25 s: a reload or relaunch usually returns its result.
+1. `launch` with `dir` set to the app folder. It waits up to 25 s (100 s in Claude Code): a reload or relaunch usually returns its result.
 2. If it returned a job still running, `job_status` with the `jobId`, until `succeeded` or `failed`. A first build takes minutes. A failed launch gives the reason and the first error lines: fix the cause and launch again.
 3. `tap` with the `jobId`, and a testID (`id`) or a visible `text`. Use a point only when the element has neither. `type` types into the field that has focus, so tap the field first. `swipe` scrolls. A result of `ok` means the gesture was sent; the next `check` shows what the app did.
 4. `logs`, to read the tagged lines of this run.

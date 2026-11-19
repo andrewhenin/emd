@@ -114,11 +114,25 @@ const emdServer = () =>
     ? `npx -y emd-agents@${version()} mcp`
     : `${process.execPath} ${fileURLToPath(new URL("../bin.js", import.meta.url))} mcp`;
 
+// Claude Code's CLI lets one stdio tool call run for hours, so EMD waits up to
+// this long per call there and an agent polls less (#223). Codex and Cursor
+// stop a call at 60 s by default and keep EMD's short waits.
+const longWaitSeconds = 100;
+
 function commands(ids: AgentId[]): [string, string[]][] {
-  const to = ids.flatMap((id) => ["-a", id]);
+  const to = (some: AgentId[]) => some.flatMap((id) => ["-a", id]);
+  const add = (some: AgentId[], env: string[] = []): [string, string[]] => [
+    "npx",
+    ["-y", addMcp, emdServer(), "-n", "emd", "-g", ...to(some), ...env, "-y"],
+  ];
+  const long = ids.filter((id) => id === "claude-code");
+  const short = ids.filter((id) => id !== "claude-code");
   return [
-    ["npx", ["-y", addMcp, emdServer(), "-n", "emd", "-g", ...to, "-y"]],
-    ["npx", ["-y", skillsCli, "add", skillSource(), "-g", ...to, "-y"]],
+    ...(long.length > 0
+      ? [add(long, ["--env", `EMD_WAIT_SECONDS=${longWaitSeconds}`])]
+      : []),
+    ...(short.length > 0 ? [add(short)] : []),
+    ["npx", ["-y", skillsCli, "add", skillSource(), "-g", ...to(ids), "-y"]],
   ];
 }
 

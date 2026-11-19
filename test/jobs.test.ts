@@ -284,6 +284,16 @@ test("waitForJob starts no read after its deadline, even when a read is slow", a
   expect(Math.max(...reads) - reads[0]!).toBeLessThan(1000);
 });
 
+test("waitForJob ends at once when the caller cancels", async () => {
+  const running = { status: "running" } as JobView;
+  const cancel = new AbortController();
+  setTimeout(() => cancel.abort(), 200);
+  const started = Date.now();
+  const job = await waitForJob("x", 20, () => running, cancel.signal);
+  expect(job?.status).toBe("running");
+  expect(Date.now() - started).toBeLessThan(2000);
+});
+
 test("an inline launch leaves the same record as a started job", async () => {
   const result: LaunchResult = {
     verdict: "launched",
