@@ -141,6 +141,7 @@ const calls = events
     const steps = stepsOf(b.name ?? "", input);
     return {
       index,
+      id: b.id,
       name: b.name ?? "",
       ok: !failed.has(b.id),
       steps,
@@ -208,6 +209,74 @@ for (const call of calls) {
   if (seen.has(call.key)) repeatedCalls++;
   seen.add(call.key);
 }
+// Claude Code's telemetry (run.ts writes otel.jsonl): time in model requests
+// and, when its trace spans came, the part spent waiting for the first token;
+// time and result size per tool; the slowest calls. `complete` is false when
+// a tool event is missing, such as a last batch lost when the process stopped.
+type Telemetry = {
+  "event.name"?: string;
+  span?: string;
+  tool_name?: string;
+  tool_use_id?: string;
+  duration_ms?: number | string;
+  ttft_ms?: number | string;
+  tool_result_size_bytes?: number | string;
+};
+const telemetry: Telemetry[] = existsSync(join(out, "otel.jsonl"))
+  ? readFileSync(join(out, "otel.jsonl"), "utf8")
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => JSON.parse(line))
+  : [];
+const ms = (e: Telemetry) => Number(e.duration_ms ?? 0);
+const total = (list: Telemetry[]) =>
+  Math.round(list.reduce((sum, e) => sum + ms(e), 0) / 100) / 10;
+const toolEvents = telemetry.filter((e) => e["event.name"] === "tool_result");
+// Summed in ms and bytes, rounded once at the end.
+const sums: Record<string, { calls: number; ms: number; bytes: number }> = {};
+for (const e of toolEvents) {
+  const name = e.tool_name ?? "?";
+  const sum = sums[name] ?? { calls: 0, ms: 0, bytes: 0 };
+  sums[name] = {
+    calls: sum.calls + 1,
+    ms: sum.ms + ms(e),
+    bytes: sum.bytes + Number(e.tool_result_size_bytes ?? 0),
+  };
+}
+const byTool = Object.fromEntries(
+  Object.entries(sums).map(([name, sum]) => [
+    name,
+    {
+      calls: sum.calls,
+      seconds: Math.round(sum.ms / 100) / 10,
+      resultKB: Math.round(sum.bytes / 102.4) / 10,
+    },
+  ]),
+);
+const requests = telemetry.filter((e) => e.span === "claude_code.llm_request");
+const timing = telemetry.length
+  ? {
+      modelSeconds: total(
+        telemetry.filter((e) => e["event.name"] === "api_request"),
+      ),
+      firstTokenSeconds: requests.length
+        ? Math.round(
+            requests.reduce((sum, e) => sum + Number(e.ttft_ms ?? 0), 0) / 100,
+          ) / 10
+        : null,
+      toolSeconds: total(toolEvents),
+      byTool,
+      slowest: [...toolEvents]
+        .sort((a, b) => ms(b) - ms(a))
+        .slice(0, 5)
+        .map((e) => ({
+          seconds: Math.round(ms(e) / 100) / 10,
+          tool: e.tool_name,
+          call: calls.find((c) => c.id === e.tool_use_id)?.summary ?? null,
+        })),
+      complete: toolEvents.length === calls.length,
+    }
+  : null;
 const runRecord = json("run.json");
 // A trial hit the limit only when no final answer came before it. A process
 // that answered and then stayed alive until the limit did not (#14 round 2).
@@ -246,6 +315,7 @@ write("meta.json", {
       }
     : null,
   toolCalls: calls.length,
+  timing,
   toolErrors: calls.filter((c) => !c.ok).length,
   repeatedCalls,
 });

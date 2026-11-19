@@ -100,6 +100,23 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.EVAL_ANTHROPIC_API_KEY }}
         run: node --experimental-strip-types "$HARNESS/run.ts"
 
+      # Read after the trial, so it adds no time to it: EMD's records as the
+      # trial left them (jobs with their phases, run logs and evidence in the
+      # temp folder; build records in ~/.emd, without DerivedData, which is
+      # gigabytes of build output) and Expo's raw build log.
+      - name: Collect EMD's and Expo's records
+        if: always() && steps.prepare.outcome == 'success'
+        shell: bash
+        run: |
+          temp="$(node -p 'require("node:os").tmpdir()')/emd"
+          if [ -d "$temp" ]; then rsync -a "$temp/" "$OUT_DIR/emd-temp/"; fi
+          if [ -d "$HOME/.emd" ]; then
+            rsync -a --exclude derived "$HOME/.emd/" "$OUT_DIR/emd-home/"
+          fi
+          for log in xcodebuild.log xcodebuild-error.log; do
+            if [ -f "$APP_DIR/.expo/$log" ]; then cp -p "$APP_DIR/.expo/$log" "$OUT_DIR/expo-$log"; fi
+          done
+
       - name: Grade the outcome
         if: always() && steps.prepare.outcome == 'success'
         shell: bash

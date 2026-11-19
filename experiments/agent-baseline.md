@@ -81,13 +81,19 @@ node --experimental-strip-types experiments/agent-baseline/summarize.ts <dir>
 
 Per trial (`experiments/agent-baseline/`):
 
-1. `prepare.sh`: the fixture app in its own git repo; one pinned simulator (all
+1. `prepare.sh`: the runner's model, CPUs and memory; the fixture app in its
+   own git repo; one pinned simulator (all
    others deleted, shut down at the start, because EMD clones only a shut-down
    one); Claude Code with an empty user config; the group's tools; a warm build
    made the way that group's agent builds. Then the workflow deletes the repo
    checkout, so a raw agent can't find EMD on disk.
 2. `run.ts`: `claude -p` with the prompt from #14, the group's model, and
-   `--dangerously-skip-permissions`, stopped at the time limit.
+   `--dangerously-skip-permissions`, stopped at the time limit. Claude Code's
+   telemetry (log events and trace spans) goes to a local receiver, which
+   keeps only names, IDs, durations, time to first token, result sizes,
+   tokens and cost in `otel.jsonl`. After the trial, the workflow copies
+   EMD's records (its temp folder, and `~/.emd` without DerivedData) and
+   Expo's raw build log.
 3. `grade.ts` (outcome): builds the app as the trial left it, launches it, taps
    "Save" and checks that "Saved" appears. "Saved" before the tap is a fail.
 4. `score.ts`: H1 proof from the transcript (an element-tree read before the
@@ -96,7 +102,9 @@ Per trial (`experiments/agent-baseline/`):
    answer, tool errors, repeated calls, and whether the session's tools match
    its group (a mismatch voids the trial; EMD's server still connecting
    counts as present). A trial hits the limit only when no final answer came
-   before it, and then its outcome is a fail.
+   before it, and then its outcome is a fail. From `otel.jsonl`: seconds in
+   model requests (and waiting for the first token, when spans came), time
+   and result size per tool, and the 5 slowest calls.
 5. The workflow removes the API key from every record before the upload.
 
 The groups are #14's, plus group 6 (Haiku, primed). Their model and arm, and

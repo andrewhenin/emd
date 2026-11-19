@@ -88,12 +88,15 @@ KEEP_APP=$([ "$APP" = installed ] && echo 1) bash "$HARNESS/stop.sh"
 jq -n \
   --arg udid "$udid" --arg name "$DEVICE_NAME" --arg runtime "$runtime" \
   --arg xcode "$(xcodebuild -version | tr '\n' ' ')" \
-  --arg macos "$(sw_vers -productVersion)" \
+  --arg macos "$(sw_vers -productVersion)" --arg hw "$(sysctl -n hw.model)" \
+  --argjson cpus "$(sysctl -n hw.ncpu)" \
+  --argjson memoryGb "$(($(sysctl -n hw.memsize) / 1073741824))" \
   --arg node "$(node --version)" --arg app "$APP" \
   --arg claude "$(claude --version)" \
   --argjson warmupExit "$warmup" --argjson warmupSeconds "$warmup_seconds" \
   '{device: {udid: $udid, name: $name, runtime: $runtime}, xcode: $xcode,
-    macos: $macos, node: $node, claudeCode: $claude, app: $app,
+    macos: $macos, runner: {model: $hw, cpus: $cpus, memoryGb: $memoryGb},
+    node: $node, claudeCode: $claude, app: $app,
     warmup: {exit: $warmupExit, seconds: $warmupSeconds}}' >"$OUT_DIR/prepare.json"
 cat "$OUT_DIR/prepare.json"
 if [ "$warmup" -ne 0 ]; then

@@ -10,6 +10,7 @@ type Trial = {
   arm: string;
   events: object[];
   timedOut?: boolean;
+  otel?: object[];
 };
 
 const model = "claude-sonnet-5-5";
@@ -33,7 +34,7 @@ const answer = {
   total_cost_usd: 0.09,
 };
 
-function score({ arm, events, timedOut = false }: Trial) {
+function score({ arm, events, timedOut = false, otel }: Trial) {
   const out = makeDir();
   const write = (file: string, data: object) =>
     writeFileSync(join(out, file), JSON.stringify(data));
@@ -50,6 +51,11 @@ function score({ arm, events, timedOut = false }: Trial) {
     join(out, "transcript.jsonl"),
     events.map((e) => JSON.stringify(e)).join("\n"),
   );
+  if (otel)
+    writeFileSync(
+      join(out, "otel.jsonl"),
+      otel.map((e) => JSON.stringify(e)).join("\n"),
+    );
   const env: Record<string, string> = { PATH: process.env.PATH ?? "" };
   env.OUT_DIR = out;
   const run = spawnSync(
@@ -159,6 +165,145 @@ test("the summary splits a group by app case and shows warm-up times", () => {
     "| 6 | primed | claude-haiku-5-5 | installed | 2 of 2 | 2 | 2 | 0 | 2 | 9 | 0.05 | 300 | 0 | 250 |",
   );
   expect(lines).toContain(
-    "| round-2 | 6 | installed | yes | pass | yes | 9 | 0.050 | 300 | 300 |  |",
+    "| round-2 | 6 | installed | yes | pass | yes | 9 | 0.050 | 300 |  |  | 300 |  |",
+  );
+});
+
+test("telemetry splits a trial's time into model, tools and slowest calls", () => {
+  const meta = score({
+    arm: "emd",
+    events: [
+      init(),
+      use("t1", "Bash", { command: "npx expo run:ios" }),
+      use("t2", "mcp__emd__launch", {}),
+      answer,
+    ],
+    otel: [
+      { "event.name": "api_request", duration_ms: 2000 },
+      { "event.name": "api_request", duration_ms: 3000 },
+      { span: "claude_code.llm_request", duration_ms: 2000, ttft_ms: 800 },
+      { span: "claude_code.llm_request", duration_ms: 3000, ttft_ms: "700" },
+      {
+        "event.name": "tool_result",
+        tool_name: "Bash",
+        tool_use_id: "t1",
+        duration_ms: 4000,
+        tool_result_size_bytes: 2048,
+      },
+      // OTLP JSON can send integers as strings.
+      {
+        "event.name": "tool_result",
+        tool_name: "mcp__emd__launch",
+        tool_use_id: "t2",
+        duration_ms: "12000",
+      },
+    ],
+  });
+  expect(meta.timing).toEqual({
+    modelSeconds: 5,
+    firstTokenSeconds: 1.5,
+    toolSeconds: 16,
+    byTool: {
+      Bash: { calls: 1, seconds: 4, resultKB: 2 },
+      mcp__emd__launch: { calls: 1, seconds: 12, resultKB: 0 },
+    },
+    slowest: [
+      { seconds: 12, tool: "mcp__emd__launch", call: "{}" },
+      { seconds: 4, tool: "Bash", call: "npx expo run:ios" },
+    ],
+    complete: true,
+  });
+});
+
+test("the runner keeps only timing, token and cost fields from telemetry and spans", () => {
+  const dir = makeDir();
+  const bin = join(dir, "bin");
+  const out = join(dir, "out");
+  mkdirSync(bin);
+  mkdirSync(out);
+  // A stand-in for Claude Code: sends one OTLP JSON batch, then answers.
+  const batch = {
+    resourceLogs: [
+      {
+        scopeLogs: [
+          {
+            logRecords: [
+              {
+                attributes: [
+                  { key: "event.name", value: { stringValue: "tool_result" } },
+                  { key: "user.email", value: { stringValue: "a@b.c" } },
+                  { key: "tool_name", value: { stringValue: "Bash" } },
+                  { key: "duration_ms", value: { intValue: "1500" } },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+  const spans = {
+    resourceSpans: [
+      {
+        scopeSpans: [
+          {
+            spans: [
+              {
+                name: "claude_code.llm_request",
+                startTimeUnixNano: "1700000000000000000",
+                attributes: [
+                  { key: "user.email", value: { stringValue: "a@b.c" } },
+                  { key: "ttft_ms", value: { intValue: "800" } },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+  writeFileSync(
+    join(bin, "claude"),
+    `#!${process.execPath}
+await fetch(process.env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: ${JSON.stringify(JSON.stringify(batch))},
+});
+await fetch(process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: ${JSON.stringify(JSON.stringify(spans))},
+});
+console.log(JSON.stringify({ type: "result", telemetry: process.env.CLAUDE_CODE_ENABLE_TELEMETRY }));
+`,
+    { mode: 0o755 },
+  );
+  const run = spawnSync(
+    process.execPath,
+    ["--experimental-strip-types", "experiments/agent-baseline/run.ts"],
+    {
+      env: {
+        PATH: `${bin}:${process.env.PATH}`,
+        APP_DIR: dir,
+        OUT_DIR: out,
+        MODEL: "claude-haiku-5-5",
+        TRIAL_MINUTES: "1",
+      },
+      encoding: "utf8",
+      timeout: 30_000,
+    },
+  );
+  expect(run.status, run.stderr).toBe(0);
+  expect(readFileSync(join(out, "transcript.jsonl"), "utf8")).toContain(
+    '"telemetry":"1"',
+  );
+  expect(readFileSync(join(out, "otel.jsonl"), "utf8")).toBe(
+    `${[
+      { "event.name": "tool_result", tool_name: "Bash", duration_ms: "1500" },
+      { span: "claude_code.llm_request", start: 1700000000000, ttft_ms: "800" },
+    ]
+      .map((line) => JSON.stringify(line))
+      .join("\n")}\n`,
   );
 });
