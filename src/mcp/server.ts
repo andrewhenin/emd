@@ -31,6 +31,25 @@ const waitSeconds = z
     "How long to wait for the work to end before returning the job. Default 25.",
   );
 
+// Waits for a job like waitForJob. A call more than 2 s past its wait means
+// this process got no CPU: one stderr line says so, and stderr reaches the
+// client's log even after the client has given up (#198).
+async function waitTimed(
+  tool: string,
+  jobId: string,
+  wait: number,
+  since = Date.now(),
+) {
+  const job = await waitForJob(jobId, wait);
+  const took = (Date.now() - since) / 1000;
+  if (took > wait + 2) {
+    console.error(
+      `emd: ${tool} took ${took.toFixed(1)} s with a ${wait} s wait.`,
+    );
+  }
+  return job;
+}
+
 const reply = (result: InputResult) => ({
   content: [{ type: "text" as const, text: JSON.stringify(result) }],
   structuredContent: result,
@@ -91,8 +110,11 @@ function buildServer(): McpServer {
       outputSchema: jobViewSchema,
     },
     async ({ waitSeconds: wait, ...input }) => {
+      const since = Date.now();
       const started = startJob("launch", input);
-      const job = (await waitForJob(started.jobId, wait ?? 25)) ?? started;
+      const job =
+        (await waitTimed("launch", started.jobId, wait ?? 25, since)) ??
+        started;
       return {
         content: [{ type: "text", text: JSON.stringify(job) }],
         structuredContent: job,
@@ -113,17 +135,7 @@ function buildServer(): McpServer {
     },
     async ({ jobId, waitSeconds }) => {
       // A 2x margin under a 60 s client timeout (#198).
-      const wait = waitSeconds ?? 30;
-      const started = Date.now();
-      const job = await waitForJob(jobId, wait);
-      const took = (Date.now() - started) / 1000;
-      // Past its wait, this process got no CPU. stderr reaches the client's log
-      // even when the client has given up on the call.
-      if (took > wait + 2) {
-        console.error(
-          `emd: job_status took ${took.toFixed(1)} s with a ${wait} s wait.`,
-        );
-      }
+      const job = await waitTimed("job_status", jobId, waitSeconds ?? 30);
       if (!job) {
         return {
           isError: true,
@@ -217,8 +229,10 @@ function buildServer(): McpServer {
       outputSchema: jobViewSchema,
     },
     async ({ waitSeconds: wait, ...input }) => {
+      const since = Date.now();
       const started = startJob("check", input);
-      const job = (await waitForJob(started.jobId, wait ?? 25)) ?? started;
+      const job =
+        (await waitTimed("check", started.jobId, wait ?? 25, since)) ?? started;
       return {
         content: [{ type: "text", text: JSON.stringify(job) }],
         structuredContent: job,
