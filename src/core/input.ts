@@ -5,10 +5,14 @@ import {
   detectEnvironment,
   directions,
   firstWorking,
+  readScreen,
+  secondsTo,
   type Target,
   type Where,
 } from "./device/backend.js";
 import { maestroBackend } from "./device/maestro.js";
+import type { UiNode } from "./device/screen.js";
+import { typeUntilShown } from "./device/typing.js";
 import { firstLine } from "./log.js";
 import type { InputResult } from "./result.js";
 import { type RunRef, resolveRun } from "./run.js";
@@ -16,23 +20,53 @@ import { type RunRef, resolveRun } from "./run.js";
 // Taps, typing and swipes on a launched app (decision 0009). Each acts once
 // and says which backend did it; whether the app reacted is for `check`.
 
+const backends = [axeBackend, maestroBackend];
+
+type Gesture = (
+  backend: DeviceBackend,
+  where: Where,
+  bin: string,
+) => Promise<void>;
+
+const until = (seconds: number) => Date.now() + seconds * 1000;
+
+type Act = {
+  // Sends one gesture through the first backend that works.
+  send(gesture: Gesture): Promise<void>;
+  // Reads the screen in at most `seconds`.
+  read(seconds: number): Promise<UiNode[]>;
+};
+
+// Runs `run` against the launched app. `run` returns extra result fields, or
+// a `reason` when it failed.
 async function act(
   what: string,
   { jobId }: RunRef,
-  gesture: (backend: DeviceBackend, where: Where, bin: string) => Promise<void>,
+  run: (io: Act) => Promise<Partial<InputResult>>,
 ): Promise<InputResult> {
   const resolved = resolveRun({ jobId });
   if ("reason" in resolved)
     return { verdict: "failed", reason: resolved.reason };
-  const where = { device: resolved.run.device, appId: resolved.run.appId };
+  const { device, appId } = resolved.run;
+  let first: Pick<InputResult, "backend" | "fellBack"> = {};
   try {
-    const { backend, fellBack } = await firstWorking(
-      what,
-      await detectEnvironment(),
-      [axeBackend, maestroBackend],
-      (b, bin) => gesture(b, where, bin),
-    );
-    return { verdict: "ok", backend, ...(fellBack ? { fellBack } : {}) };
+    const env = await detectEnvironment();
+    const extra = await run({
+      send: async (gesture) => {
+        const { backend, fellBack } = await firstWorking(
+          what,
+          env,
+          backends,
+          (b, bin) => gesture(b, { device, appId }, bin),
+        );
+        if (!first.backend) {
+          first = { backend, ...(fellBack ? { fellBack } : {}) };
+        }
+      },
+      read: (seconds) =>
+        readScreen(device, env, backends, until(seconds)).then((r) => r.nodes),
+    });
+    return { verdict: extra.reason ? "failed" : "ok", ...first, ...extra };
   } catch (error) {
     return { verdict: "failed", reason: firstLine(error) };
   }
@@ -63,8 +97,8 @@ export function tap(options: TapOptions): Promise<InputResult> {
     });
   }
   const started = Date.now();
-  const done = act("tap", options, (b, where, bin) =>
-    b.tap(where, bin, target),
+  const done = act("tap", options, ({ send }) =>
+    send((b, where, bin) => b.tap(where, bin, target)).then(() => ({})),
   );
   if ("x" in target) return done;
   // The backends wait for an element: AXe up to 10 s, Maestro its own limit.
@@ -81,7 +115,34 @@ export function typeText(
   if (text.length === 0) {
     return Promise.resolve({ verdict: "failed", reason: "Give text to type." });
   }
-  return act("type", options, (b, where, bin) => b.type(where, bin, text));
+  // `ok` means the text shows on screen (issue 163, decision 0013). Tap and
+  // swipe cannot say that.
+  return act("type", options, async ({ send, read }) => {
+    const typed = await typeUntilShown(
+      {
+        type: (part, seconds) => {
+          const end = until(seconds);
+          return send((b, where, bin) =>
+            b.type(where, bin, part, secondsTo(end)),
+          );
+        },
+        read,
+        sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+        now: Date.now,
+      },
+      text,
+    );
+    return {
+      seconds: typed.seconds,
+      ...(typed.retyped ? { retyped: typed.retyped } : {}),
+      ...(typed.verdict === "failed" ? { reason: typed.reason } : {}),
+      ...(typed.verdict === "secure"
+        ? {
+            note: "Secure field: bullets grew by the text length; the text itself cannot be read.",
+          }
+        : {}),
+    };
+  });
 }
 
 const isDirection = (value: string): value is Direction =>
@@ -97,7 +158,7 @@ export function swipe(
       reason: `Give a direction: ${directions.join(", ")}.`,
     });
   }
-  return act("swipe", options, (b, where, bin) =>
-    b.swipe(where, bin, direction),
+  return act("swipe", options, ({ send }) =>
+    send((b, where, bin) => b.swipe(where, bin, direction)).then(() => ({})),
   );
 }

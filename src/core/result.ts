@@ -94,8 +94,12 @@ export const inputResultSchema = z.object({
   backend: z.enum(backendIds).optional(),
   fellBack: fellBackSchema,
   // A tap by testID or text: seconds from start to finish, which includes
-  // the wait for the element.
+  // the wait for the element. `type`: seconds until the text showed.
   seconds: z.number().optional(),
+  // `type`: the rest of the text, when it had to be typed a second time.
+  retyped: z.string().optional(),
+  // `type` in a secure field: what could and could not be confirmed.
+  note: z.string().optional(),
 });
 
 export type InputResult = z.infer<typeof inputResultSchema>;

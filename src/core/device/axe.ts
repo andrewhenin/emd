@@ -50,12 +50,16 @@ export function parseAxe(output: string): UiNode[] {
 
 // The accessibility tree of what is on the simulator's screen now. AXe talks to
 // the simulator directly, with no driver to start.
-async function readScreen(device: string, bin: string): Promise<UiNode[]> {
+async function readScreen(
+  device: string,
+  bin: string,
+  seconds = 120,
+): Promise<UiNode[]> {
   const { stdout } = await runTool(
     "axe describe-ui",
     bin,
     ["describe-ui", "--udid", device],
-    120,
+    seconds,
   );
   return parseAxe(stdout);
 }
@@ -67,12 +71,13 @@ const run = async (
   { device }: Where,
   command: string,
   args: string[],
+  seconds = 60,
 ) => {
   await runTool(
     `axe ${command}`,
     bin,
     [command, "--udid", device, ...args],
-    60,
+    seconds,
   );
 };
 
@@ -93,7 +98,8 @@ export const axeBackend: DeviceBackend = {
   readScreen,
   tap: (where, bin, target) => run(bin, where, "tap", targetArgs(target)),
   // `--` so text that starts with a dash is typed, not read as an option.
-  type: (where, bin, text) => run(bin, where, "type", ["--", text]),
+  type: (where, bin, text, seconds) =>
+    run(bin, where, "type", ["--", text], seconds),
   // AXe's preset scrolls 200 points through the screen's centre, the finger
   // moving the way named.
   swipe: (where, bin, direction) =>

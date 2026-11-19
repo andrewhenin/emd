@@ -43,6 +43,7 @@ import {
   listDevices,
   newerThan,
   pickDevice,
+  plainKeyboard,
   removeSimulator,
   simulatorSdk,
   terminateApp,
@@ -448,6 +449,10 @@ export async function launch(
     );
   }
   await stopCaptures(root);
+  // Runs while the dev server starts, so it costs no time, and ends before the
+  // app starts. A failed write is not a launch failure: `type` still checks
+  // its text.
+  const keyboard = plainKeyboard(device).catch(() => {});
   phase("server", "starting the dev server");
   const env = {
     CI: "1",
@@ -476,6 +481,7 @@ export async function launch(
     );
   }
 
+  await keyboard;
   confirm(root, "port");
   if (fingerprint !== undefined) {
     why = whyBuild(

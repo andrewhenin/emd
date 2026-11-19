@@ -285,7 +285,7 @@ function buildServer(): McpServer {
     "type",
     {
       description:
-        "Type text into the field that has focus. Tap the field first. Letters, digits and US keyboard symbols only.",
+        "Type text into the field that has focus. Tap the field first. Letters, digits and US keyboard symbols only. ok means the text shows on screen (secure fields: bullets grew by its length); this can take up to 40 s. failed says what the screen shows.",
       inputSchema: z.object({
         jobId,
         text: z.string().describe("The text to type."),

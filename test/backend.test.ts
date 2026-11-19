@@ -146,6 +146,28 @@ test("when every backend reads nothing, the read fails and names each", async ()
 
 const ui = nodesFrom("axe");
 
+test("a read with a deadline gives each backend only the time left, and starts none after it", async () => {
+  const given: (number | undefined)[] = [];
+  const slow: Reader = {
+    id: "axe",
+    readScreen: async (_device, _bin, seconds) => {
+      given.push(seconds);
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      throw new Error("axe describe-ui timed out");
+    },
+  };
+  const read = readScreen(
+    "dev",
+    env(),
+    [slow, works("maestro")],
+    Date.now() + 50,
+  );
+  await expect(read).rejects.toThrow(/maestro: (Error: )?no time left/);
+  expect(given).toHaveLength(1);
+  expect(given[0]).toBeGreaterThan(0);
+  expect(given[0]).toBeLessThanOrEqual(0.05);
+});
+
 test("waits until the screen can be read, and says how long", async () => {
   let reads = 0;
   const result = await untilReadable(
