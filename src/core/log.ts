@@ -67,8 +67,9 @@ export function onlyOpenFailed(log: string): boolean {
 }
 
 // xcodebuild's own timing (-showBuildTimingSummary, #208): its total and its
-// slowest steps. The summary lists "Name (N tasks) | S seconds" lines, and the
-// build ends with "** BUILD SUCCEEDED ** [S sec]" (or FAILED).
+// slowest steps. The summary lists "Name (N tasks) | S seconds" lines. With
+// -ShowBuildOperationDuration the build ends with "** BUILD SUCCEEDED ** [S sec]"
+// (or FAILED); without it, the line has no total.
 export type BuildTiming = {
   seconds?: number;
   slowest: { step: string; tasks: number; seconds: number }[];
