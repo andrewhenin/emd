@@ -172,18 +172,27 @@ export function jobStatus(id: string): JobView | undefined {
 // Like jobStatus, but when the job is queued or running, reads it again every
 // half second until it ends or `waitSeconds` pass. A wait of 0 answers at once.
 // No read starts after the deadline, so a slow read can't push the answer past
-// it (#198).
+// it (#198). An aborted `signal` (the caller cancelled) ends the wait at once.
 export async function waitForJob(
   id: string,
   waitSeconds: number,
   read: (id: string) => JobView | undefined = jobStatus,
+  signal?: AbortSignal,
 ): Promise<JobView | undefined> {
   const deadline = Date.now() + waitSeconds * 1000;
   let job = read(id);
   while (job && (job.status === "queued" || job.status === "running")) {
     const left = deadline - Date.now();
-    await new Promise((resolve) => setTimeout(resolve, Math.min(500, left)));
-    if (Date.now() >= deadline) break;
+    await new Promise<void>((resolve) => {
+      const done = () => {
+        clearTimeout(timer);
+        signal?.removeEventListener("abort", done);
+        resolve();
+      };
+      const timer = setTimeout(done, Math.min(500, left));
+      signal?.addEventListener("abort", done, { once: true });
+    });
+    if (signal?.aborted || Date.now() >= deadline) break;
     job = read(id);
   }
   return job;

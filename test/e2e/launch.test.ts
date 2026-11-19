@@ -51,14 +51,29 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
   "launch on a real iOS simulator",
   () => {
     const client = new Client({ name: "emd-e2e", version: "0.0.0" });
-    const call = async (name: string, args: Record<string, unknown>) =>
-      (await client.callTool({ name, arguments: args }))
-        .structuredContent as View;
+    // The server waits up to 100 s per call, as setup sets it for Claude Code
+    // (#223), so this client allows 150 s, as Claude Code's CLI allows more.
+    const call = async (
+      name: string,
+      args: Record<string, unknown>,
+      onprogress?: (p: { message?: string }) => void,
+    ) =>
+      (
+        await client.callTool(
+          { name, arguments: args },
+          { timeout: 150_000, ...(onprogress && { onprogress }) },
+        )
+      ).structuredContent as View;
+    // Polls a job until it ends; the steps come from job_status views and the
+    // progress each wait sends.
+    let polls = 0;
     const finish = async (job: View, steps: Set<string>): Promise<View> => {
       let view = job;
       while (!["succeeded", "failed"].includes(view.status)) {
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-        view = await call("job_status", { jobId: job.jobId });
+        polls++;
+        view = await call("job_status", { jobId: job.jobId }, (p) => {
+          if (p.message) steps.add(p.message);
+        });
         if (view.step) steps.add(view.step);
       }
       return view;
@@ -76,16 +91,21 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
         new StdioClientTransport({
           command: "node",
           args: ["dist/bin.js", "mcp"],
-          env: { ...process.env, EMD_RETRY_LIMIT: "2" } as Record<
-            string,
-            string
-          >,
+          env: {
+            ...process.env,
+            EMD_RETRY_LIMIT: "2",
+            EMD_WAIT_SECONDS: "100",
+          } as Record<string, string>,
         }),
       );
       began = Date.now();
       first = await call("launch", { dir: sandbox });
       startedAfter = Date.now() - began;
       final = await finish(first, steps);
+      // #223: the calls a first build took, for the PR.
+      console.log(
+        `first launch: 1 launch + ${polls} job_status calls, ${final.seconds} s`,
+      );
     }, minutes(21));
 
     afterAll(async () => {
@@ -97,13 +117,13 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
       await client.close();
     });
 
-    test("launch returns the job after its 25 s wait, not when the build is done", () => {
-      expect(startedAfter).toBeLessThan(35_000);
+    test("launch returns the job after its 100 s wait, not when the build is done", () => {
+      expect(startedAfter).toBeLessThan(110_000);
       expect(first.status).toMatch(/queued|running/);
       expect(first.result).toBeUndefined();
     });
 
-    test("job_status reports progress while the build runs", () => {
+    test("job_status reports progress while the build runs, as views and progress", () => {
       expect(steps).toContain("building and installing the app");
     });
 

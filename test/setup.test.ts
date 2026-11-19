@@ -136,19 +136,34 @@ const installers = (dir: string): SetupDeps => ({
       writeFileSync(join(dir, ".agents/skills/emd/SKILL.md"), "skill");
       return;
     }
-    const claude = JSON.parse(readFileSync(join(dir, ".claude.json"), "utf8"));
-    claude.mcpServers[name ?? ""] = { command: "npx" };
-    writeFileSync(join(dir, ".claude.json"), JSON.stringify(claude));
-    const cursor = JSON.parse(
-      readFileSync(join(dir, ".cursor/mcp.json"), "utf8"),
-    );
-    cursor.mcpServers[name ?? ""] = { command: "npx" };
-    writeFileSync(join(dir, ".cursor/mcp.json"), JSON.stringify(cursor));
-    const toml = join(dir, ".codex/config.toml");
-    writeFileSync(
-      toml,
-      `${readFileSync(toml, "utf8")}\n[mcp_servers.${name}]\ncommand = "npx"\n`,
-    );
+    // Only the agents named with -a, as add-mcp does.
+    const to = args.flatMap((a, i) => (args[i - 1] === "-a" ? [a] : []));
+    const env = args.flatMap((a, i) => (args[i - 1] === "--env" ? [a] : []));
+    const entry = {
+      command: "npx",
+      ...(env.length > 0 && {
+        env: Object.fromEntries(env.map((e) => e.split("="))),
+      }),
+    };
+    if (to.includes("claude-code")) {
+      const path = join(dir, ".claude.json");
+      const claude = JSON.parse(readFileSync(path, "utf8"));
+      claude.mcpServers[name ?? ""] = entry;
+      writeFileSync(path, JSON.stringify(claude));
+    }
+    if (to.includes("cursor")) {
+      const path = join(dir, ".cursor/mcp.json");
+      const cursor = JSON.parse(readFileSync(path, "utf8"));
+      cursor.mcpServers[name ?? ""] = entry;
+      writeFileSync(path, JSON.stringify(cursor));
+    }
+    if (to.includes("codex")) {
+      const toml = join(dir, ".codex/config.toml");
+      writeFileSync(
+        toml,
+        `${readFileSync(toml, "utf8")}\n[mcp_servers.${name}]\ncommand = "npx"\n`,
+      );
+    }
   },
 });
 
@@ -182,6 +197,15 @@ test("applied, setup backs up each config, runs the installers and checks the re
   const claude = JSON.parse(readFileSync(join(dir, ".claude.json"), "utf8"));
   expect(claude.numStartups).toBe(3);
   expect(Object.keys(claude.mcpServers)).toEqual(["other", "emd"]);
+  // #223: Claude Code gets the long wait; Cursor and Codex keep the short one.
+  expect(claude.mcpServers.emd.env).toEqual({ EMD_WAIT_SECONDS: "100" });
+  const cursor = JSON.parse(
+    readFileSync(join(dir, ".cursor/mcp.json"), "utf8"),
+  );
+  expect(cursor.mcpServers.emd.env).toBeUndefined();
+  expect(readFileSync(join(dir, ".codex/config.toml"), "utf8")).not.toContain(
+    "EMD_WAIT_SECONDS",
+  );
 });
 
 test("when an installer fails, setup fails and names the backups", async () => {

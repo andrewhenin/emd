@@ -1,4 +1,4 @@
-import { McpServer } from "@modelcontextprotocol/server";
+import { McpServer, type ServerContext } from "@modelcontextprotocol/server";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { z } from "zod";
 import {
@@ -9,6 +9,7 @@ import {
   evidenceResultSchema,
   type InputResult,
   inputResultSchema,
+  jobStatus,
   jobViewSchema,
   logs,
   logsResultSchema,
@@ -25,29 +26,77 @@ import {
 const waitSeconds = z
   .number()
   .min(0)
-  .max(25)
+  .max(110)
   .optional()
   .describe(
-    "How long to wait for the work to end before returning the job. Default 25.",
+    "How long to wait for the work to end before returning the job. Default 25, or longer where setup allowed it.",
   );
 
-// Waits for a job like waitForJob. A call more than 2 s past its wait means
-// this process got no CPU: one stderr line says so, and stderr reaches the
-// client's log even after the client has given up (#198).
+// The default wait, in seconds, of a tool whose own default is `short`. setup
+// sets EMD_WAIT_SECONDS (0 to 110) for clients that let one call run that long
+// (#223). Once a client has cancelled a call, the session keeps `short`.
+export function defaultWait(
+  short: number,
+  cancelled: boolean,
+  configured = process.env.EMD_WAIT_SECONDS,
+): number {
+  const seconds = Number(configured);
+  return cancelled ||
+    !configured ||
+    !Number.isFinite(seconds) ||
+    seconds < 0 ||
+    seconds > 110
+    ? short
+    : seconds;
+}
+
+// How often a wait reports progress, when the call asks for it (#223).
+const progressSeconds = 15;
+
+// Waits for a job like waitForJob. While it waits it sends the job's step as
+// progress, at once and then every 15 s, when the call carries a progress
+// token: a client that resets its timeout on progress keeps the call alive.
+// A cancelled call ends at once and calls `onCancel`. A call more than 2 s
+// past its wait means this process got no CPU: one stderr line says so, and
+// stderr reaches the client's log even after the client has given up (#198).
 async function waitTimed(
   tool: string,
   jobId: string,
   wait: number,
+  ctx: ServerContext,
+  onCancel: () => void,
   since = Date.now(),
 ) {
-  const job = await waitForJob(jobId, wait);
-  const took = (Date.now() - since) / 1000;
-  if (took > wait + 2) {
-    console.error(
-      `emd: ${tool} took ${took.toFixed(1)} s with a ${wait} s wait.`,
-    );
+  const { signal, notify, _meta } = ctx.mcpReq;
+  const token = _meta?.progressToken;
+  const report = () => {
+    if (token === undefined) return;
+    const view = jobStatus(jobId);
+    notify({
+      method: "notifications/progress",
+      params: {
+        progressToken: token,
+        progress: Math.round((Date.now() - since) / 1000),
+        message: view?.step ?? view?.status,
+      },
+    }).catch(() => {});
+  };
+  report();
+  const timer = setInterval(report, progressSeconds * 1000);
+  signal.addEventListener("abort", onCancel, { once: true });
+  try {
+    const job = await waitForJob(jobId, wait, jobStatus, signal);
+    const took = (Date.now() - since) / 1000;
+    if (took > wait + 2) {
+      console.error(
+        `emd: ${tool} took ${took.toFixed(1)} s with a ${wait} s wait.`,
+      );
+    }
+    return job;
+  } finally {
+    clearInterval(timer);
+    signal.removeEventListener("abort", onCancel);
   }
-  return job;
 }
 
 // A tap's target, for the tap tool and a check's actions.
@@ -84,6 +133,11 @@ const reply = (result: InputResult) => ({
 
 function buildServer(): McpServer {
   const server = new McpServer({ name: "emd", version: version() });
+  // Set once the client cancels one of EMD's calls (#223).
+  let cancelled = false;
+  const onCancel = () => {
+    cancelled = true;
+  };
 
   server.registerTool(
     "detect",
@@ -113,7 +167,7 @@ function buildServer(): McpServer {
     "launch",
     {
       description:
-        "Build the app, install it on an iOS simulator and launch it, leaving its dev server running. Waits up to waitSeconds (default 25): a relaunch or reload often ends in time and returns its result. A build takes minutes: then it returns the job, and you call job_status with the jobId until status is succeeded or failed.",
+        "Build the app, install it on an iOS simulator and launch it, leaving its dev server running. Waits up to waitSeconds (default 25, or longer where setup allowed it): a relaunch or reload often ends in time and returns its result. A build takes minutes: then it returns the job, and you call job_status with the jobId until status is succeeded or failed.",
       inputSchema: z.object({
         dir: z
           .string()
@@ -136,12 +190,18 @@ function buildServer(): McpServer {
       }),
       outputSchema: jobViewSchema,
     },
-    async ({ waitSeconds: wait, ...input }) => {
+    async ({ waitSeconds: wait, ...input }, ctx) => {
       const since = Date.now();
       const started = startJob("launch", input);
       const job =
-        (await waitTimed("launch", started.jobId, wait ?? 25, since)) ??
-        started;
+        (await waitTimed(
+          "launch",
+          started.jobId,
+          wait ?? defaultWait(25, cancelled),
+          ctx,
+          onCancel,
+          since,
+        )) ?? started;
       return {
         content: [{ type: "text", text: JSON.stringify(job) }],
         structuredContent: job,
@@ -153,16 +213,22 @@ function buildServer(): McpServer {
     "job_status",
     {
       description:
-        "Where a job is: queued, running (with the current step and seconds), succeeded or failed. Waits up to waitSeconds (default 30) and returns as soon as the job ends, so call it again right away if it is still running; do not sleep or poll in between. When finished, includes the result. For launch: the device, app ID and log directory, or on failure the reason and the first relevant error lines, not the log. For check: the verdict, which expectations were found, and a screenshot path.",
+        "Where a job is: queued, running (with the current step and seconds), succeeded or failed. Waits up to waitSeconds (default 30, or longer where setup allowed it) and returns as soon as the job ends, so call it again right away if it is still running; do not sleep or poll in between. When finished, includes the result. For launch: the device, app ID and log directory, or on failure the reason and the first relevant error lines, not the log. For check: the verdict, which expectations were found, and a screenshot path.",
       inputSchema: z.object({
         jobId: z.string().describe("The jobId a tool such as launch returned."),
         waitSeconds: z.number().min(0).max(110).optional(),
       }),
       outputSchema: jobViewSchema,
     },
-    async ({ jobId, waitSeconds }) => {
-      // A 2x margin under a 60 s client timeout (#198).
-      const job = await waitTimed("job_status", jobId, waitSeconds ?? 30);
+    async ({ jobId, waitSeconds }, ctx) => {
+      // 30 s: a 2x margin under a 60 s client timeout (#198).
+      const job = await waitTimed(
+        "job_status",
+        jobId,
+        waitSeconds ?? defaultWait(30, cancelled),
+        ctx,
+        onCancel,
+      );
       if (!job) {
         return {
           isError: true,
@@ -210,7 +276,7 @@ function buildServer(): McpServer {
     "check",
     {
       description:
-        "Check a run against what you expect, from signals a machine can read, not your own judgment: tagged log events the app wrote ([EMD:<tag>] lines) and elements on the simulator's screen (by testID or by text). Give the taps, typing and swipes that lead to the moment as actions, or check right after them; a check reads again for up to 10 s what is still missing. Waits up to waitSeconds (default 25) and returns the finished result when the check ends in time; otherwise returns the job: call job_status until it finishes. The result's verdict is passed, failed (fix the cause and check again), stopped (the retry limit is reached: stop and report what is missing) or error (the check could not run; not counted). Your reading of the returned screenshot may be passed as agentReading; it is recorded as a second opinion and never changes the verdict. Each check rewrites the run's evidence folder and returns its path (evidenceDir) and the check names whose last verdict is not passed (notPassed).",
+        "Check a run against what you expect, from signals a machine can read, not your own judgment: tagged log events the app wrote ([EMD:<tag>] lines) and elements on the simulator's screen (by testID or by text). Give the taps, typing and swipes that lead to the moment as actions, or check right after them; a check reads again for up to 10 s what is still missing. Waits up to waitSeconds (default 25, or longer where setup allowed it) and returns the finished result when the check ends in time; otherwise returns the job: call job_status until it finishes. The result's verdict is passed, failed (fix the cause and check again), stopped (the retry limit is reached: stop and report what is missing) or error (the check could not run; not counted). Your reading of the returned screenshot may be passed as agentReading; it is recorded as a second opinion and never changes the verdict. Each check rewrites the run's evidence folder and returns its path (evidenceDir) and the check names whose last verdict is not passed (notPassed).",
       inputSchema: z.object({
         jobId: z.string().describe("The launch job whose run to check."),
         logs: z
@@ -256,11 +322,18 @@ function buildServer(): McpServer {
       }),
       outputSchema: jobViewSchema,
     },
-    async ({ waitSeconds: wait, ...input }) => {
+    async ({ waitSeconds: wait, ...input }, ctx) => {
       const since = Date.now();
       const started = startJob("check", input);
       const job =
-        (await waitTimed("check", started.jobId, wait ?? 25, since)) ?? started;
+        (await waitTimed(
+          "check",
+          started.jobId,
+          wait ?? defaultWait(25, cancelled),
+          ctx,
+          onCancel,
+          since,
+        )) ?? started;
       return {
         content: [{ type: "text", text: JSON.stringify(job) }],
         structuredContent: job,
