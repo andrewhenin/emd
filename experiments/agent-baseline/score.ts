@@ -232,22 +232,27 @@ const ms = (e: Telemetry) => Number(e.duration_ms ?? 0);
 const total = (list: Telemetry[]) =>
   Math.round(list.reduce((sum, e) => sum + ms(e), 0) / 100) / 10;
 const toolEvents = telemetry.filter((e) => e["event.name"] === "tool_result");
-const byTool: Record<
-  string,
-  { calls: number; seconds: number; resultKB: number }
-> = {};
+// Summed in ms and bytes, rounded once at the end.
+const sums: Record<string, { calls: number; ms: number; bytes: number }> = {};
 for (const e of toolEvents) {
   const name = e.tool_name ?? "?";
-  const tool = byTool[name] ?? { calls: 0, seconds: 0, resultKB: 0 };
-  byTool[name] = {
-    calls: tool.calls + 1,
-    seconds: Math.round((tool.seconds + ms(e) / 1000) * 10) / 10,
-    resultKB:
-      Math.round(
-        (tool.resultKB + Number(e.tool_result_size_bytes ?? 0) / 1024) * 10,
-      ) / 10,
+  const sum = sums[name] ?? { calls: 0, ms: 0, bytes: 0 };
+  sums[name] = {
+    calls: sum.calls + 1,
+    ms: sum.ms + ms(e),
+    bytes: sum.bytes + Number(e.tool_result_size_bytes ?? 0),
   };
 }
+const byTool = Object.fromEntries(
+  Object.entries(sums).map(([name, sum]) => [
+    name,
+    {
+      calls: sum.calls,
+      seconds: Math.round(sum.ms / 100) / 10,
+      resultKB: Math.round(sum.bytes / 102.4) / 10,
+    },
+  ]),
+);
 const requests = telemetry.filter((e) => e.span === "claude_code.llm_request");
 const timing = telemetry.length
   ? {
