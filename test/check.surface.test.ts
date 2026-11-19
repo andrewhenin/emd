@@ -95,6 +95,7 @@ test("neither the CLI nor the MCP tool lets the agent set the limit or reset the
     "elements",
     "name",
     "agentReading",
+    "actions",
     "waitSeconds",
   ]);
 });
@@ -130,3 +131,20 @@ test("a check through the CLI passes on a line that arrives late", async () => {
   expect(result).toMatchObject({ verdict: "passed" });
   expect(result.waited).toBeGreaterThanOrEqual(1);
 }, 15_000);
+
+// #207: an action runs through the same code as the tap tool, in the worker.
+test("a check's failed action ends it as an error over MCP, before any read", async () => {
+  const jobId = await launchedJob(state);
+  const done = await call("check", {
+    jobId,
+    logs: [{ tag: "smoke" }],
+    name: "after-actions",
+    actions: [{ tap: {} }, { swipe: "up" }],
+  });
+  expect(done).toMatchObject({ kind: "check", status: "failed" });
+  expect(done.result).toMatchObject({
+    verdict: "error",
+    reason: expect.stringMatching(/Action 1 \(tap\) failed: Give one target/),
+    actions: [{ verdict: "failed" }],
+  });
+});

@@ -411,6 +411,7 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
         fellBack?: { backend: string; reason: string }[];
         evidenceDir?: string;
         notPassed?: string[];
+        actions?: { verdict: string }[];
         secondOpinion?: {
           screenshot?: string;
           agent?: string;
@@ -495,6 +496,17 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
         expect(typed.result).toMatchObject({ verdict: "passed" });
         // The sandbox has nothing to scroll: this shows only that the swipe ran.
         await input("swipe", { direction: "up" });
+        // #207: a check runs its actions first. Only the action's typing can
+        // log "zq9", so a pass proves the actions ran.
+        const viaActions = await runCheck({
+          name: "after-actions",
+          logs: [{ tag: "typed", message: "zq9" }],
+          actions: [{ tap: { id: "smoke-input" } }, { type: "zq9" }],
+        });
+        expect(viaActions.result).toMatchObject({
+          verdict: "passed",
+          actions: [{ verdict: "ok" }, { verdict: "ok" }],
+        });
       },
       minutes(4),
     );

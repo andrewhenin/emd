@@ -24,7 +24,7 @@ After you change code, call `launch` again before you `check` or `tap`. When not
 2. If it returned a job still running, `job_status` with the `jobId`, until `succeeded` or `failed`. A first build takes minutes. A failed launch gives the reason and the first error lines: fix the cause and launch again.
 3. `tap` with the `jobId`, and a testID (`id`) or a visible `text`. Use a point only when the element has neither. `type` types into the field that has focus, so tap the field first. `swipe` scrolls. A result of `ok` means the gesture was sent; the next `check` shows what the app did.
 4. `logs`, to read the tagged lines of this run.
-5. `check` with the expected log events and elements and a `name` for the moment, e.g. `after-save`. A later check under that name must keep the first expectations unchanged; it can add more. It usually returns its verdict in the same call; if it returns a job, `job_status` until it ends:
+5. `check` with the expected log events and elements and a `name` for the moment, e.g. `after-save`. Put the taps, typing and swipes that lead to that moment in its `actions`, so one call acts and checks. A later check under that name must keep the first expectations unchanged; it can add more. It usually returns its verdict in the same call; if it returns a job, `job_status` until it ends:
    - `passed`: done.
    - `failed`: fix the cause, then check again.
    - `stopped`: the retry limit is reached. Stop and report what is missing. Only a person can reset the count.
