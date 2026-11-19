@@ -31,6 +31,25 @@ const waitSeconds = z
     "How long to wait for the work to end before returning the job. Default 25.",
   );
 
+// Waits for a job like waitForJob. A call more than 2 s past its wait means
+// this process got no CPU: one stderr line says so, and stderr reaches the
+// client's log even after the client has given up (#198).
+async function waitTimed(
+  tool: string,
+  jobId: string,
+  wait: number,
+  since = Date.now(),
+) {
+  const job = await waitForJob(jobId, wait);
+  const took = (Date.now() - since) / 1000;
+  if (took > wait + 2) {
+    console.error(
+      `emd: ${tool} took ${took.toFixed(1)} s with a ${wait} s wait.`,
+    );
+  }
+  return job;
+}
+
 const reply = (result: InputResult) => ({
   content: [{ type: "text" as const, text: JSON.stringify(result) }],
   structuredContent: result,
@@ -91,8 +110,11 @@ function buildServer(): McpServer {
       outputSchema: jobViewSchema,
     },
     async ({ waitSeconds: wait, ...input }) => {
+      const since = Date.now();
       const started = startJob("launch", input);
-      const job = (await waitForJob(started.jobId, wait ?? 25)) ?? started;
+      const job =
+        (await waitTimed("launch", started.jobId, wait ?? 25, since)) ??
+        started;
       return {
         content: [{ type: "text", text: JSON.stringify(job) }],
         structuredContent: job,
@@ -104,7 +126,7 @@ function buildServer(): McpServer {
     "job_status",
     {
       description:
-        "Where a job is: queued, running (with the current step and seconds), succeeded or failed. Waits up to waitSeconds (default 50) and returns as soon as the job ends, so call it again right away if it is still running; do not sleep or poll in between. When finished, includes the result. For launch: the device, app ID and log directory, or on failure the reason and the first relevant error lines, not the log. For check: the verdict, which expectations were found, and a screenshot path.",
+        "Where a job is: queued, running (with the current step and seconds), succeeded or failed. Waits up to waitSeconds (default 30) and returns as soon as the job ends, so call it again right away if it is still running; do not sleep or poll in between. When finished, includes the result. For launch: the device, app ID and log directory, or on failure the reason and the first relevant error lines, not the log. For check: the verdict, which expectations were found, and a screenshot path.",
       inputSchema: z.object({
         jobId: z.string().describe("The jobId a tool such as launch returned."),
         waitSeconds: z.number().min(0).max(110).optional(),
@@ -112,7 +134,8 @@ function buildServer(): McpServer {
       outputSchema: jobViewSchema,
     },
     async ({ jobId, waitSeconds }) => {
-      const job = await waitForJob(jobId, waitSeconds ?? 50);
+      // A 2x margin under a 60 s client timeout (#198).
+      const job = await waitTimed("job_status", jobId, waitSeconds ?? 30);
       if (!job) {
         return {
           isError: true,
@@ -206,8 +229,10 @@ function buildServer(): McpServer {
       outputSchema: jobViewSchema,
     },
     async ({ waitSeconds: wait, ...input }) => {
+      const since = Date.now();
       const started = startJob("check", input);
-      const job = (await waitForJob(started.jobId, wait ?? 25)) ?? started;
+      const job =
+        (await waitTimed("check", started.jobId, wait ?? 25, since)) ?? started;
       return {
         content: [{ type: "text", text: JSON.stringify(job) }],
         structuredContent: job,
