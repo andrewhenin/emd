@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.16.0](https://github.com/andrewhenin/emd/compare/emd-agents-v0.15.0...emd-agents-v0.16.0) (2026-11-19)
+
+
+### Features
+
+* check runs taps, typing and swipes first, in one call ([#221](https://github.com/andrewhenin/emd/issues/221)) ([e2c80e1](https://github.com/andrewhenin/emd/commit/e2c80e18f1dec228ff73bcc38d226a0a465786e3))
+* each check rewrites the evidence folder and returns its path ([#220](https://github.com/andrewhenin/emd/issues/220)) ([cd46317](https://github.com/andrewhenin/emd/commit/cd46317cd4ebfc2297082dfdcc355f7ad0d47666))
+* launch and check return their result in the same call ([#219](https://github.com/andrewhenin/emd/issues/219)) ([cce20c1](https://github.com/andrewhenin/emd/commit/cce20c1b2737e923ea610d4c4e9df51bc37711df))
+* launch installs the matching build instead of building it again ([#212](https://github.com/andrewhenin/emd/issues/212)) ([6f2fc91](https://github.com/andrewhenin/emd/commit/6f2fc91dc7444dd2c9d5a637ad400d251588593b))
+* launch reloads the app after a JavaScript-only change ([#216](https://github.com/andrewhenin/emd/issues/216)) ([6c0ab27](https://github.com/andrewhenin/emd/commit/6c0ab273ca4199d225a70f26bfc40633ad9ff701))
+* launch reports how long each phase took ([#209](https://github.com/andrewhenin/emd/issues/209)) ([9575038](https://github.com/andrewhenin/emd/commit/9575038bf1d201b2ce54c012dafc20b28647e346))
+
+
+### Bug Fixes
+
+* a later launch stops the dev server and log stream of a CLI launch ([#214](https://github.com/andrewhenin/emd/issues/214)) ([2dc2cc0](https://github.com/andrewhenin/emd/commit/2dc2cc011d642b1250f29b9db932b92e6b619a1a)), closes [#180](https://github.com/andrewhenin/emd/issues/180)
+* job_status waits 30 s by default and starts no read after its deadline ([#218](https://github.com/andrewhenin/emd/issues/218)) ([c8095d4](https://github.com/andrewhenin/emd/commit/c8095d4aa6ad2947c4abf6a47551464d2a9ec5e5))
+* launch builds when the installed app's files are gone, instead of failing ([#211](https://github.com/andrewhenin/emd/issues/211)) ([4173513](https://github.com/andrewhenin/emd/commit/4173513487eada79af145c1b16c329765803ce8e))
+* launch lets Expo set a missing iOS app ID ([#197](https://github.com/andrewhenin/emd/issues/197)) ([d6d3eab](https://github.com/andrewhenin/emd/commit/d6d3eab8270150cb267554c0c76a0b56d2cc7218))
+* type returns ok only when the typed text shows on screen ([#213](https://github.com/andrewhenin/emd/issues/213)) ([e6aa7f4](https://github.com/andrewhenin/emd/commit/e6aa7f4f6adad85eb56561545371bdcb871fa3d2))
+
+
+### Performance Improvements
+
+* fewer polls during a build where the client allows long calls ([#224](https://github.com/andrewhenin/emd/issues/224)) ([2e4d82e](https://github.com/andrewhenin/emd/commit/2e4d82e7ba91af78ad075c1717787ee86010dc5e))
+* time native builds with xcodebuild's own timing summary ([#225](https://github.com/andrewhenin/emd/issues/225)) ([ca6c290](https://github.com/andrewhenin/emd/commit/ca6c290676b7f1f49075afd6db973b1cb2155273))
+
 ## [0.15.0](https://github.com/andrewhenin/emd/compare/emd-agents-v0.14.0...emd-agents-v0.15.0) (2026-11-15)
 
 
