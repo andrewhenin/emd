@@ -34,5 +34,5 @@ seconds and result. Reading a job settles one whose worker died or never started
   The M2 queue adds a scheduler that decides when a queued job's worker starts,
   with a global limit.
 - Job files are not deleted yet; `emd gc` will.
-- Agents must poll (every 5 to 10 s), and `launch` no longer returns the launch
-  result directly.
+- Agents poll with `job_status`. Since #207, `launch` and `check` first wait up
+  to 25 s and return the result when the work ends in time.

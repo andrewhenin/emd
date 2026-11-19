@@ -128,11 +128,11 @@ EMD is open source but does not accept pull requests from outside contributors y
 `emd mcp` serves these tools:
 
 - `detect`: finds the stack, platforms, app IDs, run commands and package manager of a folder. At a workspace root, it lists the app folders instead (`apps`).
-- `launch`: builds the app, installs and opens it on an iOS simulator, and keeps its dev server running. Returns a job at once.
+- `launch`: builds the app, installs and opens it on an iOS simulator, and keeps its dev server running. Waits up to 25 s (`waitSeconds`): a reload or relaunch returns its result, a build returns a job.
 - `job_status`: the state of a job (queued, running, succeeded, failed) and, at the end, its result. It waits up to 30 s (`waitSeconds`) and returns when the job ends.
 - `logs`: the `[EMD:<tag>]` lines that the app wrote during the run of a launch job.
 - `tap`, `type`, `swipe`: act on the launched app. `tap` takes a testID, a visible text or a point. Each says which tool did it (AXe or Maestro).
-- `check`: passes or fails a run from tagged log lines and on-screen elements (by testID or text). Returns a job.
+- `check`: passes or fails a run from tagged log lines and on-screen elements (by testID or text). Waits up to 25 s (`waitSeconds`) and usually returns the verdict; a longer check returns a job.
 - `evidence`: puts the checks, log lines, screenshots and Maestro flows of a run in one folder.
 
 ### CLI commands

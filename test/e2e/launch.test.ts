@@ -97,8 +97,8 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
       await client.close();
     });
 
-    test("launch returns a job within seconds, not when the build is done", () => {
-      expect(startedAfter).toBeLessThan(10_000);
+    test("launch returns the job after its 25 s wait, not when the build is done", () => {
+      expect(startedAfter).toBeLessThan(35_000);
       expect(first.status).toMatch(/queued|running/);
       expect(first.result).toBeUndefined();
     });
