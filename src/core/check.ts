@@ -16,6 +16,7 @@ import {
 import { maestroBackend } from "./device/maestro.js";
 import { type ElementSpec, hasElement } from "./device/screen.js";
 import { recordCheck, evidence as writeEvidence } from "./evidence.js";
+import { swipe, type TapOptions, tap, typeText } from "./input.js";
 import { firstLine } from "./log.js";
 import {
   allLines,
@@ -24,7 +25,12 @@ import {
   tagPattern,
 } from "./logs.js";
 import { worktreeKey } from "./owned.js";
-import type { CheckResult, EvidenceResult, LogsResult } from "./result.js";
+import type {
+  CheckResult,
+  EvidenceResult,
+  InputResult,
+  LogsResult,
+} from "./result.js";
 import { type RunRef, resolveRun } from "./run.js";
 import { runTool } from "./tool.js";
 
@@ -37,7 +43,23 @@ export type CheckOptions = RunRef & {
   name?: string;
   // The agent's own reading of the screenshot. Second opinion only.
   agentReading?: "pass" | "fail";
+  // Taps, typing and swipes to run, in order, before the read (#207).
+  actions?: CheckAction[];
 };
+
+type CheckAction =
+  | { tap: Omit<TapOptions, "jobId"> }
+  | { type: string }
+  | { swipe: string };
+
+const maxActions = 10;
+
+// One action through the same code as the tap, type and swipe tools.
+function runAction(action: CheckAction, ref: RunRef): Promise<InputResult> {
+  if ("tap" in action) return tap({ ...ref, ...action.tap });
+  if ("type" in action) return typeText({ ...ref, text: action.type });
+  return swipe({ ...ref, direction: action.swipe });
+}
 
 // What the check reads. The real ones read the simulator; tests pass their own.
 export type Deps = {
@@ -49,6 +71,7 @@ export type Deps = {
   recheckSeconds: number;
   // Writes the run's evidence folder (#207).
   evidence: (ref: RunRef) => Promise<EvidenceResult>;
+  act: (action: CheckAction, ref: RunRef) => Promise<InputResult>;
 };
 
 const realDeps: Deps = {
@@ -57,6 +80,7 @@ const realDeps: Deps = {
   recheckSeconds: 10,
   logs: allLines,
   evidence: (ref) => writeEvidence(ref),
+  act: runAction,
   screen: async (device) =>
     readScreen(device, await detectEnvironment(), [axeBackend, maestroBackend]),
   screenshot: async (device, path) => {
@@ -123,6 +147,9 @@ export async function check(
   if (logSpecs.length > maxSpecs || elementSpecs.length > maxSpecs) {
     return error(`At most ${maxSpecs} expectations of each kind.`);
   }
+  if ((options.actions?.length ?? 0) > maxActions) {
+    return error(`At most ${maxActions} actions.`);
+  }
   for (const spec of logSpecs) {
     if (!tagPattern.test(spec.tag) || (spec.message?.length ?? 0) > maxText) {
       return error(
@@ -174,6 +201,21 @@ export async function check(
     return error(
       `Check "${name}" first expected: ${missing.join("; ")}. Keep each of these unchanged; you can add more. For a different moment, use a new name. Only a person can clear this (emd check reset).`,
     );
+  }
+
+  // The actions run first, in order. A failed one stops the rest and the
+  // read: the check could not run, so it does not count.
+  const actions: InputResult[] = [];
+  for (const [i, action] of (options.actions ?? []).entries()) {
+    const done = await deps.act(action, { jobId: options.jobId });
+    actions.push(done);
+    if (done.verdict !== "ok") {
+      return {
+        verdict: "error",
+        reason: `Action ${i + 1} (${Object.keys(action)[0]}) failed: ${done.reason ?? "no reason given"}. Nothing was read.`,
+        actions,
+      };
+    }
   }
 
   const byTag = new Map<string, TaggedLine[]>();
@@ -254,6 +296,7 @@ export async function check(
       : {}),
   };
   const evidence = {
+    ...(actions.length > 0 ? { actions } : {}),
     ...(waited > 0 ? { waited } : {}),
     logs: logResults.length > 0 ? logResults : undefined,
     elements: elementResults.length > 0 ? elementResults : undefined,

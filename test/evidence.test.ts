@@ -48,6 +48,7 @@ const readers = (found: boolean): CheckDeps => ({
     return undefined;
   },
   evidence: (ref) => evidence(ref, deps),
+  act: async () => ({ verdict: "ok" }),
 });
 
 const sandbox = () => expoProject({ ".maestro/smoke.yaml": "appId: x\n" });

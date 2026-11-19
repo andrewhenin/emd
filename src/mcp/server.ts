@@ -50,6 +50,33 @@ async function waitTimed(
   return job;
 }
 
+// A tap's target, for the tap tool and a check's actions.
+const tapTarget = {
+  id: z.string().optional().describe("The element's testID."),
+  text: z
+    .string()
+    .optional()
+    .describe("Its visible text or accessibility label, exactly."),
+  x: z.number().optional().describe("A point's x, in points."),
+  y: z.number().optional().describe("A point's y, in points."),
+};
+
+// Actions a check runs before it reads, with the tap, type and swipe tools'
+// inputs (#207).
+const actions = z
+  .array(
+    z.union([
+      z.object({ tap: z.object(tapTarget) }).strict(),
+      z.object({ type: z.string() }).strict(),
+      z.object({ swipe: z.enum(directions) }).strict(),
+    ]),
+  )
+  .max(10)
+  .optional()
+  .describe(
+    'Taps, typing and swipes to run first, in order, each as the tap, type or swipe tool would: e.g. [{"tap":{"id":"name-field"}},{"type":"Ada"},{"tap":{"text":"Save"}}]. A failed one stops the rest and the check does not count.',
+  );
+
 const reply = (result: InputResult) => ({
   content: [{ type: "text" as const, text: JSON.stringify(result) }],
   structuredContent: result,
@@ -183,7 +210,7 @@ function buildServer(): McpServer {
     "check",
     {
       description:
-        "Check a run against what you expect, from signals a machine can read, not your own judgment: tagged log events the app wrote ([EMD:<tag>] lines) and elements on the simulator's screen (by testID or by text). After a tap, type or swipe, check right away; a check reads again for up to 10 s what is still missing. Waits up to waitSeconds (default 25) and returns the finished result when the check ends in time; otherwise returns the job: call job_status until it finishes. The result's verdict is passed, failed (fix the cause and check again), stopped (the retry limit is reached: stop and report what is missing) or error (the check could not run; not counted). Your reading of the returned screenshot may be passed as agentReading; it is recorded as a second opinion and never changes the verdict. Each check rewrites the run's evidence folder and returns its path (evidenceDir) and the check names whose last verdict is not passed (notPassed).",
+        "Check a run against what you expect, from signals a machine can read, not your own judgment: tagged log events the app wrote ([EMD:<tag>] lines) and elements on the simulator's screen (by testID or by text). Give the taps, typing and swipes that lead to the moment as actions, or check right after them; a check reads again for up to 10 s what is still missing. Waits up to waitSeconds (default 25) and returns the finished result when the check ends in time; otherwise returns the job: call job_status until it finishes. The result's verdict is passed, failed (fix the cause and check again), stopped (the retry limit is reached: stop and report what is missing) or error (the check could not run; not counted). Your reading of the returned screenshot may be passed as agentReading; it is recorded as a second opinion and never changes the verdict. Each check rewrites the run's evidence folder and returns its path (evidenceDir) and the check names whose last verdict is not passed (notPassed).",
       inputSchema: z.object({
         jobId: z.string().describe("The launch job whose run to check."),
         logs: z
@@ -224,6 +251,7 @@ function buildServer(): McpServer {
           .enum(["pass", "fail"])
           .optional()
           .describe("Your reading of the screenshot. Second opinion only."),
+        actions,
         waitSeconds,
       }),
       outputSchema: jobViewSchema,
@@ -247,16 +275,7 @@ function buildServer(): McpServer {
     {
       description:
         "Tap the launched app: an element by testID or by visible text, or a point. Give one target. Waits up to 10 s for the element, and the result's seconds says how long the tap took. If it never appears, nothing is tapped. A result of ok means the tap was sent; call check to see what the app did.",
-      inputSchema: z.object({
-        jobId,
-        id: z.string().optional().describe("The element's testID."),
-        text: z
-          .string()
-          .optional()
-          .describe("Its visible text or accessibility label, exactly."),
-        x: z.number().optional().describe("A point's x, in points."),
-        y: z.number().optional().describe("A point's y, in points."),
-      }),
+      inputSchema: z.object({ jobId, ...tapTarget }),
       outputSchema: inputResultSchema,
     },
     async (input) => reply(await tap(input)),
