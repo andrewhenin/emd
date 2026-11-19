@@ -1,4 +1,12 @@
-import { mkdir, readFile, realpath, rm, symlink } from "node:fs/promises";
+import {
+  appendFile,
+  mkdir,
+  readFile,
+  realpath,
+  rm,
+  stat,
+  symlink,
+} from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import {
@@ -17,7 +25,7 @@ import {
   xcodebuildShim,
 } from "./isolate.js";
 import { launchesIn } from "./jobstore.js";
-import { firstErrors, knownFix, onlyOpenFailed } from "./log.js";
+import { buildTiming, firstErrors, knownFix, onlyOpenFailed } from "./log.js";
 import { startCapture, stopCaptures } from "./logs.js";
 import { confirm, reserve, worktreeKey } from "./owned.js";
 import { type LoggedProcess, startLogged } from "./process.js";
@@ -193,6 +201,32 @@ async function runBuild(
     reason = `The app compiled, but the install or open step failed (exit ${outcome}).`;
   }
   return { reason, errors: firstErrors(text) };
+}
+
+// After a build, xcodebuild's timing from the raw log Expo writes to
+// <app>/.expo/xcodebuild.log (#208): appends the slowest steps to build.log and
+// returns xcodebuild's total. A log older than the build gives nothing.
+export async function recordTiming(
+  root: string,
+  buildLog: string,
+  since: number,
+): Promise<number | undefined> {
+  const raw = join(root, ".expo", "xcodebuild.log");
+  try {
+    if ((await stat(raw)).mtimeMs < since) return undefined;
+    const timing = buildTiming(await readFile(raw, "utf8"));
+    if (!timing) return undefined;
+    const lines = [
+      `EMD: xcodebuild took ${timing.seconds ?? "an unknown number of"} s. Its slowest steps:`,
+      ...timing.slowest.map(
+        (s) => `EMD:   ${s.step} (${s.tasks} tasks): ${s.seconds} s`,
+      ),
+    ];
+    await appendFile(buildLog, `\n${lines.join("\n")}\n`);
+    return timing.seconds;
+  } catch {
+    return undefined;
+  }
 }
 
 export async function launch(
@@ -492,9 +526,12 @@ export async function launch(
   }
   const reused = why === undefined;
   // Builds and installs the app; returns the launch result when it fails.
+  let xcodebuildSeconds: number | undefined;
   const buildApp = async (): Promise<LaunchResult | undefined> => {
     phase("build", "building and installing the app");
+    const buildStarted = Date.now();
     const failure = await runBuild(plan.build, root, buildLog, env, options);
+    xcodebuildSeconds = await recordTiming(root, buildLog, buildStarted);
     if (failure) {
       metro.kill();
       return stuck(failure.reason, { errors: failure.errors });
@@ -626,7 +663,11 @@ export async function launch(
     build:
       why === undefined
         ? { action: "reused" }
-        : { action: installedAgain ? "installed" : "built", reason: why },
+        : {
+            action: installedAgain ? "installed" : "built",
+            reason: why,
+            ...(xcodebuildSeconds !== undefined && { xcodebuildSeconds }),
+          },
     metro: { pid: metro.pid, port },
     logStream: { pid: capture.pid },
     derivedData,

@@ -59,6 +59,9 @@ export const launchResultSchema = z.object({
     .object({
       action: z.enum(["built", "reused", "installed", "reloaded"]),
       reason: z.string().optional(),
+      // xcodebuild's own seconds, from its timing summary (#208). Its slowest
+      // steps are at the end of build.log.
+      xcodebuildSeconds: z.number().optional(),
     })
     .optional(),
   // Set when AXe is installed: seconds `launch` waited until AXe could read the

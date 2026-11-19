@@ -1,10 +1,15 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { expect, test } from "vitest";
+import { recordTiming } from "../src/core/launch.ts";
 import {
+  buildTiming,
   firstErrors,
   knownFix,
   onlyOpenFailed,
   stripAnsi,
 } from "../src/core/log.ts";
+import { makeDir } from "./helpers.ts";
 
 const esc = String.fromCharCode(27);
 
@@ -111,4 +116,61 @@ test("names the fix when an old Expo CLI looks for Simulator.app", () => {
     "Select Xcode 26 with `xcode-select`, or upgrade the app to Expo SDK 56 or later.",
   );
   expect(knownFix("\u203a Build Succeeded\n")).toBeUndefined();
+});
+
+// #208: xcodebuild's -showBuildTimingSummary, as it ends a raw build log,
+// here out of order.
+const timed = [
+  "\u001b[1mBuild Timing Summary\u001b[0m",
+  "",
+  "Ld (4 tasks) | 3.2 seconds",
+  "",
+  "CopySwiftLibs (1 task) | 0.4 seconds",
+  "",
+  "CompileC (212 tasks) | 96.402 seconds",
+  "",
+  "CodeSign (1 task) | 0.9 seconds",
+  "",
+  "SwiftCompile (31 tasks) | 40.5 seconds",
+  "",
+  "PhaseScriptExecution (9 tasks) | 61.118 seconds",
+  "",
+  "** BUILD SUCCEEDED ** [187.623 sec]",
+].join("\n");
+
+test("reads xcodebuild's total and its slowest steps from the timing summary", () => {
+  expect(buildTiming(timed)).toEqual({
+    seconds: 187.623,
+    slowest: [
+      { step: "CompileC", tasks: 212, seconds: 96.402 },
+      { step: "PhaseScriptExecution", tasks: 9, seconds: 61.118 },
+      { step: "SwiftCompile", tasks: 31, seconds: 40.5 },
+      { step: "Ld", tasks: 4, seconds: 3.2 },
+      { step: "CodeSign", tasks: 1, seconds: 0.9 },
+    ],
+  });
+});
+
+test("a failed build still has a total; a log without a summary has no timing", () => {
+  expect(buildTiming("** BUILD FAILED ** [12.5 sec]")).toEqual({
+    seconds: 12.5,
+    slowest: [],
+  });
+  expect(buildTiming("› Build Succeeded\n")).toBeUndefined();
+});
+
+test("recordTiming appends the slowest steps to build.log, only from a log newer than the build", async () => {
+  const root = makeDir({ ".expo/xcodebuild.log": timed });
+  const log = join(
+    makeDir({ "build.log": "› Build Succeeded\n" }),
+    "build.log",
+  );
+  expect(await recordTiming(root, log, Date.now() + 60_000)).toBeUndefined();
+  expect(await recordTiming(root, log, 0)).toBe(187.623);
+  const text = readFileSync(log, "utf8");
+  expect(text).toContain("EMD: xcodebuild took 187.623 s.");
+  expect(text).toContain("EMD:   CompileC (212 tasks): 96.402 s");
+  expect(text).not.toContain("CopySwiftLibs");
+  // No raw log: nothing to record.
+  expect(await recordTiming(makeDir(), log, 0)).toBeUndefined();
 });

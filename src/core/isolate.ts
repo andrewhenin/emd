@@ -34,7 +34,9 @@ export const derivedDataPath = (root: string): string =>
   );
 
 // Expo's build has no DerivedData option, so a directory placed first on PATH
-// holds an xcodebuild that adds it. Returns that directory.
+// holds an xcodebuild that adds it. It also asks for xcodebuild's timing summary
+// (#208) and, with ShowBuildOperationDuration, the total on the "** BUILD
+// SUCCEEDED **" line; both land in Expo's raw log. Returns that directory.
 export function xcodebuildShim(root: string, derivedData: string): string {
   const dir = join(homeDir(), "bin", worktreeKey(root));
   mkdirSync(dir, { recursive: true });
@@ -42,7 +44,7 @@ export function xcodebuildShim(root: string, derivedData: string): string {
   const quoted = `'${derivedData.replaceAll("'", "'\\''")}'`;
   writeFileSync(
     path,
-    `#!/bin/sh\nexec /usr/bin/xcodebuild -derivedDataPath ${quoted} "$@"\n`,
+    `#!/bin/sh\nexec /usr/bin/xcodebuild -derivedDataPath ${quoted} -showBuildTimingSummary -ShowBuildOperationDuration=YES "$@"\n`,
     { mode: 0o755 },
   );
   return dir;
