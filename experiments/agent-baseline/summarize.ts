@@ -20,6 +20,7 @@ type Meta = {
   // Records from before the app case (#14) have none: they are fresh.
   app?: string;
   warmup?: { seconds?: number };
+  timing?: { modelSeconds: number; toolSeconds: number } | null;
   valid: { ok: boolean; reasons: string[] };
   outcome: string | null;
   h1: boolean;
@@ -117,11 +118,13 @@ console.log(
     "Turns",
     "$",
     "s",
+    "Model s",
+    "Tool s",
     "Warm-up s",
     "Void reasons",
   ]),
 );
-console.log(row(Array(11).fill("---")));
+console.log(row(Array(13).fill("---")));
 for (const t of trials) {
   console.log(
     row([
@@ -134,6 +137,8 @@ for (const t of trials) {
       t.result?.numTurns ?? "",
       t.result?.costUsd?.toFixed(3) ?? "",
       Math.round(seconds(t) ?? 0) || "",
+      t.timing?.modelSeconds ?? "",
+      t.timing?.toolSeconds ?? "",
       t.warmup?.seconds ?? "",
       t.valid.reasons.join("; "),
     ]),

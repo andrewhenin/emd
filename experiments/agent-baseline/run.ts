@@ -1,11 +1,13 @@
 // Runs one trial of the agent baseline (#14): Claude Code headless in the app
 // folder, with the group's model and the prompt every group gets, stopped at
-// the time limit. Writes transcript.jsonl, claude-stderr.log and run.json to
-// OUT_DIR. Results: experiments/agent-baseline.md
+// the time limit. Writes transcript.jsonl, claude-stderr.log, otel.jsonl and
+// run.json to OUT_DIR. Results: experiments/agent-baseline.md
 //
 // Env: APP_DIR, OUT_DIR, MODEL, TRIAL_MINUTES, ANTHROPIC_API_KEY.
 import { spawn } from "node:child_process";
 import { createWriteStream, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 
 const need = (name: string): string => {
@@ -58,6 +60,71 @@ const env = Object.fromEntries(
   ),
 );
 
+// Claude Code's own telemetry, its OpenTelemetry log events: how long each
+// tool call and each model request took. A local receiver keeps only these
+// fields in otel.jsonl; the others name the account, and records are public.
+const kept = new Set([
+  "event.name",
+  "event.sequence",
+  "tool_name",
+  "tool_use_id",
+  "success",
+  "duration_ms",
+  "model",
+  "cost_usd",
+  "input_tokens",
+  "output_tokens",
+  "cache_read_tokens",
+  "cache_creation_tokens",
+]);
+type Attribute = {
+  key: string;
+  value?: Record<string, string | number | boolean>;
+};
+type LogRecord = { attributes?: Attribute[] };
+type Logs = {
+  resourceLogs?: { scopeLogs?: { logRecords?: LogRecord[] }[] }[];
+};
+const records = (body: Logs) =>
+  (body.resourceLogs ?? []).flatMap((r) =>
+    (r.scopeLogs ?? []).flatMap((s) => s.logRecords ?? []),
+  );
+const fields = (record: LogRecord) =>
+  Object.fromEntries(
+    (record.attributes ?? [])
+      .filter((a) => kept.has(a.key))
+      // OTLP JSON sends 64-bit integers as strings.
+      .map((a) => [a.key, Object.values(a.value ?? {})[0]]),
+  );
+const telemetry = createWriteStream(join(out, "otel.jsonl"));
+const receiver = createServer((request, response) => {
+  const chunks: Buffer[] = [];
+  request.on("data", (chunk: Buffer) => chunks.push(chunk));
+  request.on("end", () => {
+    try {
+      for (const record of records(
+        JSON.parse(Buffer.concat(chunks).toString()),
+      ))
+        telemetry.write(`${JSON.stringify(fields(record))}\n`);
+    } catch {
+      // Not OTLP JSON: nothing to keep.
+    }
+    response.writeHead(200, { "content-type": "application/json" }).end("{}");
+  });
+});
+await new Promise<void>((resolve) =>
+  receiver.listen(0, "127.0.0.1", () => resolve()),
+);
+Object.assign(env, {
+  CLAUDE_CODE_ENABLE_TELEMETRY: "1",
+  OTEL_LOGS_EXPORTER: "otlp",
+  OTEL_METRICS_EXPORTER: "none",
+  OTEL_EXPORTER_OTLP_LOGS_PROTOCOL: "http/json",
+  OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: `http://127.0.0.1:${(receiver.address() as AddressInfo).port}/v1/logs`,
+  // The default is 5 s; a shorter wait loses less if the process is stopped.
+  OTEL_LOGS_EXPORT_INTERVAL: "1000",
+});
+
 const started = new Date();
 // Its own process group, so the time limit stops the servers it started too.
 const child = spawn("claude", args, {
@@ -102,6 +169,12 @@ const done = (exitCode: number | null, signal: NodeJS.Signals | null) => {
   };
   writeFileSync(join(out, "run.json"), `${JSON.stringify(record, null, 2)}\n`);
   console.log(JSON.stringify(record));
+  // A last batch can still be on its way when the process ends.
+  setTimeout(() => {
+    receiver.close();
+    receiver.closeAllConnections();
+    telemetry.end();
+  }, 2000);
 };
 child.on("error", (error) => {
   console.error(error);
