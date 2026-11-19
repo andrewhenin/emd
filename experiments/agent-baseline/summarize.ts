@@ -115,8 +115,8 @@ for (const t of trials) {
       t.outcome ?? "",
       t.h1 ? "yes" : "no",
       t.result?.numTurns ?? "",
-      t.result?.costUsd ?? "",
-      seconds(t) ?? "",
+      t.result?.costUsd?.toFixed(3) ?? "",
+      Math.round(seconds(t) ?? 0) || "",
       t.valid.reasons.join("; "),
     ]),
   );
