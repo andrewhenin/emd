@@ -99,7 +99,7 @@ function buildServer(): McpServer {
       outputSchema: jobViewSchema,
     },
     async ({ jobId, waitSeconds }) => {
-      // 30 s leaves a 2x margin under a 60 s client timeout (#198).
+      // A 2x margin under a 60 s client timeout (#198).
       const wait = waitSeconds ?? 30;
       const started = Date.now();
       const job = await waitForJob(jobId, wait);

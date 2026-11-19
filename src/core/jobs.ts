@@ -182,7 +182,6 @@ export async function waitForJob(
   let job = read(id);
   while (job && (job.status === "queued" || job.status === "running")) {
     const left = deadline - Date.now();
-    if (left <= 0) break;
     await new Promise((resolve) => setTimeout(resolve, Math.min(500, left)));
     if (Date.now() >= deadline) break;
     job = read(id);

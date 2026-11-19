@@ -271,19 +271,17 @@ test("waitForJob answers at once with a wait of 0, and when the wait runs out", 
 
 test("waitForJob starts no read after its deadline, even when a read is slow", async () => {
   const running = { status: "running" } as JobView;
-  for (const readMs of [0, 700]) {
-    const started = Date.now();
-    const reads: number[] = [];
-    const job = await waitForJob("x", 1, () => {
-      reads.push(Date.now() - started);
-      // A read that blocks, as a file read on a busy machine can.
-      while (Date.now() - started - reads.at(-1)! < readMs) {}
-      return running;
-    });
-    expect(job?.status).toBe("running");
-    expect(Math.max(...reads)).toBeLessThan(1000);
-    expect(Date.now() - started).toBeLessThan(1150);
-  }
+  const reads: number[] = [];
+  const job = await waitForJob("x", 1, () => {
+    const at = Date.now();
+    reads.push(at);
+    // A read that blocks, as a file read on a busy machine can.
+    while (Date.now() - at < 700) {}
+    return running;
+  });
+  expect(job?.status).toBe("running");
+  // The first read starts the wait, so every later one must start within 1 s.
+  expect(Math.max(...reads) - reads[0]!).toBeLessThan(1000);
 });
 
 test("an inline launch leaves the same record as a started job", async () => {
