@@ -5,8 +5,8 @@
 # `npm ci && npm run build`. Writes prepare.json (and the warm-up output) to
 # OUT_DIR. Results: experiments/agent-baseline.md
 #
-# Env: ARM (raw, primed or emd), EMD_VERSION, CLAUDE_CODE_VERSION,
-# DEVICE_NAME, HARNESS, APP_DIR, OUT_DIR.
+# Env: ARM (raw, primed or emd), APP (fresh or installed), EMD_VERSION,
+# CLAUDE_CODE_VERSION, DEVICE_NAME, HARNESS, APP_DIR, OUT_DIR.
 set -euo pipefail
 
 here=experiments/agent-baseline
@@ -81,17 +81,19 @@ else
   (cd "$APP_DIR" && npx expo run:ios --device "$udid" --no-bundler) >"$OUT_DIR/warmup.log" 2>&1 || warmup=$?
 fi
 warmup_seconds=$(($(date +%s) - start))
-bash "$HARNESS/stop.sh"
+# installed: the warm-up's app stays on the simulator, as on a developer's
+# machine after their first run. fresh: the trial starts without it.
+KEEP_APP=$([ "$APP" = installed ] && echo 1) bash "$HARNESS/stop.sh"
 
 jq -n \
   --arg udid "$udid" --arg name "$DEVICE_NAME" --arg runtime "$runtime" \
   --arg xcode "$(xcodebuild -version | tr '\n' ' ')" \
   --arg macos "$(sw_vers -productVersion)" \
-  --arg node "$(node --version)" \
+  --arg node "$(node --version)" --arg app "$APP" \
   --arg claude "$(claude --version)" \
   --argjson warmupExit "$warmup" --argjson warmupSeconds "$warmup_seconds" \
   '{device: {udid: $udid, name: $name, runtime: $runtime}, xcode: $xcode,
-    macos: $macos, node: $node, claudeCode: $claude,
+    macos: $macos, node: $node, claudeCode: $claude, app: $app,
     warmup: {exit: $warmupExit, seconds: $warmupSeconds}}' >"$OUT_DIR/prepare.json"
 cat "$OUT_DIR/prepare.json"
 if [ "$warmup" -ne 0 ]; then

@@ -7,11 +7,19 @@ on:
   workflow_dispatch:
     inputs:
       label:
-        description: "pilot, round-1, round-2 or round-3"
+        description: "pilot or round-N"
         required: true
       groups:
         description: "Groups to run, as a JSON array"
-        default: "[1,2,3,4,5]"
+        default: "[1,2,3,4,5,6]"
+      app:
+        description: "fresh: the warm-up's app is uninstalled before the trial. installed: it stays."
+        type: choice
+        options: [fresh, installed]
+        default: fresh
+      emd_version:
+        description: "The emd-agents version the EMD groups install"
+        default: "0.15.0"
       trial_minutes:
         description: "Time limit per trial, in minutes"
         default: "60"
@@ -36,8 +44,9 @@ jobs:
       GROUP: ${{ matrix.group }}
       LABEL: ${{ inputs.label }}
       TRIAL_MINUTES: ${{ inputs.trial_minutes }}
+      APP: ${{ inputs.app }}
       CLAUDE_CODE_VERSION: 2.1.325
-      EMD_VERSION: 0.15.0
+      EMD_VERSION: ${{ inputs.emd_version }}
       DEVICE_NAME: iPhone 17
       DISABLE_AUTOUPDATER: "1"
     steps:
@@ -49,7 +58,7 @@ jobs:
         with:
           node-version: 22
 
-      # The five groups of #14. Their model and arm are set only here.
+      # The groups of #14. Their model and arm are set only here.
       - name: Pick the group
         shell: bash
         run: |
@@ -59,6 +68,7 @@ jobs:
             3) model=claude-sonnet-5-5 arm=emd ;;
             4) model=claude-haiku-5-5 arm=raw ;;
             5) model=claude-haiku-5-5 arm=emd ;;
+            6) model=claude-haiku-5-5 arm=primed ;;
             *) echo "Unknown group $GROUP"; exit 1 ;;
           esac
           {

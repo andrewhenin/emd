@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "vitest";
 import { makeDir } from "./helpers.ts";
@@ -113,4 +113,52 @@ test("no answer before the limit fails, whatever the app shows", () => {
     outcome: "fail",
     seconds: 1260,
   });
+});
+
+// The summary, run as a script on a folder of trial records.
+test("the summary splits a group by app case and shows warm-up times", () => {
+  const dir = makeDir();
+  const trial = (name: string, meta: object) => {
+    const folder = join(dir, name);
+    mkdirSync(folder);
+    writeFileSync(
+      join(folder, "meta.json"),
+      JSON.stringify({
+        group: 6,
+        arm: "primed",
+        model: "claude-haiku-5-5",
+        valid: { ok: true, reasons: [] },
+        outcome: "pass",
+        h1: true,
+        seconds: 300,
+        result: { numTurns: 9, costUsd: 0.05 },
+        toolErrors: 0,
+        ...meta,
+      }),
+    );
+  };
+  // A record from before the app case counts as fresh.
+  trial("a", { label: "round-1", warmup: { seconds: 400 } });
+  trial("b", { label: "round-1", app: "installed", warmup: { seconds: 200 } });
+  trial("c", { label: "round-2", app: "installed", warmup: { seconds: 300 } });
+  const run = spawnSync(
+    process.execPath,
+    [
+      "--experimental-strip-types",
+      "experiments/agent-baseline/summarize.ts",
+      dir,
+    ],
+    { encoding: "utf8", timeout: 30_000 },
+  );
+  expect(run.status, run.stderr).toBe(0);
+  const lines = run.stdout.split("\n");
+  expect(lines).toContain(
+    "| 6 | primed | claude-haiku-5-5 | fresh | 1 of 1 | 1 | 1 | 0 | 1 | 9 | 0.05 | 300 | 0 | 400 |",
+  );
+  expect(lines).toContain(
+    "| 6 | primed | claude-haiku-5-5 | installed | 2 of 2 | 2 | 2 | 0 | 2 | 9 | 0.05 | 300 | 0 | 250 |",
+  );
+  expect(lines).toContain(
+    "| round-2 | 6 | installed | yes | pass | yes | 9 | 0.050 | 300 | 300 |  |",
+  );
 });

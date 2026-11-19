@@ -30,7 +30,7 @@ Against the predictions: H1 held against raw and failed against primed. H2
 (EMD at most half of raw's cost) failed: 60%. H3 (EMD faster) held against raw
 and failed against primed. H4 (only EMD needs no help) failed: no group needed
 help. H5 (Haiku with EMD matches Sonnet without it) held for proof, at 7% of
-the cost; no Haiku primed group ran, so the gain may belong to AXe.
+the cost; no Haiku primed group ran in run 1, so the gain may belong to AXe.
 
 Where the time went: 86 to 94% outside the model (`duration_api_ms` against
 `duration_ms`), mostly build, simulator boot and first screen. EMD's extra turns were 5 to 7 `job_status` polls per
@@ -64,11 +64,14 @@ runner, so no trial inherits another's state. Start it by hand:
 
 ```
 gh workflow run agent-baseline.yml -R andrewhenin/emd -f label=pilot -f groups='[1,2,3]'
-gh workflow run agent-baseline.yml -R andrewhenin/emd -f label=round-1 -f trial_minutes=<limit>
+gh workflow run agent-baseline.yml -R andrewhenin/emd -f label=round-1 -f trial_minutes=<limit> -f app=installed -f emd_version=<version>
 ```
 
+Model outputs and macOS runners vary, so run at least five rounds. The summary
+shows each trial's warm-up build time as runner speed.
+
 It needs the repo secret `EVAL_ANTHROPIC_API_KEY`, a key with a spend cap.
-Each job uploads one artifact of records. Download all three rounds into one
+Each job uploads one artifact of records. Download all rounds into one
 folder, score each trial again with the current scorer, then summarize:
 
 ```
@@ -96,6 +99,10 @@ Per trial (`experiments/agent-baseline/`):
    before it, and then its outcome is a fail.
 5. The workflow removes the API key from every record before the upload.
 
-The five groups are #14's. Their model and arm, and the pinned versions, are
-set only in `.github/workflows/agent-baseline.yml`. The primed group's app gets
-`agent-baseline/primed-AGENTS.md` and AXe on PATH.
+The groups are #14's, plus group 6 (Haiku, primed). Their model and arm, and
+the pinned Claude Code version, are set only in
+`.github/workflows/agent-baseline.yml`; the EMD version is the `emd_version`
+input. The primed groups' app gets `agent-baseline/primed-AGENTS.md` and AXe on
+PATH. With `app=installed`, the warm-up's app stays installed for the trial, as
+on a developer's machine after their first run; the default, `fresh`,
+uninstalls it, as rounds 1 to 3 did.
