@@ -83,7 +83,7 @@ fi
 warmup_seconds=$(($(date +%s) - start))
 # installed: the warm-up's app stays on the simulator, as on a developer's
 # machine after their first run. fresh: the trial starts without it.
-if [ "$APP" = installed ]; then KEEP_APP=1 bash "$HARNESS/stop.sh"; else bash "$HARNESS/stop.sh"; fi
+KEEP_APP=$([ "$APP" = installed ] && echo 1) bash "$HARNESS/stop.sh"
 
 jq -n \
   --arg udid "$udid" --arg name "$DEVICE_NAME" --arg runtime "$runtime" \

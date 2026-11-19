@@ -30,7 +30,7 @@ Against the predictions: H1 held against raw and failed against primed. H2
 (EMD at most half of raw's cost) failed: 60%. H3 (EMD faster) held against raw
 and failed against primed. H4 (only EMD needs no help) failed: no group needed
 help. H5 (Haiku with EMD matches Sonnet without it) held for proof, at 7% of
-the cost; no Haiku primed group ran, so the gain may belong to AXe.
+the cost; no Haiku primed group ran in run 1, so the gain may belong to AXe.
 
 Where the time went: 86 to 94% outside the model (`duration_api_ms` against
 `duration_ms`), mostly build, simulator boot and first screen. EMD's extra turns were 5 to 7 `job_status` polls per
@@ -67,10 +67,8 @@ gh workflow run agent-baseline.yml -R andrewhenin/emd -f label=pilot -f groups='
 gh workflow run agent-baseline.yml -R andrewhenin/emd -f label=round-1 -f trial_minutes=<limit> -f app=installed -f emd_version=<version>
 ```
 
-Model outputs vary between runs, and so do macOS runners (a first simulator
-boot took 108 s on one and 196 s on another the same day). So run at least five
-rounds, spread over two days or more. Each trial records its warm-up build
-time, and the summary shows it, as a measure of that runner's speed.
+Model outputs and macOS runners vary, so run at least five rounds over two days
+or more. The summary shows each trial's warm-up build time as runner speed.
 
 It needs the repo secret `EVAL_ANTHROPIC_API_KEY`, a key with a spend cap.
 Each job uploads one artifact of records. Download all rounds into one
