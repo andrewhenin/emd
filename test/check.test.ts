@@ -10,6 +10,7 @@ import {
 import { resetChecks } from "../src/core/checkrecord.ts";
 import { readScreen, type ScreenRead } from "../src/core/device/backend.ts";
 import type { UiNode } from "../src/core/device/screen.ts";
+import { evidence } from "../src/core/evidence.ts";
 import type { LogsResult } from "../src/core/result.ts";
 import { cli, launchedJob, makeDir } from "./helpers.ts";
 
@@ -55,6 +56,9 @@ function readers(screen: Screen = {}, overrides: Partial<Deps> = {}) {
       writeFileSync(path, "png");
       return undefined;
     },
+    // The bundle reads no log, so the read counts stay the check's own.
+    evidence: (ref) =>
+      evidence(ref, { logs: async () => ({ verdict: "ok", lines: [] }) }),
     ...overrides,
   };
   return { deps, calls };

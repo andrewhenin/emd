@@ -409,6 +409,8 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
         elements?: { found: boolean }[];
         backend?: string;
         fellBack?: { backend: string; reason: string }[];
+        evidenceDir?: string;
+        notPassed?: string[];
         secondOpinion?: {
           screenshot?: string;
           agent?: string;
@@ -468,6 +470,12 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
         expect(after.result).toMatchObject({ verdict: "passed" });
         expect(after.result?.attempt).toBeUndefined();
         expectBackendNamed(after);
+        // #207: each check rewrote the bundle and returned its folder; the
+        // earlier failed name stays in view until it passes.
+        expect(
+          existsSync(join(after.result?.evidenceDir ?? "", "manifest.json")),
+        ).toBe(true);
+        expect(after.result?.notPassed).toContain("before-tap");
       },
       minutes(8),
     );
