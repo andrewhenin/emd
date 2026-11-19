@@ -20,6 +20,17 @@ import {
   waitForJob,
 } from "../core/index.js";
 
+// Fast work returns its result in the same call, so the agent needs no
+// job_status call (#207). 25 s keeps a 2x margin under a 60 s client timeout.
+const waitSeconds = z
+  .number()
+  .min(0)
+  .max(25)
+  .optional()
+  .describe(
+    "How long to wait for the work to end before returning the job. Default 25.",
+  );
+
 const reply = (result: InputResult) => ({
   content: [{ type: "text" as const, text: JSON.stringify(result) }],
   structuredContent: result,
@@ -56,7 +67,7 @@ function buildServer(): McpServer {
     "launch",
     {
       description:
-        "Start building the app, installing it on an iOS simulator and launching it, leaving its dev server running. Returns a job within seconds; the work takes up to minutes. Then call job_status with the jobId until status is succeeded or failed.",
+        "Build the app, install it on an iOS simulator and launch it, leaving its dev server running. Waits up to waitSeconds (default 25): a relaunch or reload often ends in time and returns its result. A build takes minutes: then it returns the job, and you call job_status with the jobId until status is succeeded or failed.",
       inputSchema: z.object({
         dir: z
           .string()
@@ -75,11 +86,13 @@ function buildServer(): McpServer {
           .positive()
           .optional()
           .describe("How long the build may take. Default 900."),
+        waitSeconds,
       }),
       outputSchema: jobViewSchema,
     },
-    async (input) => {
-      const job = startJob("launch", input);
+    async ({ waitSeconds: wait, ...input }) => {
+      const started = startJob("launch", input);
+      const job = (await waitForJob(started.jobId, wait ?? 25)) ?? started;
       return {
         content: [{ type: "text", text: JSON.stringify(job) }],
         structuredContent: job,
@@ -147,7 +160,7 @@ function buildServer(): McpServer {
     "check",
     {
       description:
-        "Check a run against what you expect, from signals a machine can read, not your own judgment: tagged log events the app wrote ([EMD:<tag>] lines) and elements on the simulator's screen (by testID or by text). After a tap, type or swipe, check right away; a check reads again for up to 10 s what is still missing. Starts a job and returns it within seconds; call job_status until it finishes, which can take a minute. The result's verdict is passed, failed (fix the cause and check again), stopped (the retry limit is reached: stop and report what is missing) or error (the check could not run; not counted). Your reading of the returned screenshot may be passed as agentReading; it is recorded as a second opinion and never changes the verdict.",
+        "Check a run against what you expect, from signals a machine can read, not your own judgment: tagged log events the app wrote ([EMD:<tag>] lines) and elements on the simulator's screen (by testID or by text). After a tap, type or swipe, check right away; a check reads again for up to 10 s what is still missing. Waits up to waitSeconds (default 25) and returns the finished result when the check ends in time; otherwise returns the job: call job_status until it finishes. The result's verdict is passed, failed (fix the cause and check again), stopped (the retry limit is reached: stop and report what is missing) or error (the check could not run; not counted). Your reading of the returned screenshot may be passed as agentReading; it is recorded as a second opinion and never changes the verdict.",
       inputSchema: z.object({
         jobId: z.string().describe("The launch job whose run to check."),
         logs: z
@@ -188,11 +201,13 @@ function buildServer(): McpServer {
           .enum(["pass", "fail"])
           .optional()
           .describe("Your reading of the screenshot. Second opinion only."),
+        waitSeconds,
       }),
       outputSchema: jobViewSchema,
     },
-    async (input) => {
-      const job = startJob("check", input);
+    async ({ waitSeconds: wait, ...input }) => {
+      const started = startJob("check", input);
+      const job = (await waitForJob(started.jobId, wait ?? 25)) ?? started;
       return {
         content: [{ type: "text", text: JSON.stringify(job) }],
         structuredContent: job,
