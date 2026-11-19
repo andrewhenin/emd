@@ -65,3 +65,34 @@ export function onlyOpenFailed(log: string): boolean {
     text.indexOf("\nError: ") === text.indexOf("\nError: xcrun simctl openurl ")
   );
 }
+
+// xcodebuild's own timing (-showBuildTimingSummary, #208): its total and its
+// slowest steps. The summary lists "Name (N tasks) | S seconds" lines, and the
+// build ends with "** BUILD SUCCEEDED ** [S sec]" (or FAILED).
+export type BuildTiming = {
+  seconds?: number;
+  slowest: { step: string; tasks: number; seconds: number }[];
+};
+
+const timingLine = /^(.+?) \((\d+) tasks?\) \| ([\d.]+) seconds?$/;
+const buildEnd = /\*\* BUILD (?:SUCCEEDED|FAILED) \*\* \[([\d.]+) sec\]/;
+
+export function buildTiming(log: string, top = 5): BuildTiming | undefined {
+  const lines = stripAnsi(log)
+    .split("\n")
+    .map((line) => line.trim());
+  const steps = lines.flatMap((line) => {
+    const m = line.match(timingLine);
+    return m
+      ? [{ step: m[1] ?? "", tasks: Number(m[2]), seconds: Number(m[3]) }]
+      : [];
+  });
+  const total = lines
+    .map((line) => line.match(buildEnd)?.[1])
+    .findLast(Boolean);
+  if (steps.length === 0 && total === undefined) return undefined;
+  return {
+    ...(total !== undefined && { seconds: Number(total) }),
+    slowest: steps.sort((a, b) => b.seconds - a.seconds).slice(0, top),
+  };
+}

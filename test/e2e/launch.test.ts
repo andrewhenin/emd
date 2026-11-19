@@ -32,7 +32,7 @@ type View = {
     device: { id: string; name: string };
     appId: string;
     appPid: number;
-    build: { action: string; reason?: string };
+    build: { action: string; reason?: string; xcodebuildSeconds?: number };
     metro: { pid: number; port: number };
     screen?: { waited: number; error?: string };
     logDir: string;
@@ -148,6 +148,23 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
     test("the result says how long each phase took", () => {
       const phases = final.result?.phases ?? {};
       console.log(`first launch phases: ${JSON.stringify(phases)}`);
+      // #208: xcodebuild's own total, from its timing summary, with its
+      // slowest steps at the end of build.log.
+      const xcodebuild = final.result?.build.xcodebuildSeconds ?? 0;
+      console.log(`first launch xcodebuild: ${xcodebuild} s`);
+      expect(xcodebuild).toBeGreaterThan(0);
+      expect(xcodebuild).toBeLessThanOrEqual(phases.build ?? 0);
+      const buildLog = readFileSync(
+        join(final.result?.logDir ?? "", "build.log"),
+        "utf8",
+      );
+      console.log(
+        buildLog
+          .split("\n")
+          .filter((line) => line.startsWith("EMD:"))
+          .join("\n"),
+      );
+      expect(buildLog).toContain("EMD: xcodebuild took");
       expect(Object.keys(phases)).toEqual(
         expect.arrayContaining([
           "project",
