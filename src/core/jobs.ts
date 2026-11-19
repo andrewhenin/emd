@@ -171,19 +171,21 @@ export function jobStatus(id: string): JobView | undefined {
 
 // Like jobStatus, but when the job is queued or running, reads it again every
 // half second until it ends or `waitSeconds` pass. A wait of 0 answers at once.
+// No read starts after the deadline, so a slow read can't push the answer past
+// it (#198).
 export async function waitForJob(
   id: string,
   waitSeconds: number,
+  read: (id: string) => JobView | undefined = jobStatus,
 ): Promise<JobView | undefined> {
   const deadline = Date.now() + waitSeconds * 1000;
-  let job = jobStatus(id);
-  while (
-    job &&
-    (job.status === "queued" || job.status === "running") &&
-    Date.now() < deadline
-  ) {
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    job = jobStatus(id);
+  let job = read(id);
+  while (job && (job.status === "queued" || job.status === "running")) {
+    const left = deadline - Date.now();
+    if (left <= 0) break;
+    await new Promise((resolve) => setTimeout(resolve, Math.min(500, left)));
+    if (Date.now() >= deadline) break;
+    job = read(id);
   }
   return job;
 }

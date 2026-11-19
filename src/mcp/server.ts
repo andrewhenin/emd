@@ -91,7 +91,7 @@ function buildServer(): McpServer {
     "job_status",
     {
       description:
-        "Where a job is: queued, running (with the current step and seconds), succeeded or failed. Waits up to waitSeconds (default 50) and returns as soon as the job ends, so call it again right away if it is still running; do not sleep or poll in between. When finished, includes the result. For launch: the device, app ID and log directory, or on failure the reason and the first relevant error lines, not the log. For check: the verdict, which expectations were found, and a screenshot path.",
+        "Where a job is: queued, running (with the current step and seconds), succeeded or failed. Waits up to waitSeconds (default 30) and returns as soon as the job ends, so call it again right away if it is still running; do not sleep or poll in between. When finished, includes the result. For launch: the device, app ID and log directory, or on failure the reason and the first relevant error lines, not the log. For check: the verdict, which expectations were found, and a screenshot path.",
       inputSchema: z.object({
         jobId: z.string().describe("The jobId a tool such as launch returned."),
         waitSeconds: z.number().min(0).max(110).optional(),
@@ -99,7 +99,18 @@ function buildServer(): McpServer {
       outputSchema: jobViewSchema,
     },
     async ({ jobId, waitSeconds }) => {
-      const job = await waitForJob(jobId, waitSeconds ?? 50);
+      // 30 s leaves a 2x margin under a 60 s client timeout (#198).
+      const wait = waitSeconds ?? 30;
+      const started = Date.now();
+      const job = await waitForJob(jobId, wait);
+      const took = (Date.now() - started) / 1000;
+      // Past its wait, this process got no CPU. stderr reaches the client's log
+      // even when the client has given up on the call.
+      if (took > wait + 2) {
+        console.error(
+          `emd: job_status took ${took.toFixed(1)} s with a ${wait} s wait.`,
+        );
+      }
       if (!job) {
         return {
           isError: true,

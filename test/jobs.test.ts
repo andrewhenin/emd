@@ -12,7 +12,7 @@ import {
   waitForJob,
 } from "../src/core/jobs.ts";
 import { launchesIn, readJob } from "../src/core/jobstore.ts";
-import type { CheckResult, LaunchResult } from "../src/core/result.ts";
+import type { CheckResult, JobView, LaunchResult } from "../src/core/result.ts";
 import { makeDir } from "./helpers.ts";
 
 // Jobs are real files in a temp state dir. Handlers here are small real
@@ -267,6 +267,23 @@ test("waitForJob answers at once with a wait of 0, and when the wait runs out", 
   const started = Date.now();
   expect((await waitForJob(job.id, 0.1))?.status).toBe("queued");
   expect(Date.now() - started).toBeGreaterThanOrEqual(100);
+});
+
+test("waitForJob starts no read after its deadline, even when a read is slow", async () => {
+  const running = { status: "running" } as JobView;
+  for (const readMs of [0, 700]) {
+    const started = Date.now();
+    const reads: number[] = [];
+    const job = await waitForJob("x", 1, () => {
+      reads.push(Date.now() - started);
+      // A read that blocks, as a file read on a busy machine can.
+      while (Date.now() - started - reads.at(-1)! < readMs) {}
+      return running;
+    });
+    expect(job?.status).toBe("running");
+    expect(Math.max(...reads)).toBeLessThan(1000);
+    expect(Date.now() - started).toBeLessThan(1150);
+  }
 });
 
 test("an inline launch leaves the same record as a started job", async () => {
