@@ -1,4 +1,4 @@
-import { chmodSync, writeFileSync } from "node:fs";
+import { chmodSync, readFileSync, writeFileSync } from "node:fs";
 import { delimiter, join } from "node:path";
 import { expect, test } from "vitest";
 import {
@@ -7,6 +7,7 @@ import {
   newerThan,
   parseSdkVersion,
   pickDevice,
+  plainKeyboard,
 } from "../src/core/simulator.ts";
 import { makeDir } from "./helpers.ts";
 
@@ -83,6 +84,28 @@ test("appInstalled needs the container's Info.plist", async () => {
     expect(await appInstalled(device, "com.emd.sandbox")).toBe(false);
     writeFileSync(join(container, "Info.plist"), "");
     expect(await appInstalled(device, "com.emd.sandbox")).toBe(true);
+  } finally {
+    process.env.PATH = path;
+  }
+});
+
+// `plainKeyboard` with a stub `xcrun` that logs its arguments.
+test("plainKeyboard turns off Predictive Text and Auto-Correction", async () => {
+  const bin = makeDir();
+  const calls = join(bin, "calls.log");
+  writeFileSync(join(bin, "xcrun"), `#!/bin/sh\necho "$*" >> "${calls}"\n`);
+  chmodSync(join(bin, "xcrun"), 0o755);
+  const path = process.env.PATH;
+  process.env.PATH = `${bin}${delimiter}${path}`;
+  try {
+    const device = { id: "D", name: "d", state: "Booted", version: [26, 5] };
+    await plainKeyboard(device);
+    expect(
+      readFileSync(calls, "utf8").split("\n").filter(Boolean).sort(),
+    ).toEqual([
+      "simctl spawn D defaults write com.apple.Preferences KeyboardAutocorrection -bool false",
+      "simctl spawn D defaults write com.apple.Preferences KeyboardPrediction -bool false",
+    ]);
   } finally {
     process.env.PATH = path;
   }

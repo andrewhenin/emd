@@ -23,6 +23,10 @@ the missing rest once, all of it when no key arrived. Late keys came 10 to
 27 s late, so a shorter wait doubles text; doubled text fails, never a false
 `ok`.
 
+Launch turns off Predictive Text and Auto-Correction on EMD's own simulator,
+as Appium's WebDriverAgent does. Predictions add new text nodes while `type`
+waits, and corrections change the typed text.
+
 `tap` and `swipe` still return `ok` when the gesture is sent. Their effect is
 for `check` to show; the right screen state varies, and the typed text is known.
 

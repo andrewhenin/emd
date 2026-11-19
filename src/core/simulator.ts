@@ -138,9 +138,14 @@ export async function appAccessibilityOn(device: Device): Promise<boolean> {
   }
 }
 
-// Turns it on, on a simulator EMD made. The setting stays on the device; an
+// Sets a boolean preference inside the simulator. It stays on the device; an
 // app that is already running must restart to see it.
-export async function enableAppAccessibility(device: Device): Promise<void> {
+async function writeBool(
+  device: Device,
+  domain: string,
+  key: string,
+  value: boolean,
+): Promise<void> {
   await runTool(
     "simctl spawn defaults write",
     "xcrun",
@@ -150,12 +155,29 @@ export async function enableAppAccessibility(device: Device): Promise<void> {
       device.id,
       "defaults",
       "write",
-      "com.apple.Accessibility",
-      accessibilityKey,
+      domain,
+      key,
       "-bool",
-      "true",
+      String(value),
     ],
     60,
+  );
+}
+
+// Turns it on, on a simulator EMD made.
+export async function enableAppAccessibility(device: Device): Promise<void> {
+  await writeBool(device, "com.apple.Accessibility", accessibilityKey, true);
+}
+
+// Turns off Predictive Text and Auto-Correction on a simulator EMD made, as
+// Appium's WebDriverAgent does before tests (same keys). Predictions add new
+// text to the screen while `type` waits for its keys, and corrections change
+// the typed text.
+export async function plainKeyboard(device: Device): Promise<void> {
+  await Promise.all(
+    ["KeyboardPrediction", "KeyboardAutocorrection"].map((key) =>
+      writeBool(device, "com.apple.Preferences", key, false),
+    ),
   );
 }
 
