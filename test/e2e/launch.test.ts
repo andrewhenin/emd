@@ -377,20 +377,21 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
 
     // The first launch's dev server is still up (#121).
     test(
-      "a later launch stops the dev server the earlier one left, and its run does not see the earlier run's lines",
+      "a later launch reloads the app on the dev server the earlier one left, and its run does not see the earlier run's lines",
       async () => {
         const left = final.result?.metro;
         again = await finish(await call("launch", { dir: sandbox }), new Set());
         expect(again.status, again.result?.reason).toBe("succeeded");
-        expect(again.result?.metro.port).toBe(left?.port);
-        // Nothing native changed and the app is installed (#174).
-        expect(again.result?.build).toEqual({ action: "reused" });
+        // Nothing native changed and the app runs: a reload, on the same dev
+        // server (#205). The earlier run's lines stay in the earlier run.
+        expect(again.result?.metro).toEqual(left);
+        expect(again.result?.build).toEqual({ action: "reloaded" });
         // #131: the relaunch returns only when AXe can read the screen.
         expect(again.result?.screen?.error).toBeUndefined();
         console.log(
           `relaunch: screen readable after ${again.result?.screen?.waited} s; phases ${JSON.stringify(again.result?.phases)}`,
         );
-        expect(() => process.kill(-(left?.pid ?? 0), 0)).toThrow();
+        expect(() => process.kill(-(left?.pid ?? 0), 0)).not.toThrow();
         const later = await readLogs(again.jobId, { tag: "smoke" });
         expect(later).toMatchObject({ verdict: "ok", total: 0, lines: [] });
         const earlier = await readLogs(first.jobId, { tag: "smoke" });
