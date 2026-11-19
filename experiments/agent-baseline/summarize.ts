@@ -19,6 +19,8 @@ type Meta = {
   valid: { ok: boolean; reasons: string[] };
   outcome: string | null;
   h1: boolean;
+  hitLimit?: boolean;
+  seconds?: number | null;
   run?: { seconds?: number; timedOut?: boolean };
   result: {
     numTurns?: number;
@@ -44,6 +46,9 @@ const median = (values: (number | undefined)[]) => {
   return String(Math.round(m * 100) / 100);
 };
 const row = (cells: (string | number)[]) => `| ${cells.join(" | ")} |`;
+// Records scored before the limit rule (#14) have only run.timedOut.
+const hitLimit = (t: Meta) => t.hitLimit ?? !!t.run?.timedOut;
+const seconds = (t: Meta) => t.seconds ?? t.run?.seconds;
 
 console.log(
   row([
@@ -74,13 +79,13 @@ for (const group of [...new Set(trials.map((t) => t.group))]) {
       `${valid.length} of ${all.length}`,
       valid.filter((t) => t.outcome === "pass").length,
       valid.filter((t) => t.h1).length,
-      valid.filter((t) => t.run?.timedOut).length,
+      valid.filter(hitLimit).length,
       valid.filter(
-        (t) => !t.run?.timedOut && !t.result?.permissionDenials && t.result,
+        (t) => !hitLimit(t) && !t.result?.permissionDenials && t.result,
       ).length,
       median(valid.map((t) => t.result?.numTurns)),
       median(valid.map((t) => t.result?.costUsd)),
-      median(valid.map((t) => t.run?.seconds)),
+      median(valid.map(seconds)),
       median(valid.map((t) => t.toolErrors)),
     ]),
   );
@@ -111,7 +116,7 @@ for (const t of trials) {
       t.h1 ? "yes" : "no",
       t.result?.numTurns ?? "",
       t.result?.costUsd ?? "",
-      t.run?.seconds ?? "",
+      seconds(t) ?? "",
       t.valid.reasons.join("; "),
     ]),
   );

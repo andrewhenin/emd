@@ -19,9 +19,13 @@ gh workflow run agent-baseline.yml -R andrewhenin/emd -f label=round-1 -f trial_
 ```
 
 It needs the repo secret `EVAL_ANTHROPIC_API_KEY`, a key with a spend cap.
-Each job uploads one artifact of records. Summarize the downloaded artifacts of
-all three rounds with
-`node --experimental-strip-types experiments/agent-baseline/summarize.ts <dir>`.
+Each job uploads one artifact of records. Download all three rounds into one
+folder, score each trial again with the current scorer, then summarize:
+
+```
+for d in <dir>/*/; do OUT_DIR="$d" node --experimental-strip-types experiments/agent-baseline/score.ts >/dev/null; done
+node --experimental-strip-types experiments/agent-baseline/summarize.ts <dir>
+```
 
 Per trial (`experiments/agent-baseline/`):
 
@@ -35,9 +39,12 @@ Per trial (`experiments/agent-baseline/`):
 3. `grade.ts` (outcome): builds the app as the trial left it, launches it, taps
    "Save" and checks that "Saved" appears. "Saved" before the tap is a fail.
 4. `score.ts`: H1 proof from the transcript (an element-tree read before the
-   first edit and after the last), the agent's claim, the app's diff, cost,
-   turns, time, tool errors, repeated calls, and whether the session's tools
-   match its group (a mismatch voids the trial).
+   first edit and after the last, in order within one shell call too), the
+   agent's claim, the app's diff, cost, turns, time from prompt to final
+   answer, tool errors, repeated calls, and whether the session's tools match
+   its group (a mismatch voids the trial; EMD's server still connecting
+   counts as present). A trial hits the limit only when no final answer came
+   before it, and then its outcome is a fail.
 5. The workflow removes the API key from every record before the upload.
 
 The five groups are #14's. Their model and arm, and the pinned versions, are
