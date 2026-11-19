@@ -181,11 +181,14 @@ test("telemetry splits a trial's time into model, tools and slowest calls", () =
     otel: [
       { "event.name": "api_request", duration_ms: 2000 },
       { "event.name": "api_request", duration_ms: 3000 },
+      { span: "claude_code.llm_request", duration_ms: 2000, ttft_ms: 800 },
+      { span: "claude_code.llm_request", duration_ms: 3000, ttft_ms: "700" },
       {
         "event.name": "tool_result",
         tool_name: "Bash",
         tool_use_id: "t1",
         duration_ms: 4000,
+        tool_result_size_bytes: 2048,
       },
       // OTLP JSON can send integers as strings.
       {
@@ -198,10 +201,11 @@ test("telemetry splits a trial's time into model, tools and slowest calls", () =
   });
   expect(meta.timing).toEqual({
     modelSeconds: 5,
+    firstTokenSeconds: 1.5,
     toolSeconds: 16,
     byTool: {
-      Bash: { calls: 1, seconds: 4 },
-      mcp__emd__launch: { calls: 1, seconds: 12 },
+      Bash: { calls: 1, seconds: 4, resultKB: 2 },
+      mcp__emd__launch: { calls: 1, seconds: 12, resultKB: 0 },
     },
     slowest: [
       { seconds: 12, tool: "mcp__emd__launch", call: "{}" },
@@ -211,7 +215,7 @@ test("telemetry splits a trial's time into model, tools and slowest calls", () =
   });
 });
 
-test("the runner keeps only timing, token and cost fields from telemetry", () => {
+test("the runner keeps only timing, token and cost fields from telemetry and spans", () => {
   const dir = makeDir();
   const bin = join(dir, "bin");
   const out = join(dir, "out");
@@ -238,6 +242,26 @@ test("the runner keeps only timing, token and cost fields from telemetry", () =>
       },
     ],
   };
+  const spans = {
+    resourceSpans: [
+      {
+        scopeSpans: [
+          {
+            spans: [
+              {
+                name: "claude_code.llm_request",
+                startTimeUnixNano: "1700000000000000000",
+                attributes: [
+                  { key: "user.email", value: { stringValue: "a@b.c" } },
+                  { key: "ttft_ms", value: { intValue: "800" } },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
   writeFileSync(
     join(bin, "claude"),
     `#!${process.execPath}
@@ -245,6 +269,11 @@ await fetch(process.env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT, {
   method: "POST",
   headers: { "content-type": "application/json" },
   body: ${JSON.stringify(JSON.stringify(batch))},
+});
+await fetch(process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: ${JSON.stringify(JSON.stringify(spans))},
 });
 console.log(JSON.stringify({ type: "result", telemetry: process.env.CLAUDE_CODE_ENABLE_TELEMETRY }));
 `,
@@ -270,6 +299,11 @@ console.log(JSON.stringify({ type: "result", telemetry: process.env.CLAUDE_CODE_
     '"telemetry":"1"',
   );
   expect(readFileSync(join(out, "otel.jsonl"), "utf8")).toBe(
-    `${JSON.stringify({ "event.name": "tool_result", tool_name: "Bash", duration_ms: "1500" })}\n`,
+    `${[
+      { "event.name": "tool_result", tool_name: "Bash", duration_ms: "1500" },
+      { span: "claude_code.llm_request", start: 1700000000000, ttft_ms: "800" },
+    ]
+      .map((line) => JSON.stringify(line))
+      .join("\n")}\n`,
   );
 });

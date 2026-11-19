@@ -209,14 +209,18 @@ for (const call of calls) {
   if (seen.has(call.key)) repeatedCalls++;
   seen.add(call.key);
 }
-// Claude Code's telemetry (run.ts writes otel.jsonl): time in model requests,
-// time in each tool, and the slowest calls. `complete` is false when a tool
-// event is missing, such as a last batch lost when the process was stopped.
+// Claude Code's telemetry (run.ts writes otel.jsonl): time in model requests
+// and, when its trace spans came, the part spent waiting for the first token;
+// time and result size per tool; the slowest calls. `complete` is false when
+// a tool event is missing, such as a last batch lost when the process stopped.
 type Telemetry = {
   "event.name"?: string;
+  span?: string;
   tool_name?: string;
   tool_use_id?: string;
   duration_ms?: number | string;
+  ttft_ms?: number | string;
+  tool_result_size_bytes?: number | string;
 };
 const telemetry: Telemetry[] = existsSync(join(out, "otel.jsonl"))
   ? readFileSync(join(out, "otel.jsonl"), "utf8")
@@ -228,20 +232,33 @@ const ms = (e: Telemetry) => Number(e.duration_ms ?? 0);
 const total = (list: Telemetry[]) =>
   Math.round(list.reduce((sum, e) => sum + ms(e), 0) / 100) / 10;
 const toolEvents = telemetry.filter((e) => e["event.name"] === "tool_result");
-const byTool: Record<string, { calls: number; seconds: number }> = {};
+const byTool: Record<
+  string,
+  { calls: number; seconds: number; resultKB: number }
+> = {};
 for (const e of toolEvents) {
   const name = e.tool_name ?? "?";
-  const tool = byTool[name] ?? { calls: 0, seconds: 0 };
+  const tool = byTool[name] ?? { calls: 0, seconds: 0, resultKB: 0 };
   byTool[name] = {
     calls: tool.calls + 1,
     seconds: Math.round((tool.seconds + ms(e) / 1000) * 10) / 10,
+    resultKB:
+      Math.round(
+        (tool.resultKB + Number(e.tool_result_size_bytes ?? 0) / 1024) * 10,
+      ) / 10,
   };
 }
+const requests = telemetry.filter((e) => e.span === "claude_code.llm_request");
 const timing = telemetry.length
   ? {
       modelSeconds: total(
         telemetry.filter((e) => e["event.name"] === "api_request"),
       ),
+      firstTokenSeconds: requests.length
+        ? Math.round(
+            requests.reduce((sum, e) => sum + Number(e.ttft_ms ?? 0), 0) / 100,
+          ) / 10
+        : null,
       toolSeconds: total(toolEvents),
       byTool,
       slowest: [...toolEvents]

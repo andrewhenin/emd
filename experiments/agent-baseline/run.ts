@@ -60,9 +60,11 @@ const env = Object.fromEntries(
   ),
 );
 
-// Claude Code's own telemetry, its OpenTelemetry log events: how long each
-// tool call and each model request took. A local receiver keeps only these
-// fields in otel.jsonl; the others name the account, and records are public.
+// Claude Code's own telemetry (OpenTelemetry): log events with the duration
+// of each tool call and model request, and trace spans that add each model
+// request's time to first token. Both export in the background. A local
+// receiver keeps only these fields in otel.jsonl; the others name the
+// account, and records are public.
 const kept = new Set([
   "event.name",
   "event.sequence",
@@ -70,42 +72,64 @@ const kept = new Set([
   "tool_use_id",
   "success",
   "duration_ms",
+  "ttft_ms",
+  "first_content_ms",
+  "attempt",
+  "stop_reason",
   "model",
   "cost_usd",
   "input_tokens",
   "output_tokens",
   "cache_read_tokens",
   "cache_creation_tokens",
+  "tool_input_size_bytes",
+  "tool_result_size_bytes",
+  "result_tokens",
 ]);
 type Attribute = {
   key: string;
   value?: Record<string, string | number | boolean>;
 };
-type LogRecord = { attributes?: Attribute[] };
-type Logs = {
-  resourceLogs?: { scopeLogs?: { logRecords?: LogRecord[] }[] }[];
+type Item = {
+  name?: string;
+  startTimeUnixNano?: string;
+  attributes?: Attribute[];
 };
-const records = (body: Logs) =>
-  (body.resourceLogs ?? []).flatMap((r) =>
+type Otlp = {
+  resourceLogs?: { scopeLogs?: { logRecords?: Item[] }[] }[];
+  resourceSpans?: { scopeSpans?: { spans?: Item[] }[] }[];
+};
+const items = (body: Otlp) => [
+  ...(body.resourceLogs ?? []).flatMap((r) =>
     (r.scopeLogs ?? []).flatMap((s) => s.logRecords ?? []),
-  );
-const fields = (record: LogRecord) =>
-  Object.fromEntries(
-    (record.attributes ?? [])
+  ),
+  ...(body.resourceSpans ?? []).flatMap((r) =>
+    (r.scopeSpans ?? []).flatMap((s) => s.spans ?? []),
+  ),
+];
+const fields = (item: Item) => ({
+  // A span: its name and start time (ms since the epoch).
+  ...(item.name
+    ? {
+        span: item.name,
+        start: Math.round(Number(item.startTimeUnixNano ?? 0) / 1e6),
+      }
+    : {}),
+  ...Object.fromEntries(
+    (item.attributes ?? [])
       .filter((a) => kept.has(a.key))
       // OTLP JSON sends 64-bit integers as strings.
       .map((a) => [a.key, Object.values(a.value ?? {})[0]]),
-  );
+  ),
+});
 const telemetry = createWriteStream(join(out, "otel.jsonl"));
 const receiver = createServer((request, response) => {
   const chunks: Buffer[] = [];
   request.on("data", (chunk: Buffer) => chunks.push(chunk));
   request.on("end", () => {
     try {
-      for (const record of records(
-        JSON.parse(Buffer.concat(chunks).toString()),
-      ))
-        telemetry.write(`${JSON.stringify(fields(record))}\n`);
+      for (const item of items(JSON.parse(Buffer.concat(chunks).toString())))
+        telemetry.write(`${JSON.stringify(fields(item))}\n`);
     } catch {
       // Not OTLP JSON: nothing to keep.
     }
@@ -115,14 +139,20 @@ const receiver = createServer((request, response) => {
 await new Promise<void>((resolve) =>
   receiver.listen(0, "127.0.0.1", () => resolve()),
 );
+const endpoint = `http://127.0.0.1:${(receiver.address() as AddressInfo).port}`;
 Object.assign(env, {
   CLAUDE_CODE_ENABLE_TELEMETRY: "1",
-  OTEL_LOGS_EXPORTER: "otlp",
+  CLAUDE_CODE_ENHANCED_TELEMETRY_BETA: "1",
   OTEL_METRICS_EXPORTER: "none",
+  OTEL_LOGS_EXPORTER: "otlp",
   OTEL_EXPORTER_OTLP_LOGS_PROTOCOL: "http/json",
-  OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: `http://127.0.0.1:${(receiver.address() as AddressInfo).port}/v1/logs`,
-  // The default is 5 s; a shorter wait loses less if the process is stopped.
+  OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: `${endpoint}/v1/logs`,
+  OTEL_TRACES_EXPORTER: "otlp",
+  OTEL_EXPORTER_OTLP_TRACES_PROTOCOL: "http/json",
+  OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: `${endpoint}/v1/traces`,
+  // The defaults are 5 s; a shorter wait loses less if the process is stopped.
   OTEL_LOGS_EXPORT_INTERVAL: "1000",
+  OTEL_BSP_SCHEDULE_DELAY: "1000",
 });
 
 const started = new Date();
