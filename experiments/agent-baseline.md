@@ -67,8 +67,8 @@ gh workflow run agent-baseline.yml -R andrewhenin/emd -f label=pilot -f groups='
 gh workflow run agent-baseline.yml -R andrewhenin/emd -f label=round-1 -f trial_minutes=<limit> -f app=installed -f emd_version=<version>
 ```
 
-Model outputs and macOS runners vary, so run at least five rounds over two days
-or more. The summary shows each trial's warm-up build time as runner speed.
+Model outputs and macOS runners vary, so run at least five rounds. The summary
+shows each trial's warm-up build time as runner speed.
 
 It needs the repo secret `EVAL_ANTHROPIC_API_KEY`, a key with a spend cap.
 Each job uploads one artifact of records. Download all rounds into one
