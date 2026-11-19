@@ -86,6 +86,24 @@ const fellBackSchema = z
   .array(z.object({ backend: z.enum(backendIds), reason: z.string() }))
   .optional();
 
+// A tap, typing or swipe (decision 0009). ok: the backend did it; only a check
+// shows whether the app reacted. failed: it could not, and `reason` says why.
+export const inputResultSchema = z.object({
+  verdict: z.enum(["ok", "failed"]),
+  reason: z.string().optional(),
+  backend: z.enum(backendIds).optional(),
+  fellBack: fellBackSchema,
+  // A tap by testID or text: seconds from start to finish, which includes
+  // the wait for the element. `type`: seconds until the text showed.
+  seconds: z.number().optional(),
+  // `type`: the rest of the text, when it had to be typed a second time.
+  retyped: z.string().optional(),
+  // `type` in a secure field: what could and could not be confirmed.
+  note: z.string().optional(),
+});
+
+export type InputResult = z.infer<typeof inputResultSchema>;
+
 // The verdict comes only from log events and UI elements. The agent's own
 // reading of a screenshot is recorded next to it as a second opinion and never
 // changes the verdict.
@@ -135,27 +153,16 @@ export const checkResultSchema = z.object({
       agrees: z.boolean().optional(),
     })
     .optional(),
+  // The run's evidence folder, rewritten after this check (#207), and the
+  // worktree's check names whose last verdict is not passed. Report each.
+  evidenceDir: z.string().optional(),
+  notPassed: z.array(z.string()).optional(),
+  // The actions the check ran before it read, in order, with each outcome
+  // (#207). A failed action stops the rest and the read.
+  actions: z.array(inputResultSchema).optional(),
 });
 
 export type CheckResult = z.infer<typeof checkResultSchema>;
-
-// A tap, typing or swipe (decision 0009). ok: the backend did it; only a check
-// shows whether the app reacted. failed: it could not, and `reason` says why.
-export const inputResultSchema = z.object({
-  verdict: z.enum(["ok", "failed"]),
-  reason: z.string().optional(),
-  backend: z.enum(backendIds).optional(),
-  fellBack: fellBackSchema,
-  // A tap by testID or text: seconds from start to finish, which includes
-  // the wait for the element. `type`: seconds until the text showed.
-  seconds: z.number().optional(),
-  // `type`: the rest of the text, when it had to be typed a second time.
-  retyped: z.string().optional(),
-  // `type` in a secure field: what could and could not be confirmed.
-  note: z.string().optional(),
-});
-
-export type InputResult = z.infer<typeof inputResultSchema>;
 
 export const evidenceResultSchema = z.object({
   verdict: z.enum(["written", "failed"]),

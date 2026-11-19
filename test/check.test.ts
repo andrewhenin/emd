@@ -10,6 +10,7 @@ import {
 import { resetChecks } from "../src/core/checkrecord.ts";
 import { readScreen, type ScreenRead } from "../src/core/device/backend.ts";
 import type { UiNode } from "../src/core/device/screen.ts";
+import { evidence } from "../src/core/evidence.ts";
 import type { LogsResult } from "../src/core/result.ts";
 import { cli, launchedJob, makeDir } from "./helpers.ts";
 
@@ -26,10 +27,16 @@ beforeEach(() => {
 const launched = (root?: string) => launchedJob(state, root);
 
 type Screen = { logs?: Record<string, string[]>; nodes?: UiNode[] };
-type Calls = { logs: number; screen: number; screenshot: number };
+type Calls = {
+  logs: number;
+  screen: number;
+  screenshot: number;
+  // Each action and each screen read, in the order they ran.
+  order: string[];
+};
 
 function readers(screen: Screen = {}, overrides: Partial<Deps> = {}) {
-  const calls: Calls = { logs: 0, screen: 0, screenshot: 0 };
+  const calls: Calls = { logs: 0, screen: 0, screenshot: 0, order: [] };
   const deps: Deps = {
     recheckSeconds: 0,
     logs: async ({ tag }): Promise<LogsResult> => {
@@ -47,6 +54,7 @@ function readers(screen: Screen = {}, overrides: Partial<Deps> = {}) {
     },
     screen: async (): Promise<ScreenRead> => {
       calls.screen++;
+      calls.order.push("read");
       return { nodes: screen.nodes ?? [], backend: "axe" };
     },
     screenshot: async (_device, path) => {
@@ -55,6 +63,13 @@ function readers(screen: Screen = {}, overrides: Partial<Deps> = {}) {
       writeFileSync(path, "png");
       return undefined;
     },
+    act: async (action) => {
+      calls.order.push(Object.keys(action)[0] ?? "");
+      return { verdict: "ok", backend: "axe" };
+    },
+    // The bundle reads no log, so the read counts stay the check's own.
+    evidence: (ref) =>
+      evidence(ref, { logs: async () => ({ verdict: "ok", lines: [] }) }),
     ...overrides,
   };
   return { deps, calls };
@@ -529,5 +544,74 @@ test.each([
   const result = await check(options as CheckOptions, () => {}, deps);
   expect(result.verdict).toBe("error");
   expect(result.reason).toMatch(reason);
-  expect(calls).toEqual({ logs: 0, screen: 0, screenshot: 0 });
+  expect(calls).toEqual({ logs: 0, screen: 0, screenshot: 0, order: [] });
+});
+
+test("actions run in order before the read, and the result gives each outcome", async () => {
+  const jobId = await launched();
+  const { deps, calls } = readers(tapped);
+  const result = await run(
+    {
+      jobId,
+      ...expectTapped,
+      actions: [{ tap: { id: "field" } }, { type: "Ada" }, { swipe: "up" }],
+    },
+    deps,
+  );
+  expect(result.verdict).toBe("passed");
+  expect(calls.order).toEqual(["tap", "type", "swipe", "read"]);
+  expect(result.actions).toEqual([
+    { verdict: "ok", backend: "axe" },
+    { verdict: "ok", backend: "axe" },
+    { verdict: "ok", backend: "axe" },
+  ]);
+});
+
+test("a failed action stops the rest and the read, and the check does not count", async () => {
+  const jobId = await launched();
+  const { deps, calls } = readers(tapped, {
+    act: async (action) => {
+      calls.order.push(Object.keys(action)[0] ?? "");
+      return "type" in action
+        ? { verdict: "failed", reason: "no field has focus" }
+        : { verdict: "ok", backend: "axe" };
+    },
+  });
+  const result = await run(
+    {
+      jobId,
+      ...expectTapped,
+      actions: [{ tap: { id: "field" } }, { type: "Ada" }, { swipe: "up" }],
+    },
+    deps,
+  );
+  expect(result).toMatchObject({
+    verdict: "error",
+    reason: expect.stringMatching(
+      /Action 2 \(type\) failed: no field has focus/,
+    ),
+  });
+  expect(result.actions).toHaveLength(2);
+  expect(calls.order).toEqual(["tap", "type"]);
+  // Not an attempt: a later failed check is still the first.
+  const missed = await run(
+    { jobId, ...expectTapped },
+    readers({ nodes: [] }).deps,
+  );
+  expect(missed).toMatchObject({ verdict: "failed", attempt: 1 });
+});
+
+test("more than 10 actions is an error, and none runs", async () => {
+  const jobId = await launched();
+  const { deps, calls } = readers(tapped);
+  const result = await run(
+    {
+      jobId,
+      ...expectTapped,
+      actions: Array.from({ length: 11 }, () => ({ swipe: "up" })),
+    },
+    deps,
+  );
+  expect(result).toMatchObject({ verdict: "error" });
+  expect(calls.order).toEqual([]);
 });

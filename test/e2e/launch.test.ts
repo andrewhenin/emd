@@ -97,8 +97,8 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
       await client.close();
     });
 
-    test("launch returns a job within seconds, not when the build is done", () => {
-      expect(startedAfter).toBeLessThan(10_000);
+    test("launch returns the job after its 25 s wait, not when the build is done", () => {
+      expect(startedAfter).toBeLessThan(35_000);
       expect(first.status).toMatch(/queued|running/);
       expect(first.result).toBeUndefined();
     });
@@ -415,6 +415,9 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
         elements?: { found: boolean }[];
         backend?: string;
         fellBack?: { backend: string; reason: string }[];
+        evidenceDir?: string;
+        notPassed?: string[];
+        actions?: { verdict: string }[];
         secondOpinion?: {
           screenshot?: string;
           agent?: string;
@@ -474,6 +477,12 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
         expect(after.result).toMatchObject({ verdict: "passed" });
         expect(after.result?.attempt).toBeUndefined();
         expectBackendNamed(after);
+        // #207: each check rewrote the bundle and returned its folder; the
+        // earlier failed name stays in view until it passes.
+        expect(
+          existsSync(join(after.result?.evidenceDir ?? "", "manifest.json")),
+        ).toBe(true);
+        expect(after.result?.notPassed).toContain("before-tap");
       },
       minutes(8),
     );
@@ -493,6 +502,17 @@ describe.skipIf(!sandbox || process.platform !== "darwin")(
         expect(typed.result).toMatchObject({ verdict: "passed" });
         // The sandbox has nothing to scroll: this shows only that the swipe ran.
         await input("swipe", { direction: "up" });
+        // #207: a check runs its actions first. Only the action's typing can
+        // log "zq9", so a pass proves the actions ran.
+        const viaActions = await runCheck({
+          name: "after-actions",
+          logs: [{ tag: "typed", message: "zq9" }],
+          actions: [{ tap: { id: "smoke-input" } }, { type: "zq9" }],
+        });
+        expect(viaActions.result).toMatchObject({
+          verdict: "passed",
+          actions: [{ verdict: "ok" }, { verdict: "ok" }],
+        });
       },
       minutes(4),
     );

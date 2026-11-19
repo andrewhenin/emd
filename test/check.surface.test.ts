@@ -34,7 +34,7 @@ test.each([
     /No job with id/,
   ],
 ])(
-  "%s: the CLI blocks, MCP starts a check job that ends the same",
+  "%s: the CLI blocks, MCP returns the same result in one call or as a job",
   async (_name, args, mcpArgs, shape, reason) => {
     const run = cli(...args);
     expect(run.status).toBe(1);
@@ -42,14 +42,19 @@ test.each([
     expect(fromCli).toMatchObject(shape);
     expect(fromCli.reason).toMatch(reason);
 
-    const started = Date.now();
-    const job = await call("check", mcpArgs);
-    expect(Date.now() - started).toBeLessThan(5000);
-    expect(job).toMatchObject({ kind: "check", status: "queued" });
-
-    const done = await finished(job.jobId);
+    // A check that ends within the wait returns its result in this one call.
+    const done = await call("check", mcpArgs);
     expect(done).toMatchObject({ kind: "check", status: "failed" });
     expect(done.result).toEqual(fromCli);
+
+    // With no wait, the call returns the job, and job_status gives the same.
+    const started = Date.now();
+    const job = await call("check", { ...mcpArgs, waitSeconds: 0 });
+    expect(Date.now() - started).toBeLessThan(5000);
+    expect(job).toMatchObject({ kind: "check", status: "queued" });
+    const later = await finished(job.jobId);
+    expect(later).toMatchObject({ kind: "check", status: "failed" });
+    expect(later.result).toEqual(fromCli);
   },
 );
 
@@ -90,6 +95,8 @@ test("neither the CLI nor the MCP tool lets the agent set the limit or reset the
     "elements",
     "name",
     "agentReading",
+    "actions",
+    "waitSeconds",
   ]);
 });
 
@@ -124,3 +131,20 @@ test("a check through the CLI passes on a line that arrives late", async () => {
   expect(result).toMatchObject({ verdict: "passed" });
   expect(result.waited).toBeGreaterThanOrEqual(1);
 }, 15_000);
+
+// #207: an action runs through the same code as the tap tool, in the worker.
+test("a check's failed action ends it as an error over MCP, before any read", async () => {
+  const jobId = await launchedJob(state);
+  const done = await call("check", {
+    jobId,
+    logs: [{ tag: "smoke" }],
+    name: "after-actions",
+    actions: [{ tap: {} }, { swipe: "up" }],
+  });
+  expect(done).toMatchObject({ kind: "check", status: "failed" });
+  expect(done.result).toMatchObject({
+    verdict: "error",
+    reason: expect.stringMatching(/Action 1 \(tap\) failed: Give one target/),
+    actions: [{ verdict: "failed" }],
+  });
+});

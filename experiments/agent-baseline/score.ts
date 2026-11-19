@@ -6,23 +6,29 @@
 // validity) to OUT_DIR. Results: experiments/agent-baseline.md
 //
 // Env: APP_DIR, OUT_DIR, GROUP, ARM, MODEL, LABEL, EMD_VERSION.
+// To score a downloaded trial again, set only OUT_DIR: the rest comes from its
+// meta.json, and its diff.patch stays as it is.
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-const need = (name: string): string => {
-  const value = process.env[name];
-  if (!value) throw new Error(`${name} is not set`);
-  return value;
-};
-const out = need("OUT_DIR");
-const app = need("APP_DIR");
-const arm = need("ARM");
-const model = need("MODEL");
+const out = process.env.OUT_DIR;
+if (!out) throw new Error("OUT_DIR is not set");
 const json = (file: string): Record<string, unknown> =>
   existsSync(join(out, file))
     ? JSON.parse(readFileSync(join(out, file), "utf8"))
     : {};
+const prior = json("meta.json");
+const need = (name: string, key: string): string => {
+  const value = process.env[name] ?? prior[key];
+  if (value === undefined || value === null || value === "") {
+    throw new Error(`${name} is not set`);
+  }
+  return String(value);
+};
+const app = process.env.APP_DIR;
+const arm = need("ARM", "arm");
+const model = need("MODEL", "model");
 const write = (file: string, data: unknown) =>
   writeFileSync(
     join(out, file),
@@ -63,44 +69,62 @@ write("init.json", init ?? {});
 write("claim.txt", typeof result?.result === "string" ? result.result : "");
 
 // The app's final change, untracked files included.
-spawnSync("git", ["-C", app, "add", "-A"]);
-const diff = spawnSync("git", ["-C", app, "diff", "--cached", "--binary"], {
-  encoding: "utf8",
-  maxBuffer: 256 << 20,
-});
-write("diff.patch", diff.stdout ?? "");
+if (app) {
+  spawnSync("git", ["-C", app, "add", "-A"]);
+  const diff = spawnSync("git", ["-C", app, "diff", "--cached", "--binary"], {
+    encoding: "utf8",
+    maxBuffer: 256 << 20,
+  });
+  write("diff.patch", diff.stdout ?? "");
+}
 
 // What each tool call did, in order. A screen read is a machine read of the
 // element tree (or a UI test), not a screenshot. Patterns cover the common
 // tools; a person reads every failed transcript and a sample of passed ones.
+// One shell call can read, edit and read again (#14 round 1), so each match
+// keeps its place in the command.
 type Kind = "edit" | "screen" | "log" | "screenshot";
+const source = /\.(tsx?|jsx?)\b/;
 const shell: [Kind, RegExp][] = [
-  ["screen", /\baxe\s+describe-ui\b/],
-  ["screen", /\bidb\s+ui\s+describe/],
-  ["screen", /\bmaestro\s+(hierarchy|test)\b/],
-  ["screen", /\bxcodebuild\b[^\n]*\btest\b/],
-  ["log", /\blog\s+(show|stream)\b/],
-  ["screenshot", /\bsimctl\s+io\s+\S+\s+screenshot\b/],
-  ["edit", /(sed\s+-i|>\s*\S+\.(tsx?|jsx?)\b|\btee\s+\S+\.(tsx?|jsx?)\b)/],
+  ["screen", /\baxe\s+describe-ui\b/g],
+  ["screen", /\bidb\s+ui\s+describe/g],
+  ["screen", /\bmaestro\s+(hierarchy|test)\b/g],
+  ["screen", /\bxcodebuild\b[^\n]*\btest\b/g],
+  ["log", /\blog\s+(show|stream)\b/g],
+  ["screenshot", /\bsimctl\s+io\s+\S+\s+screenshot\b/g],
+  ["edit", /sed\s+-i|perl\s+-\w*i/g],
+  ["edit", />\s*["']?\S+\.(tsx?|jsx?)\b|\btee\s+\S+\.(tsx?|jsx?)\b/g],
 ];
-const kindsOf = (name: string, input: Record<string, unknown>): Kind[] => {
+// A script that writes a file (python, node), counted only when the command
+// names a source file.
+const scriptWrite = /\.write(_text)?\(|writeFileSync\(/g;
+type Step = { kind: Kind; at: number };
+const stepsOf = (name: string, input: Record<string, unknown>): Step[] => {
   const path = String(input.file_path ?? "");
-  if (name === "mcp__emd__check") return ["screen"];
-  if (name === "mcp__emd__logs") return ["log"];
-  if (name === "mcp__emd__evidence") return ["screenshot"];
-  if (name === "Read" && /\.png$/i.test(path)) return ["screenshot"];
+  if (name === "mcp__emd__check") return [{ kind: "screen", at: 0 }];
+  if (name === "mcp__emd__logs") return [{ kind: "log", at: 0 }];
+  if (name === "mcp__emd__evidence") return [{ kind: "screenshot", at: 0 }];
+  if (name === "Read" && /\.png$/i.test(path)) {
+    return [{ kind: "screenshot", at: 0 }];
+  }
   if (
     ["Edit", "MultiEdit", "Write"].includes(name) &&
-    /\.(tsx?|jsx?)$/.test(path) &&
+    source.test(path) &&
     !/\/(node_modules|ios)\//.test(path)
   ) {
-    return ["edit"];
+    return [{ kind: "edit", at: 0 }];
   }
-  if (name === "Bash") {
-    const command = String(input.command ?? "");
-    return shell.filter(([, re]) => re.test(command)).map(([kind]) => kind);
+  if (name !== "Bash") return [];
+  const command = String(input.command ?? "");
+  const found = shell.flatMap(([kind, re]) =>
+    [...command.matchAll(re)].map((m) => ({ kind, at: m.index ?? 0 })),
+  );
+  if (source.test(command)) {
+    for (const m of command.matchAll(scriptWrite)) {
+      found.push({ kind: "edit", at: m.index ?? 0 });
+    }
   }
-  return [];
+  return found.sort((a, b) => a.at - b.at);
 };
 
 const failed = new Set(
@@ -114,46 +138,60 @@ const calls = events
   .filter((b) => b.type === "tool_use")
   .map((b, index) => {
     const input = b.input ?? {};
+    const steps = stepsOf(b.name ?? "", input);
     return {
       index,
       name: b.name ?? "",
       ok: !failed.has(b.id),
-      kinds: kindsOf(b.name ?? "", input),
+      steps,
+      kinds: [...new Set(steps.map((step) => step.kind))],
       summary: String(
         input.command ?? input.file_path ?? JSON.stringify(input),
       ).slice(0, 200),
       key: `${b.name}:${JSON.stringify(input)}`,
     };
   });
-const edits = calls.filter((c) => c.kinds.includes("edit"));
-const firstEdit = edits[0]?.index;
-const lastEdit = edits.at(-1)?.index;
+// Every step in order: by call, then by place in the call.
+type Placed = { call: number; at: number; kind: Kind; ok: boolean };
+const timeline: Placed[] = calls.flatMap((c) =>
+  c.steps.map((step) => ({ call: c.index, ok: c.ok, ...step })),
+);
+const order = (a: Placed, b: Placed) => a.call - b.call || a.at - b.at;
+const edits = timeline.filter((s) => s.kind === "edit");
+const firstEdit = edits[0];
+const lastEdit = edits.at(-1);
 const around = (kind: Kind) => {
-  const ok = calls.filter((c) => c.ok && c.kinds.includes(kind));
+  const ok = timeline.filter((s) => s.ok && s.kind === kind);
   return {
-    before: firstEdit !== undefined && ok.some((c) => c.index < firstEdit),
-    after: lastEdit !== undefined && ok.some((c) => c.index > lastEdit),
+    before: !!firstEdit && ok.some((s) => order(s, firstEdit) < 0),
+    after: !!lastEdit && ok.some((s) => order(s, lastEdit) > 0),
   };
 };
 const screen = around("screen");
 const proof = {
   h1: screen.before && screen.after,
-  firstEdit,
-  lastEdit,
+  firstEdit: firstEdit && { call: firstEdit.call, at: firstEdit.at },
+  lastEdit: lastEdit && { call: lastEdit.call, at: lastEdit.at },
   screen,
   log: around("log"),
   screenshot: around("screenshot"),
   calls: calls
     .filter((c) => c.kinds.length > 0)
-    .map(({ key: _key, ...c }) => c),
+    .map(({ key: _key, steps: _steps, ...c }) => c),
 };
 write("proof.json", proof);
 
 // Void when the session's tools don't match its group (#14): EMD's MCP tools
 // in the EMD groups and only there; the same for the emd skill when the init
-// event lists skills.
+// event lists skills. EMD's server counts when init lists it still connecting:
+// in round 2 two Haiku trials started that way, then used its tools.
 const tools = Array.isArray(init?.tools) ? (init.tools as string[]) : [];
-const emdTools = tools.some((t) => t.startsWith("mcp__emd__"));
+const servers = Array.isArray(init?.mcp_servers)
+  ? (init.mcp_servers as { name?: string }[])
+  : [];
+const emdTools =
+  tools.some((t) => t.startsWith("mcp__emd__")) ||
+  servers.some((s) => s.name === "emd");
 const skills = Array.isArray(init?.skills) ? (init.skills as unknown[]) : null;
 const emdSkill = skills?.some((s) => JSON.stringify(s).includes('"emd"'));
 const reasons = [
@@ -171,19 +209,29 @@ for (const call of calls) {
   seen.add(call.key);
 }
 const runRecord = json("run.json");
+// A trial hit the limit only when no final answer came before it. A process
+// that answered and then stayed alive until the limit did not (#14 round 2).
+const hitLimit = runRecord.timedOut === true && !result;
 write("meta.json", {
-  group: Number(need("GROUP")),
+  group: Number(need("GROUP", "group")),
   arm,
   model,
-  label: need("LABEL"),
-  emdVersion: arm === "emd" ? need("EMD_VERSION") : null,
-  harnessCommit: process.env.GITHUB_SHA ?? null,
-  runId: process.env.GITHUB_RUN_ID ?? null,
+  label: need("LABEL", "label"),
+  emdVersion: arm === "emd" ? need("EMD_VERSION", "emdVersion") : null,
+  harnessCommit: process.env.GITHUB_SHA ?? prior.harnessCommit ?? null,
+  runId: process.env.GITHUB_RUN_ID ?? prior.runId ?? null,
   ...json("prepare.json"),
   run: runRecord,
   valid: { ok: reasons.length === 0, reasons },
-  outcome: json("grade.json").outcome ?? null,
+  hitLimit,
+  // A trial that hit the limit fails, whatever the app shows (#14).
+  outcome: hitLimit ? "fail" : (json("grade.json").outcome ?? null),
   h1: proof.h1,
+  // Prompt to final answer; the process can outlive the answer.
+  seconds:
+    typeof result?.duration_ms === "number"
+      ? result.duration_ms / 1000
+      : (runRecord.seconds ?? null),
   result: result
     ? {
         subtype: result.subtype,

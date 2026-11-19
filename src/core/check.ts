@@ -15,7 +15,8 @@ import {
 } from "./device/backend.js";
 import { maestroBackend } from "./device/maestro.js";
 import { type ElementSpec, hasElement } from "./device/screen.js";
-import { recordCheck } from "./evidence.js";
+import { recordCheck, evidence as writeEvidence } from "./evidence.js";
+import { swipe, type TapOptions, tap, typeText } from "./input.js";
 import { firstLine } from "./log.js";
 import {
   allLines,
@@ -24,7 +25,12 @@ import {
   tagPattern,
 } from "./logs.js";
 import { worktreeKey } from "./owned.js";
-import type { CheckResult, LogsResult } from "./result.js";
+import type {
+  CheckResult,
+  EvidenceResult,
+  InputResult,
+  LogsResult,
+} from "./result.js";
 import { type RunRef, resolveRun } from "./run.js";
 import { runTool } from "./tool.js";
 
@@ -37,7 +43,23 @@ export type CheckOptions = RunRef & {
   name?: string;
   // The agent's own reading of the screenshot. Second opinion only.
   agentReading?: "pass" | "fail";
+  // Taps, typing and swipes to run, in order, before the read (#207).
+  actions?: CheckAction[];
 };
+
+type CheckAction =
+  | { tap: Omit<TapOptions, "jobId"> }
+  | { type: string }
+  | { swipe: string };
+
+const maxActions = 10;
+
+// One action through the same code as the tap, type and swipe tools.
+function runAction(action: CheckAction, ref: RunRef): Promise<InputResult> {
+  if ("tap" in action) return tap({ ...ref, ...action.tap });
+  if ("type" in action) return typeText({ ...ref, text: action.type });
+  return swipe({ ...ref, direction: action.swipe });
+}
 
 // What the check reads. The real ones read the simulator; tests pass their own.
 export type Deps = {
@@ -47,6 +69,9 @@ export type Deps = {
   screenshot: (device: string, path: string) => Promise<string | undefined>;
   // How long a check reads again before it fails (#140).
   recheckSeconds: number;
+  // Writes the run's evidence folder (#207).
+  evidence: (ref: RunRef) => Promise<EvidenceResult>;
+  act: (action: CheckAction, ref: RunRef) => Promise<InputResult>;
 };
 
 const realDeps: Deps = {
@@ -54,6 +79,8 @@ const realDeps: Deps = {
   // returns at once, and in 2 of 2 e2e runs the check after it waited 5 s.
   recheckSeconds: 10,
   logs: allLines,
+  evidence: (ref) => writeEvidence(ref),
+  act: runAction,
   screen: async (device) =>
     readScreen(device, await detectEnvironment(), [axeBackend, maestroBackend]),
   screenshot: async (device, path) => {
@@ -120,6 +147,9 @@ export async function check(
   if (logSpecs.length > maxSpecs || elementSpecs.length > maxSpecs) {
     return error(`At most ${maxSpecs} expectations of each kind.`);
   }
+  if ((options.actions?.length ?? 0) > maxActions) {
+    return error(`At most ${maxActions} actions.`);
+  }
   for (const spec of logSpecs) {
     if (!tagPattern.test(spec.tag) || (spec.message?.length ?? 0) > maxText) {
       return error(
@@ -171,6 +201,21 @@ export async function check(
     return error(
       `Check "${name}" first expected: ${missing.join("; ")}. Keep each of these unchanged; you can add more. For a different moment, use a new name. Only a person can clear this (emd check reset).`,
     );
+  }
+
+  // The actions run first, in order. A failed one stops the rest and the
+  // read: the check could not run, so it does not count.
+  const actions: InputResult[] = [];
+  for (const [i, action] of (options.actions ?? []).entries()) {
+    const done = await deps.act(action, { jobId: options.jobId });
+    actions.push(done);
+    if (done.verdict !== "ok") {
+      return {
+        verdict: "error",
+        reason: `Action ${i + 1} (${Object.keys(action)[0]}) failed: ${done.reason ?? "no reason given"}. Nothing was read.`,
+        actions,
+      };
+    }
   }
 
   const byTag = new Map<string, TaggedLine[]>();
@@ -251,6 +296,7 @@ export async function check(
       : {}),
   };
   const evidence = {
+    ...(actions.length > 0 ? { actions } : {}),
     ...(waited > 0 ? { waited } : {}),
     logs: logResults.length > 0 ? logResults : undefined,
     elements: elementResults.length > 0 ? elementResults : undefined,
@@ -261,8 +307,10 @@ export async function check(
   };
 
   // Only a check that read something is a check that ran. It sets the count
-  // (a pass starts it over) and the name's last verdict.
-  const ran = (result: CheckResult): CheckResult => {
+  // (a pass starts it over) and the name's last verdict. Then it rewrites the
+  // run's evidence folder, so the agent needs no evidence call (#207). A
+  // folder that can't be written leaves the result as it was.
+  const ran = async (result: CheckResult): Promise<CheckResult> => {
     recordCheck(logDir, name, result);
     writeRecord(key, {
       failures: result.verdict === "passed" ? 0 : before + 1,
@@ -271,7 +319,15 @@ export async function check(
         [name]: { expected: first ?? expected, last: result.verdict },
       },
     });
-    return result;
+    const written = await deps
+      .evidence({ jobId: options.jobId })
+      .catch(() => undefined);
+    if (written?.verdict !== "written") return result;
+    return {
+      ...result,
+      evidenceDir: written.dir,
+      ...(written.notPassed && { notPassed: written.notPassed }),
+    };
   };
 
   if (passed) return ran({ verdict: "passed", ...evidence });

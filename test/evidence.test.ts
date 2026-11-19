@@ -47,6 +47,8 @@ const readers = (found: boolean): CheckDeps => ({
     writeFileSync(path, "png");
     return undefined;
   },
+  evidence: (ref) => evidence(ref, deps),
+  act: async () => ({ verdict: "ok" }),
 });
 
 const sandbox = () => expoProject({ ".maestro/smoke.yaml": "appId: x\n" });
@@ -92,6 +94,40 @@ test("the bundle holds the checks that ran, the log lines, screenshots and flows
   expect(read(result.dir, "logs.json")).toEqual(taps);
 });
 
+test("each check rewrites the bundle and returns its folder, so no evidence call is needed", async () => {
+  const jobId = await launchedJob(state, sandbox());
+  const miss = await check(
+    { jobId, ...smoke, name: "before" },
+    undefined,
+    readers(false),
+  );
+  expect(miss).toMatchObject({ verdict: "failed", notPassed: ["before"] });
+  const hit = await check(
+    { jobId, ...smoke, name: "after" },
+    undefined,
+    readers(true),
+  );
+  expect(hit.verdict).toBe("passed");
+  expect(hit.evidenceDir).toBe(miss.evidenceDir);
+  const manifest = read(hit.evidenceDir, "manifest.json");
+  expect(manifest.checks.map((c: { name: string }) => c.name)).toEqual([
+    "before",
+    "after",
+  ]);
+  expect(hit.notPassed).toEqual(["before"]);
+});
+
+test("a check whose bundle can't be written keeps its result", async () => {
+  const jobId = await launchedJob(state, sandbox());
+  const result = await check({ jobId, ...smoke }, undefined, {
+    ...readers(true),
+    evidence: async () => {
+      throw new Error("disk full");
+    },
+  });
+  expect(result.verdict).toBe("passed");
+  expect(result.evidenceDir).toBeUndefined();
+});
 test("only checks that ran are listed: not invalid ones, not ones refused for the retry limit", async () => {
   const jobId = await launchedJob(state, sandbox());
   process.env.EMD_RETRY_LIMIT = "1";

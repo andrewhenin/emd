@@ -60,15 +60,20 @@ test.each([
       reason: expect.stringMatching(reason),
     });
 
+    // Work that ends within the wait returns its result in this one call.
+    const done = await call("launch", { dir });
+    expect(done).toMatchObject({ kind: "launch", status: "failed" });
+    expect(done.result).toEqual(fromCli);
+
+    // With no wait, the call returns the job, and job_status gives the same.
     const started = Date.now();
-    const job = await call("launch", { dir });
+    const job = await call("launch", { dir, waitSeconds: 0 });
     expect(Date.now() - started).toBeLessThan(5000);
     expect(job).toMatchObject({ kind: "launch", status: "queued" });
     expect(job.result).toBeUndefined();
-
-    const done = await finished(job.jobId);
-    expect(done).toMatchObject({ jobId: job.jobId, status: "failed" });
-    expect(done.result).toEqual(fromCli);
+    const later = await finished(job.jobId);
+    expect(later).toMatchObject({ jobId: job.jobId, status: "failed" });
+    expect(later.result).toEqual(fromCli);
   },
 );
 
