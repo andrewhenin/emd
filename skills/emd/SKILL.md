@@ -29,7 +29,7 @@ After you change code, call `launch` again before you `check` or `tap`. When not
    - `failed`: fix the cause, then check again.
    - `stopped`: the retry limit is reached. Stop and report what is missing. Only a person can reset the count.
    - `error`: the check could not run. Read its reason.
-6. `evidence`, to write the evidence folder. Put its path, the screenshots and the matching log lines in your report or PR, and each name in `notPassed`.
+6. Each check rewrites the run's evidence folder and returns its path (`evidenceDir`). Put that path, the screenshots and the matching log lines in your report or PR, and each name in `notPassed`. Call `evidence` only to rewrite the folder on its own.
 
 ## Rules
 

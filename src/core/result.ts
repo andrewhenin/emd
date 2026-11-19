@@ -135,6 +135,10 @@ export const checkResultSchema = z.object({
       agrees: z.boolean().optional(),
     })
     .optional(),
+  // The run's evidence folder, rewritten after this check (#207), and the
+  // worktree's check names whose last verdict is not passed. Report each.
+  evidenceDir: z.string().optional(),
+  notPassed: z.array(z.string()).optional(),
 });
 
 export type CheckResult = z.infer<typeof checkResultSchema>;

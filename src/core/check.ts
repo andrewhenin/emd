@@ -15,7 +15,7 @@ import {
 } from "./device/backend.js";
 import { maestroBackend } from "./device/maestro.js";
 import { type ElementSpec, hasElement } from "./device/screen.js";
-import { recordCheck } from "./evidence.js";
+import { recordCheck, evidence as writeEvidence } from "./evidence.js";
 import { firstLine } from "./log.js";
 import {
   allLines,
@@ -24,7 +24,7 @@ import {
   tagPattern,
 } from "./logs.js";
 import { worktreeKey } from "./owned.js";
-import type { CheckResult, LogsResult } from "./result.js";
+import type { CheckResult, EvidenceResult, LogsResult } from "./result.js";
 import { type RunRef, resolveRun } from "./run.js";
 import { runTool } from "./tool.js";
 
@@ -47,6 +47,8 @@ export type Deps = {
   screenshot: (device: string, path: string) => Promise<string | undefined>;
   // How long a check reads again before it fails (#140).
   recheckSeconds: number;
+  // Writes the run's evidence folder (#207).
+  evidence: (ref: RunRef) => Promise<EvidenceResult>;
 };
 
 const realDeps: Deps = {
@@ -54,6 +56,7 @@ const realDeps: Deps = {
   // returns at once, and in 2 of 2 e2e runs the check after it waited 5 s.
   recheckSeconds: 10,
   logs: allLines,
+  evidence: (ref) => writeEvidence(ref),
   screen: async (device) =>
     readScreen(device, await detectEnvironment(), [axeBackend, maestroBackend]),
   screenshot: async (device, path) => {
@@ -261,8 +264,10 @@ export async function check(
   };
 
   // Only a check that read something is a check that ran. It sets the count
-  // (a pass starts it over) and the name's last verdict.
-  const ran = (result: CheckResult): CheckResult => {
+  // (a pass starts it over) and the name's last verdict. Then it rewrites the
+  // run's evidence folder, so the agent needs no evidence call (#207). A
+  // folder that can't be written leaves the result as it was.
+  const ran = async (result: CheckResult): Promise<CheckResult> => {
     recordCheck(logDir, name, result);
     writeRecord(key, {
       failures: result.verdict === "passed" ? 0 : before + 1,
@@ -271,7 +276,15 @@ export async function check(
         [name]: { expected: first ?? expected, last: result.verdict },
       },
     });
-    return result;
+    const written = await deps
+      .evidence({ jobId: options.jobId })
+      .catch(() => undefined);
+    if (written?.verdict !== "written") return result;
+    return {
+      ...result,
+      evidenceDir: written.dir,
+      ...(written.notPassed && { notPassed: written.notPassed }),
+    };
   };
 
   if (passed) return ran({ verdict: "passed", ...evidence });
