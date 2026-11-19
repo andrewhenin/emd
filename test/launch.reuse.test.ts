@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { delimiter, join } from "node:path";
 import { expect, test } from "vitest";
-import { expoProject, makeDir } from "./helpers.ts";
+import { expoProject, holdPort, makeDir } from "./helpers.ts";
 
 // `emd launch` through the built CLI, with stubs for everything native: `xcrun`
 // (simctl), `axe`, `npx` and the project's Expo CLI. The stubs log each call to
@@ -10,7 +10,7 @@ import { expoProject, makeDir } from "./helpers.ts";
 const plist = `<?xml version="1.0" encoding="UTF-8"?>
 <plist version="1.0"><dict><key>CFBundleExecutable</key><string>emd</string></dict></plist>`;
 
-function rig() {
+async function rig() {
   const bin = makeDir();
   const state = makeDir();
   const calls = join(bin, "calls.log");
@@ -57,6 +57,7 @@ else if (command === "run:ios" && fs.existsSync(${JSON.stringify(writePlist)})) 
     "node_modules/@expo/fingerprint/index.js":
       'exports.createFingerprintAsync = async () => ({ hash: "same" });',
   });
+  await holdPort(state, project);
   return {
     launch: () => {
       const run = spawnSync("node", ["dist/bin.js", "launch", project], {
@@ -106,8 +107,8 @@ const onMac = test.skipIf(process.platform !== "darwin");
 
 onMac(
   "a container with no Info.plist is built, not reused",
-  () => {
-    const { launch, builds, install } = rig();
+  async () => {
+    const { launch, builds, install } = await rig();
     launch(); // not installed: builds and records the build
     install();
     const second = launch();
@@ -120,8 +121,8 @@ onMac(
 
 onMac(
   "an Info.plist that cannot be read: one build, then it launches",
-  () => {
-    const { launch, builds, install, buildWritesPlist } = rig();
+  async () => {
+    const { launch, builds, install, buildWritesPlist } = await rig();
     launch();
     install("");
     buildWritesPlist(true);
@@ -139,8 +140,8 @@ onMac(
 
 onMac(
   "the app still cannot be read after the build: launch fails",
-  () => {
-    const { launch, builds, install } = rig();
+  async () => {
+    const { launch, builds, install } = await rig();
     launch();
     install("");
     const second = launch();
@@ -155,8 +156,8 @@ onMac(
 
 onMac(
   "the app is gone but the build is in DerivedData: it installs, no build runs",
-  () => {
-    const { launch, builds, installs, leaveBuiltApp } = rig();
+  async () => {
+    const { launch, builds, installs, leaveBuiltApp } = await rig();
     const first = launch();
     leaveBuiltApp(first.derivedData);
     const second = launch();
@@ -175,9 +176,9 @@ onMac(
 
 onMac(
   "the install fails: it builds as before",
-  () => {
+  async () => {
     const { launch, builds, leaveBuiltApp, failInstalls, buildWritesPlist } =
-      rig();
+      await rig();
     const first = launch();
     leaveBuiltApp(first.derivedData);
     failInstalls();
@@ -194,14 +195,14 @@ onMac(
 
 onMac(
   "the installed app cannot be read: one build, then it launches",
-  () => {
+  async () => {
     const {
       launch,
       builds,
       leaveBuiltApp,
       unreadableInstalls,
       buildWritesPlist,
-    } = rig();
+    } = await rig();
     const first = launch();
     leaveBuiltApp(first.derivedData);
     unreadableInstalls();
