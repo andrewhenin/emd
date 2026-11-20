@@ -1,0 +1,98 @@
+name: agent-baseline-tasks
+
+# Checks each task of the agent baseline (#14) before trials use it, as
+# Terminal-Bench checks its tasks: the grader gives the task's "noop" outcome
+# on the start app and its "reference" outcome on the reference change
+# (tasks.json). No agent runs and no API key is used. save-proof is left out:
+# it has save's start app, reference and grader. Tasks and results:
+# experiments/agent-baseline.md
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - experiments/agent-baseline/tasks/**
+      - experiments/agent-baseline/tasks.json
+      - experiments/agent-baseline/grade.ts
+      - experiments/agent-baseline/prepare.sh
+      - .github/workflows/agent-baseline-tasks.yml
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        task: [save, two-taps, server-save]
+    runs-on: macos-26
+    timeout-minutes: 90
+    env:
+      TASK: ${{ matrix.task }}
+      ARM: none
+      APP: fresh
+      DEVICE_NAME: iPhone 17
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Prepare the start app
+        shell: bash
+        run: |
+          {
+            echo "HARNESS=$RUNNER_TEMP/harness"
+            echo "CHECK=$RUNNER_TEMP/check"
+          } >> "$GITHUB_ENV"
+          export HARNESS="$RUNNER_TEMP/harness" CHECK="$RUNNER_TEMP/check"
+          npm ci
+          npm run build
+          APP_DIR="$HOME/app" OUT_DIR="$CHECK/noop" bash experiments/agent-baseline/prepare.sh
+          bash "$HARNESS/install-axe.sh" "$RUNNER_TEMP/grader-axe"
+
+      - name: Grade the start app
+        shell: bash
+        run: |
+          bash "$HARNESS/stop.sh"
+          APP_DIR="$HOME/app" OUT_DIR="$CHECK/noop" AXE="$RUNNER_TEMP/grader-axe/axe" \
+            node --experimental-strip-types "$HARNESS/grade.ts"
+
+      - name: Grade the reference change
+        shell: bash
+        run: |
+          mkdir -p "$CHECK/reference"
+          cp "$CHECK/noop/prepare.json" "$CHECK/reference/"
+          reference=$(jq -r --arg t "$TASK" '.[$t].reference' experiments/agent-baseline/tasks.json)
+          cp "experiments/agent-baseline/$reference" "$HOME/app/App.tsx"
+          bash "$HARNESS/stop.sh"
+          APP_DIR="$HOME/app" OUT_DIR="$CHECK/reference" AXE="$RUNNER_TEMP/grader-axe/axe" \
+            node --experimental-strip-types "$HARNESS/grade.ts"
+
+      - name: Compare with the expected outcomes
+        shell: bash
+        run: |
+          failed=0
+          for kind in noop reference; do
+            want=$(jq -r --arg t "$TASK" --arg k "$kind" '.[$t].expect[$k]' experiments/agent-baseline/tasks.json)
+            got=$(jq -r '.outcome' "$CHECK/$kind/grade.json")
+            echo "$kind: expected $want, got $got ($(jq -r '.reason' "$CHECK/$kind/grade.json"))"
+            [ "$want" = "$got" ] || failed=1
+          done
+          # The start app must fail for the bug's reason: one tap with the
+          # keyboard up.
+          if [ "$TASK" = two-taps ] && ! jq -e '.note.keyboard != null' "$CHECK/noop/grade.json"; then
+            echo "noop: the keyboard was not up when Save was tapped."
+            failed=1
+          fi
+          exit "$failed"
+
+      - name: Upload the grades
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: task-check-${{ matrix.task }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/check
+          retention-days: 30
+          if-no-files-found: warn
