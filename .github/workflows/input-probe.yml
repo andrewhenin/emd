@@ -1,0 +1,73 @@
+name: input-probe
+
+# Runs experiments/input-probe/probe.ts on a CI simulator: many taps and many
+# typing attempts through EMD, with what the app and the screen showed for
+# each. Started by hand. How to read it: experiments/input-probe.md
+on:
+  workflow_dispatch:
+    inputs:
+      attempts:
+        description: "Attempts per phase"
+        default: "20"
+      runner:
+        description: "Runner image"
+        type: choice
+        options: [macos-26, xcode-27]
+        default: macos-26
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install and build
+        shell: bash
+        run: |
+          npm ci
+          npm ci --prefix fixtures/expo
+          npm run build
+
+      # The same setup as e2e, for the same AXe.
+      - name: Run setup with the real installers
+        shell: bash
+        run: |
+          home="$RUNNER_TEMP/setup-home"
+          mkdir -p "$home/.claude"
+          echo '{}' > "$home/.claude.json"
+          HOME="$home" EMD_STATE_DIR="$home/.emd" node dist/bin.js setup --yes | tee "$RUNNER_TEMP/setup.json"
+          jq -er .axe.dir "$RUNNER_TEMP/setup.json" >> "$GITHUB_PATH"
+
+      - name: Print versions
+        shell: bash
+        run: |
+          xcodebuild -version
+          sw_vers -productVersion
+          sysctl -n hw.model hw.ncpu
+          axe --version
+
+      - name: Run the probe
+        shell: bash
+        env:
+          EMD_STATE_DIR: ${{ runner.temp }}/emd-state
+          ATTEMPTS: ${{ inputs.attempts }}
+        run: node --experimental-strip-types experiments/input-probe/probe.ts "$RUNNER_TEMP/probe" "$ATTEMPTS"
+
+      - name: Upload the records
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: input-probe-${{ github.run_id }}-${{ inputs.runner }}
+          path: |
+            ${{ runner.temp }}/probe
+            ${{ runner.temp }}/emd-state/runs
+          if-no-files-found: warn
