@@ -34,4 +34,16 @@ a plain relaunch (the control), and after the two keys are also written to
 
 ## Results
 
-None yet.
+Run [44670204774](https://github.com/andrewhenin/emd/actions/runs/44670204774),
+2026-11-20, macOS 26 runner (3 CPUs), iOS 26, 20 attempts per phase:
+
+- Taps: 20 of 20 reached the app and fired the button.
+- Typing: 60 of 60 `ok`, and the app got every word, in all three phases.
+- Prediction bar: shown in 40 of 40 attempts with the keys in
+  `com.apple.Preferences` only (they read back 0), and in 0 of 20 after they
+  were also written to `com.apple.keyboard.preferences`. So iOS 26 reads them
+  there; #233 writes both.
+- Neither nightly failure reproduced with an idle app. In the failed nightly of
+  2026-11-17, the app got the touch 12 s after `tap` returned, after the check
+  had stopped; in the e2e, that tap follows a reload. Unverified; the e2e logs
+  touches and input times, so the next failure shows more.

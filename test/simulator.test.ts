@@ -105,6 +105,8 @@ test("plainKeyboard turns off Predictive Text and Auto-Correction", async () => 
     ).toEqual([
       "simctl spawn D defaults write com.apple.Preferences KeyboardAutocorrection -bool false",
       "simctl spawn D defaults write com.apple.Preferences KeyboardPrediction -bool false",
+      "simctl spawn D defaults write com.apple.keyboard.preferences KeyboardAutocorrection -bool false",
+      "simctl spawn D defaults write com.apple.keyboard.preferences KeyboardPrediction -bool false",
     ]);
   } finally {
     process.env.PATH = path;
