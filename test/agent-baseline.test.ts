@@ -193,7 +193,8 @@ test("telemetry splits a trial's time into model, tools and slowest calls", () =
       // OTLP JSON can send integers as strings.
       {
         "event.name": "tool_result",
-        tool_name: "mcp__emd__launch",
+        // Telemetry's name for any MCP call; the scorer takes the transcript's.
+        tool_name: "mcp_tool",
         tool_use_id: "t2",
         duration_ms: "12000",
       },

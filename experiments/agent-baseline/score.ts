@@ -232,10 +232,13 @@ const ms = (e: Telemetry) => Number(e.duration_ms ?? 0);
 const total = (list: Telemetry[]) =>
   Math.round(list.reduce((sum, e) => sum + ms(e), 0) / 100) / 10;
 const toolEvents = telemetry.filter((e) => e["event.name"] === "tool_result");
+// Telemetry names every MCP call "mcp_tool"; the transcript has its real name.
+const toolName = (e: Telemetry) =>
+  calls.find((c) => c.id === e.tool_use_id)?.name ?? e.tool_name ?? "?";
 // Summed in ms and bytes, rounded once at the end.
 const sums: Record<string, { calls: number; ms: number; bytes: number }> = {};
 for (const e of toolEvents) {
-  const name = e.tool_name ?? "?";
+  const name = toolName(e);
   const sum = sums[name] ?? { calls: 0, ms: 0, bytes: 0 };
   sums[name] = {
     calls: sum.calls + 1,
@@ -271,7 +274,7 @@ const timing = telemetry.length
         .slice(0, 5)
         .map((e) => ({
           seconds: Math.round(ms(e) / 100) / 10,
-          tool: e.tool_name,
+          tool: toolName(e),
           call: calls.find((c) => c.id === e.tool_use_id)?.summary ?? null,
         })),
       complete: toolEvents.length === calls.length,
