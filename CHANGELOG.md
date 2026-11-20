@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.16.1](https://github.com/andrewhenin/emd/compare/emd-agents-v0.16.0...emd-agents-v0.16.1) (2026-11-20)
+
+
+### Bug Fixes
+
+* launch asks the simulator again before rebuilding, and check times its steps ([#229](https://github.com/andrewhenin/emd/issues/229)) ([046bbf5](https://github.com/andrewhenin/emd/commit/046bbf5926308f0ee35d368d5ca99a2f5769f515))
+
 ## [0.16.0](https://github.com/andrewhenin/emd/compare/emd-agents-v0.15.0...emd-agents-v0.16.0) (2026-11-19)
 
 
