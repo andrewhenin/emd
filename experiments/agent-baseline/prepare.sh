@@ -92,11 +92,13 @@ jq -n \
   --argjson cpus "$(sysctl -n hw.ncpu)" \
   --argjson memoryGb "$(($(sysctl -n hw.memsize) / 1073741824))" \
   --arg node "$(node --version)" --arg app "$APP" \
-  --arg claude "$(claude --version)" \
+  --arg claude "$(claude --version)" --argjson axe "$(cat "$HARNESS/axe-pin.json")" \
+  --arg emd "$([ "$ARM" = emd ] && echo "$EMD_VERSION")" \
   --argjson warmupExit "$warmup" --argjson warmupSeconds "$warmup_seconds" \
   '{device: {udid: $udid, name: $name, runtime: $runtime}, xcode: $xcode,
     macos: $macos, runner: {model: $hw, cpus: $cpus, memoryGb: $memoryGb},
     node: $node, claudeCode: $claude, app: $app,
+    tools: {emd: (if $emd == "" then null else $emd end), axe: $axe},
     warmup: {exit: $warmupExit, seconds: $warmupSeconds}}' >"$OUT_DIR/prepare.json"
 cat "$OUT_DIR/prepare.json"
 if [ "$warmup" -ne 0 ]; then
