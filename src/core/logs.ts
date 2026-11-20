@@ -61,12 +61,26 @@ export function parseTagged(ndjson: string, tag?: string): TaggedLine[] {
   return lines;
 }
 
+// simctl can fail to answer for a while after a boot, even after bootstatus:
+// in the #14 pilot, a reused build fell back to a 194 s rebuild. So a few short
+// tries, 2 s apart, as other simulator tools retry such calls.
 async function appExecutable(device: string, appId: string): Promise<string> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await readExecutable(device, appId);
+    } catch (error) {
+      if (attempt >= 3) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
+  }
+}
+
+async function readExecutable(device: string, appId: string): Promise<string> {
   const { stdout } = await runTool(
     "simctl get_app_container",
     "xcrun",
     ["simctl", "get_app_container", device, appId],
-    60,
+    20,
   );
   const { stdout: name } = await runTool(
     "plutil",

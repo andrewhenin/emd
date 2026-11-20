@@ -203,17 +203,33 @@ export async function check(
     );
   }
 
+  // Seconds each step took, like launch's phases. A step that runs again
+  // adds up.
+  const phases: Record<string, number> = {};
+  const timed = async <T>(name: string, step: () => Promise<T>): Promise<T> => {
+    const at = Date.now();
+    try {
+      return await step();
+    } finally {
+      phases[name] =
+        Math.round(((phases[name] ?? 0) * 1000 + Date.now() - at) / 100) / 10;
+    }
+  };
+
   // The actions run first, in order. A failed one stops the rest and the
   // read: the check could not run, so it does not count.
   const actions: InputResult[] = [];
   for (const [i, action] of (options.actions ?? []).entries()) {
-    const done = await deps.act(action, { jobId: options.jobId });
+    const done = await timed("actions", () =>
+      deps.act(action, { jobId: options.jobId }),
+    );
     actions.push(done);
     if (done.verdict !== "ok") {
       return {
         verdict: "error",
         reason: `Action ${i + 1} (${Object.keys(action)[0]}) failed: ${done.reason ?? "no reason given"}. Nothing was read.`,
         actions,
+        phases,
       };
     }
   }
@@ -261,18 +277,21 @@ export async function check(
     const screenMissing = first || elementResults.some((r) => !r.found);
     if (logSpecs.length > 0 && logsMissing) {
       report(first ? "reading the logs" : "reading the logs again");
-      const failure = await readLogs();
+      const failure = await timed("logs", readLogs);
       if (failure) return error(failure);
     }
     if (elementSpecs.length > 0 && screenMissing) {
       report(first ? "reading the screen" : "reading the screen again");
-      const failure = await readTheScreen();
+      const failure = await timed("screen", readTheScreen);
       if (failure) return error(failure);
     }
     ({ logs: logResults, elements: elementResults } = judge());
     const missing = [...logResults, ...elementResults].some((r) => !r.found);
     if (!missing || Date.now() - started >= deps.recheckSeconds * 1000) break;
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await timed(
+      "wait",
+      () => new Promise((resolve) => setTimeout(resolve, 1000)),
+    );
   }
   const waited = Math.round((Date.now() - started) / 1000);
   const nodes = screen?.nodes ?? [];
@@ -281,7 +300,9 @@ export async function check(
   report("taking a screenshot");
   const stamp = Date.now();
   const shotPath = join(logDir, `check-${stamp}.png`);
-  const shotError = await deps.screenshot(device, shotPath);
+  const shotError = await timed("screenshot", () =>
+    deps.screenshot(device, shotPath),
+  );
   const shot = shotError === undefined ? shotPath : undefined;
   // What the screen reader got, next to the screenshot, for when they disagree.
   if (screen) {
@@ -319,14 +340,15 @@ export async function check(
         [name]: { expected: first ?? expected, last: result.verdict },
       },
     });
-    const written = await deps
-      .evidence({ jobId: options.jobId })
-      .catch(() => undefined);
-    if (written?.verdict !== "written") return result;
+    const written = await timed("evidence", () =>
+      deps.evidence({ jobId: options.jobId }).catch(() => undefined),
+    );
+    if (written?.verdict !== "written") return { ...result, phases };
     return {
       ...result,
       evidenceDir: written.dir,
       ...(written.notPassed && { notPassed: written.notPassed }),
+      phases,
     };
   };
 
