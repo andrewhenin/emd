@@ -175,8 +175,14 @@ export async function enableAppAccessibility(device: Device): Promise<void> {
 // the typed text.
 export async function plainKeyboard(device: Device): Promise<void> {
   await Promise.all(
-    ["KeyboardPrediction", "KeyboardAutocorrection"].map((key) =>
-      writeBool(device, "com.apple.Preferences", key, false),
+    // iOS 26 reads them from com.apple.keyboard.preferences: written only to
+    // com.apple.Preferences, the bar still showed in 40 of 40 typing attempts,
+    // and 0 of 20 with both (experiments/input-probe.md).
+    ["com.apple.Preferences", "com.apple.keyboard.preferences"].flatMap(
+      (domain) =>
+        ["KeyboardPrediction", "KeyboardAutocorrection"].map((key) =>
+          writeBool(device, domain, key, false),
+        ),
     ),
   );
 }
