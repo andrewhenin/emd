@@ -122,6 +122,9 @@ export const checkResultSchema = z.object({
   // Seconds the check read again for what was missing; absent when the first
   // read decided.
   waited: z.number().optional(),
+  // Seconds each step took: actions, logs, screen, wait (between reads),
+  // screenshot, evidence. Only the steps that ran (#14 audit).
+  phases: z.record(z.string(), z.number()).optional(),
   logs: z
     .array(
       z.object({

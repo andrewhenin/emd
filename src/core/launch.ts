@@ -601,8 +601,9 @@ export async function launch(
     capture = await startCapture(device.id, appId, logDir);
   } catch (error) {
     if (!reused && !installedAgain) return captureFailed(error);
-    // The reused or installed build's app cannot be read: build once and try again.
-    why = "installed app could not be read";
+    // The reused or installed build's app cannot be read: build once and try
+    // again. The reason keeps the error, so a rebuild says what caused it.
+    why = `installed app could not be read: ${String(error).split("\n")[0]}`;
     installedAgain = false;
     const failure = await buildApp();
     if (failure) return failure;

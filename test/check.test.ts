@@ -615,3 +615,26 @@ test("more than 10 actions is an error, and none runs", async () => {
   expect(result).toMatchObject({ verdict: "error" });
   expect(calls.order).toEqual([]);
 });
+
+test("a check says how long each step took, so a slow check shows where", async () => {
+  const jobId = await launched();
+  const slow = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  const { deps } = readers(tapped, {
+    act: async () => {
+      await slow(300);
+      return { verdict: "ok", backend: "axe" };
+    },
+  });
+  const result = await run(
+    { jobId, actions: [{ tap: { id: "smoke-button" } }], ...expectTapped },
+    deps,
+  );
+  expect(Object.keys(result.phases ?? {}).sort()).toEqual([
+    "actions",
+    "evidence",
+    "logs",
+    "screen",
+    "screenshot",
+  ]);
+  expect(result.phases?.actions).toBeGreaterThanOrEqual(0.3);
+});
