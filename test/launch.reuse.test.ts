@@ -130,7 +130,7 @@ onMac(
     expect(second.verdict).toBe("launched");
     expect(second.build).toEqual({
       action: "built",
-      reason: "installed app could not be read",
+      reason: expect.stringMatching(/^installed app could not be read: \S/),
     });
     expect(second.phases).toHaveProperty("reuse");
     expect(builds()).toBe(2);
@@ -211,7 +211,7 @@ onMac(
     expect(second.verdict).toBe("launched");
     expect(second.build).toEqual({
       action: "built",
-      reason: "installed app could not be read",
+      reason: expect.stringMatching(/^installed app could not be read: \S/),
     });
     expect(builds()).toBe(2);
   },
