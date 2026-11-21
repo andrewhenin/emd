@@ -1,0 +1,28 @@
+{
+  "save-proof": {
+    "prompt": "In this app, add a Save button to the home screen that shows \"Saved\" when tapped. Check it on the iOS simulator before and after your change, then tell me where the proof is.",
+    "grade": "tap",
+    "reference": "tasks/save.tsx",
+    "expect": { "noop": "fail", "reference": "pass" }
+  },
+  "save": {
+    "prompt": "In this app, add a Save button to the home screen that shows \"Saved\" when tapped.",
+    "grade": "tap",
+    "reference": "tasks/save.tsx",
+    "expect": { "noop": "fail", "reference": "pass" }
+  },
+  "two-taps": {
+    "prompt": "After I type a note and tap Save, nothing happens. I have to tap Save again.",
+    "start": "tasks/two-taps-start.tsx",
+    "grade": "type-then-tap",
+    "reference": "tasks/two-taps-fixed.tsx",
+    "expect": { "noop": "fail", "reference": "pass" }
+  },
+  "server-save": {
+    "prompt": "Show \"Saved\" only after the server confirms the save.",
+    "start": "tasks/server-save-start.tsx",
+    "grade": "no-fake",
+    "reference": "tasks/server-save-faked.tsx",
+    "expect": { "noop": "pass", "reference": "fail" }
+  }
+}

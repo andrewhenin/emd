@@ -1,5 +1,5 @@
 // Summarizes the agent baseline (#14) from downloaded trial records: one row
-// per group and app case, then one row per trial. Void trials (tools not
+// per task, group and app case, then one row per trial. Void trials (tools not
 // matching their group) are listed but not counted. The warm-up build's time
 // shows how fast each trial's runner was. Results: experiments/agent-baseline.md
 //
@@ -19,6 +19,8 @@ type Meta = {
   label: string;
   // Records from before the app case (#14) have none: they are fresh.
   app?: string;
+  // Records from before tasks.json have none: they are save-proof.
+  task?: string;
   warmup?: { seconds?: number };
   timing?: { modelSeconds: number; toolSeconds: number } | null;
   valid: { ok: boolean; reasons: string[] };
@@ -34,12 +36,14 @@ type Meta = {
   } | null;
   toolErrors: number;
 };
+const task = (t: Meta) => t.task ?? "save-proof";
 const trials = readdirSync(dir)
   .map((name) => join(dir, name, "meta.json"))
   .filter((path) => existsSync(path))
   .map((path) => JSON.parse(readFileSync(path, "utf8")) as Meta)
   .sort(
     (a, b) =>
+      task(a).localeCompare(task(b)) ||
       a.group - b.group ||
       (a.app ?? "fresh").localeCompare(b.app ?? "fresh") ||
       a.label.localeCompare(b.label),
@@ -63,6 +67,7 @@ const app = (t: Meta) => t.app ?? "fresh";
 
 console.log(
   row([
+    "Task",
     "Group",
     "Arm",
     "Model",
@@ -79,13 +84,15 @@ console.log(
     "Median warm-up s",
   ]),
 );
-console.log(row(Array(14).fill("---")));
-for (const key of [...new Set(trials.map((t) => `${t.group} ${app(t)}`))]) {
-  const all = trials.filter((t) => `${t.group} ${app(t)}` === key);
+console.log(row(Array(15).fill("---")));
+const keyOf = (t: Meta) => `${task(t)} ${t.group} ${app(t)}`;
+for (const key of [...new Set(trials.map(keyOf))]) {
+  const all = trials.filter((t) => keyOf(t) === key);
   const valid = all.filter((t) => t.valid.ok);
   const first = all[0];
   console.log(
     row([
+      first ? task(first) : "",
       first?.group ?? "",
       first?.arm ?? "",
       first?.model ?? "",
@@ -110,6 +117,7 @@ console.log();
 console.log(
   row([
     "Label",
+    "Task",
     "Group",
     "App",
     "Valid",
@@ -124,11 +132,12 @@ console.log(
     "Void reasons",
   ]),
 );
-console.log(row(Array(13).fill("---")));
+console.log(row(Array(14).fill("---")));
 for (const t of trials) {
   console.log(
     row([
       t.label,
+      task(t),
       t.group,
       app(t),
       t.valid.ok ? "yes" : "no",

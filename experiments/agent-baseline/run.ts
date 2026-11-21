@@ -1,11 +1,12 @@
 // Runs one trial of the agent baseline (#14): Claude Code headless in the app
-// folder, with the group's model and the prompt every group gets, stopped at
-// the time limit. Writes transcript.jsonl, claude-stderr.log, otel.jsonl and
-// run.json to OUT_DIR. Results: experiments/agent-baseline.md
+// folder, with the group's model and the task's prompt, the same for every
+// group, stopped at the time limit. Writes transcript.jsonl,
+// claude-stderr.log, otel.jsonl and run.json to OUT_DIR. Results:
+// experiments/agent-baseline.md
 //
-// Env: APP_DIR, OUT_DIR, MODEL, TRIAL_MINUTES, ANTHROPIC_API_KEY.
+// Env: APP_DIR, OUT_DIR, MODEL, TASK, TRIAL_MINUTES, ANTHROPIC_API_KEY.
 import { spawn } from "node:child_process";
-import { createWriteStream, writeFileSync } from "node:fs";
+import { createWriteStream, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
@@ -16,9 +17,15 @@ const need = (name: string): string => {
   return value;
 };
 
-// The task, word for word as #14 pre-registered it.
-const prompt =
-  'In this app, add a Save button to the home screen that shows "Saved" when tapped. Check it on the iOS simulator before and after your change, then tell me where the proof is.';
+// The task's prompt, word for word as #14 pre-registered it. prepare.sh copies
+// tasks.json next to this script.
+const task = need("TASK");
+const prompt = (
+  JSON.parse(
+    readFileSync(new URL("./tasks.json", import.meta.url), "utf8"),
+  ) as Record<string, { prompt: string } | undefined>
+)[task]?.prompt;
+if (!prompt) throw new Error(`No task ${task} in tasks.json`);
 const out = need("OUT_DIR");
 const minutes = Number(need("TRIAL_MINUTES"));
 if (!(minutes > 0)) throw new Error("TRIAL_MINUTES must be a positive number");
@@ -45,11 +52,14 @@ const harnessVars = new Set([
   "OUT_DIR",
   "HARNESS",
   "MODEL",
+  "TASK",
   "ARM",
   "GROUP",
   "LABEL",
   "TRIAL_MINUTES",
   "EMD_VERSION",
+  "AGENT_DEVICE_VERSION",
+  "SKILLS_VERSION",
   "CLAUDE_CODE_VERSION",
   "DEVICE_NAME",
 ]);
@@ -187,6 +197,7 @@ const done = (exitCode: number | null, signal: NodeJS.Signals | null) => {
   clearTimeout(limit);
   const ended = new Date();
   const record = {
+    task,
     prompt,
     args: args.filter((a) => a !== prompt),
     started: started.toISOString(),
