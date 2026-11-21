@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.16.2](https://github.com/andrewhenin/emd/compare/emd-agents-v0.16.1...emd-agents-v0.16.2) (2026-11-21)
+
+
+### Bug Fixes
+
+* read the screen again when AXe returns an empty tree ([#237](https://github.com/andrewhenin/emd/issues/237)) ([652e968](https://github.com/andrewhenin/emd/commit/652e968ceae50664e483ed819f1ad07a7a9a791c))
+* turn off keyboard predictions in the domain iOS 26 reads ([#234](https://github.com/andrewhenin/emd/issues/234)) ([5063f9a](https://github.com/andrewhenin/emd/commit/5063f9a72cf4b51ba3e1cff62dccacd5d918c1ba))
+
 ## [0.16.1](https://github.com/andrewhenin/emd/compare/emd-agents-v0.16.0...emd-agents-v0.16.1) (2026-11-20)
 
 
