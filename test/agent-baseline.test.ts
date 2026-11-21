@@ -103,6 +103,23 @@ test("EMD's server still connecting at the start is a valid EMD trial", () => {
   expect(meta.valid).toEqual({ ok: true, reasons: [] });
 });
 
+test("agent-device's open and a --settle action are screen reads in its group", () => {
+  const meta = score({
+    arm: "agent-device",
+    events: [
+      init({ skills: ["agent-device", "ios-simulator"] }),
+      use("1", "Bash", {
+        command: "agent-device open com.emd.sandbox --platform ios",
+      }),
+      use("2", "Edit", { file_path: "/app/App.tsx" }),
+      use("3", "Bash", { command: "agent-device press @e4 --settle" }),
+      answer,
+    ],
+  });
+  expect(meta.h1).toBe(true);
+  expect(meta.valid).toEqual({ ok: true, reasons: [] });
+});
+
 test("an answer before the limit counts, even if the process outlived it", () => {
   const meta = score({ arm: "raw", events: [init(), answer], timedOut: true });
   expect(meta).toMatchObject({
@@ -122,7 +139,7 @@ test("no answer before the limit fails, whatever the app shows", () => {
 });
 
 // The summary, run as a script on a folder of trial records.
-test("the summary splits a group by app case and shows warm-up times", () => {
+test("the summary splits a group by task and app case and shows warm-up times", () => {
   const dir = makeDir();
   const trial = (name: string, meta: object) => {
     const folder = join(dir, name);
@@ -143,8 +160,10 @@ test("the summary splits a group by app case and shows warm-up times", () => {
       }),
     );
   };
-  // A record from before the app case counts as fresh.
+  // A record from before the app case counts as fresh, and one from before
+  // tasks.json as save-proof.
   trial("a", { label: "round-1", warmup: { seconds: 400 } });
+  trial("d", { label: "round-1", task: "two-taps", warmup: { seconds: 100 } });
   trial("b", { label: "round-1", app: "installed", warmup: { seconds: 200 } });
   trial("c", { label: "round-2", app: "installed", warmup: { seconds: 300 } });
   const run = spawnSync(
@@ -159,13 +178,16 @@ test("the summary splits a group by app case and shows warm-up times", () => {
   expect(run.status, run.stderr).toBe(0);
   const lines = run.stdout.split("\n");
   expect(lines).toContain(
-    "| 6 | primed | claude-haiku-5-5 | fresh | 1 of 1 | 1 | 1 | 0 | 1 | 9 | 0.05 | 300 | 0 | 400 |",
+    "| save-proof | 6 | primed | claude-haiku-5-5 | fresh | 1 of 1 | 1 | 1 | 0 | 1 | 9 | 0.05 | 300 | 0 | 400 |",
   );
   expect(lines).toContain(
-    "| 6 | primed | claude-haiku-5-5 | installed | 2 of 2 | 2 | 2 | 0 | 2 | 9 | 0.05 | 300 | 0 | 250 |",
+    "| save-proof | 6 | primed | claude-haiku-5-5 | installed | 2 of 2 | 2 | 2 | 0 | 2 | 9 | 0.05 | 300 | 0 | 250 |",
   );
   expect(lines).toContain(
-    "| round-2 | 6 | installed | yes | pass | yes | 9 | 0.050 | 300 |  |  | 300 |  |",
+    "| two-taps | 6 | primed | claude-haiku-5-5 | fresh | 1 of 1 | 1 | 1 | 0 | 1 | 9 | 0.05 | 300 | 0 | 100 |",
+  );
+  expect(lines).toContain(
+    "| round-2 | save-proof | 6 | installed | yes | pass | yes | 9 | 0.050 | 300 |  |  | 300 |  |",
   );
 });
 
@@ -216,7 +238,7 @@ test("telemetry splits a trial's time into model, tools and slowest calls", () =
   });
 });
 
-test("the runner keeps only timing, token and cost fields from telemetry and spans", () => {
+test("the runner sends the task's prompt and keeps only timing, token and cost fields from telemetry", () => {
   const dir = makeDir();
   const bin = join(dir, "bin");
   const out = join(dir, "out");
@@ -276,7 +298,7 @@ await fetch(process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT, {
   headers: { "content-type": "application/json" },
   body: ${JSON.stringify(JSON.stringify(spans))},
 });
-console.log(JSON.stringify({ type: "result", telemetry: process.env.CLAUDE_CODE_ENABLE_TELEMETRY }));
+console.log(JSON.stringify({ type: "result", telemetry: process.env.CLAUDE_CODE_ENABLE_TELEMETRY, task: process.env.TASK ?? null, prompt: process.argv[3] }));
 `,
     { mode: 0o755 },
   );
@@ -289,6 +311,7 @@ console.log(JSON.stringify({ type: "result", telemetry: process.env.CLAUDE_CODE_
         APP_DIR: dir,
         OUT_DIR: out,
         MODEL: "claude-haiku-5-5",
+        TASK: "save",
         TRIAL_MINUTES: "1",
       },
       encoding: "utf8",
@@ -296,8 +319,11 @@ console.log(JSON.stringify({ type: "result", telemetry: process.env.CLAUDE_CODE_
     },
   );
   expect(run.status, run.stderr).toBe(0);
-  expect(readFileSync(join(out, "transcript.jsonl"), "utf8")).toContain(
-    '"telemetry":"1"',
+  const transcript = readFileSync(join(out, "transcript.jsonl"), "utf8");
+  expect(transcript).toContain('"telemetry":"1"');
+  // The agent gets the task's prompt, not the task's name.
+  expect(transcript).toContain(
+    `"task":null,"prompt":${JSON.stringify('In this app, add a Save button to the home screen that shows "Saved" when tapped.')}`,
   );
   expect(readFileSync(join(out, "otel.jsonl"), "utf8")).toBe(
     `${[

@@ -90,8 +90,14 @@ const shell: [Kind, RegExp][] = [
   ["screen", /\bidb\s+ui\s+describe/g],
   ["screen", /\bmaestro\s+(hierarchy|test)\b/g],
   ["screen", /\bxcodebuild\b[^\n]*\btest\b/g],
+  // agent-device: `open` returns the first interactive snapshot, and an
+  // action with --settle returns what changed on screen.
+  ["screen", /\bagent-device\s+(open|snapshot|diff|get|is|find|wait)\b/g],
+  ["screen", /\bagent-device\s[^\n;&|]*--settle\b/g],
   ["log", /\blog\s+(show|stream)\b/g],
+  ["log", /\bagent-device\s+logs\b/g],
   ["screenshot", /\bsimctl\s+io\s+\S+\s+screenshot\b/g],
+  ["screenshot", /\bagent-device\s+screenshot\b/g],
   ["edit", /sed\s+-i|perl\s+-\w*i/g],
   ["edit", />\s*["']?\S+\.(tsx?|jsx?)\b|\btee\s+\S+\.(tsx?|jsx?)\b/g],
 ];
@@ -183,9 +189,10 @@ const proof = {
 write("proof.json", proof);
 
 // Void when the session's tools don't match its group (#14): EMD's MCP tools
-// in the EMD groups and only there; the same for the emd skill when the init
-// event lists skills. EMD's server counts when init lists it still connecting:
-// in round 2 two Haiku trials started that way, then used its tools.
+// in the EMD groups and only there; the same for the emd skill, and for
+// agent-device's skill in the agent-device group, when the init event lists
+// skills. EMD's server counts when init lists it still connecting: in round 2
+// two Haiku trials started that way, then used its tools.
 const tools = Array.isArray(init?.tools) ? (init.tools as string[]) : [];
 const servers = Array.isArray(init?.mcp_servers)
   ? (init.mcp_servers as { name?: string }[])
@@ -194,12 +201,18 @@ const emdTools =
   tools.some((t) => t.startsWith("mcp__emd__")) ||
   servers.some((s) => s.name === "emd");
 const skills = Array.isArray(init?.skills) ? (init.skills as unknown[]) : null;
-const emdSkill = skills?.some((s) => JSON.stringify(s).includes('"emd"'));
+const hasSkill = (name: string) =>
+  skills?.some((s) => JSON.stringify(s).includes(`"${name}"`));
+const emdSkill = hasSkill("emd");
+const agentDeviceSkill = hasSkill("agent-device");
 const reasons = [
   init ? "" : "no init event",
   init && init.model !== model ? `model ${init.model}, not ${model}` : "",
   emdTools !== (arm === "emd") ? `EMD tools: ${emdTools}` : "",
   skills && emdSkill !== (arm === "emd") ? `emd skill: ${emdSkill}` : "",
+  skills && agentDeviceSkill !== (arm === "agent-device")
+    ? `agent-device skill: ${agentDeviceSkill}`
+    : "",
 ].filter(Boolean);
 
 // The same tool with the same input again.
