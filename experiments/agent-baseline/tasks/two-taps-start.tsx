@@ -20,6 +20,8 @@ export default function App() {
       <TextInput
         testID="note-input"
         placeholder="Write a note"
+        autoCapitalize="none"
+        autoCorrect={false}
         value={note}
         onChangeText={(text) => {
           setNote(text);
