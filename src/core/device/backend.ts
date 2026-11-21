@@ -95,27 +95,42 @@ export function secondsTo(until: number): number {
 // A screen read, and which backend produced it.
 export type ScreenRead = Omit<Acted<UiNode[]>, "value"> & { nodes: UiNode[] };
 
+// How many times a backend reads before an empty tree moves the read on to
+// the next backend. AXe can read nothing for a moment: right after a
+// relaunch, and once as the keyboard came up, where Maestro's read then took
+// 31.7 s and used up `type`'s 40 s (#94, e2e run 44673258008).
+const emptyReads = 3;
+
 export async function readScreen(
   device: string,
   env: Environment,
   backends: Pick<DeviceBackend, "id" | "readScreen">[],
   // A Date.now() time that no backend's read may pass.
   until?: number,
+  pauseMs = 1000,
 ): Promise<ScreenRead> {
   const { value, ...rest } = await firstWorking(
     "read the screen",
     env,
     backends,
     async (backend, bin) => {
-      const nodes = await backend.readScreen(
-        device,
-        bin,
-        until === undefined ? undefined : secondsTo(until),
-      );
-      // Every good read includes the app's root node, so none means the read
-      // failed (AXe sometimes reads nothing right after a relaunch).
-      if (nodes.length === 0) throw new Error("returned an empty tree");
-      return nodes;
+      for (let read = 1; ; read++) {
+        const nodes = await backend.readScreen(
+          device,
+          bin,
+          until === undefined ? undefined : secondsTo(until),
+        );
+        // Every good read includes the app's root node, so none means the
+        // read failed.
+        if (nodes.length > 0) return nodes;
+        if (
+          read >= emptyReads ||
+          (until !== undefined && Date.now() + pauseMs >= until)
+        ) {
+          throw new Error("returned an empty tree");
+        }
+        await new Promise((resolve) => setTimeout(resolve, pauseMs));
+      }
     },
   );
   return { nodes: value, ...rest };

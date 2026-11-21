@@ -119,16 +119,46 @@ test("when no backend can read the screen, the error names each reason", async (
   );
 });
 
-const empty = (id: BackendId): Reader => ({
+const empty = (id: BackendId, calls: BackendId[] = []): Reader => ({
   id,
-  readScreen: async () => [],
+  readScreen: async () => {
+    calls.push(id);
+    return [];
+  },
 });
 
-test("an empty tree is a failed read: the next backend answers, and why is recorded", async () => {
-  const read = await readScreen("udid", env(), [
-    empty("axe"),
-    works("maestro"),
-  ]);
+test("an empty tree is read again: AXe answers on its third read, before Maestro starts", async () => {
+  const calls: BackendId[] = [];
+  let reads = 0;
+  const late: Reader = {
+    id: "axe",
+    readScreen: async () => {
+      calls.push("axe");
+      return ++reads < 3 ? [] : nodesFrom("axe");
+    },
+  };
+  const read = await readScreen(
+    "udid",
+    env(),
+    [late, works("maestro", calls)],
+    undefined,
+    0,
+  );
+  expect(read.backend).toBe("axe");
+  expect(read.fellBack).toBeUndefined();
+  expect(calls).toEqual(["axe", "axe", "axe"]);
+});
+
+test("a tree empty for three reads is a failed read: the next backend answers, and why is recorded", async () => {
+  const calls: BackendId[] = [];
+  const read = await readScreen(
+    "udid",
+    env(),
+    [empty("axe", calls), works("maestro", calls)],
+    undefined,
+    0,
+  );
+  expect(calls).toEqual(["axe", "axe", "axe", "maestro"]);
   expect(read.backend).toBe("maestro");
   expect(read.nodes).toEqual(nodesFrom("maestro"));
   expect(read.fellBack).toEqual([
@@ -136,9 +166,22 @@ test("an empty tree is a failed read: the next backend answers, and why is recor
   ]);
 });
 
+test("an empty tree is not read again past the deadline", async () => {
+  const calls: BackendId[] = [];
+  await expect(
+    readScreen(
+      "udid",
+      env(),
+      [empty("axe", calls), empty("maestro", calls)],
+      Date.now() + 500,
+    ),
+  ).rejects.toThrow("axe: Error: returned an empty tree");
+  expect(calls).toEqual(["axe", "maestro"]);
+});
+
 test("when every backend reads nothing, the read fails and names each", async () => {
   await expect(
-    readScreen("udid", env(), [empty("axe"), empty("maestro")]),
+    readScreen("udid", env(), [empty("axe"), empty("maestro")], undefined, 0),
   ).rejects.toThrow(
     "no backend could read the screen (axe: Error: returned an empty tree; maestro: Error: returned an empty tree)",
   );
