@@ -81,9 +81,9 @@ jobs:
             [ "$want" = "$got" ] || failed=1
           done
           # The start app must fail for the bug's reason: one tap with the
-          # keyboard up.
-          if [ "$TASK" = two-taps ] && ! jq -e '.note.keyboard != null' "$CHECK/noop/grade.json"; then
-            echo "noop: the keyboard was not up when Save was tapped."
+          # on-screen keys up.
+          if [ "$TASK" = two-taps ] && ! jq -e '.note.keysUp == true' "$CHECK/noop/grade.json"; then
+            echo "noop: the on-screen keys were not up when Save was tapped."
             failed=1
           fi
           exit "$failed"
