@@ -37,7 +37,8 @@ jobs:
         shell: bash
         run: |
           bin="$ANDROID_HOME/cmdline-tools/latest/bin"
-          yes | "$bin/sdkmanager" --licenses > /dev/null
+          # yes ends on SIGPIPE when sdkmanager exits, which pipefail counts.
+          yes | "$bin/sdkmanager" --licenses > /dev/null || true
           "$bin/sdkmanager" "emulator" "platform-tools" "$IMAGE" > /dev/null
           echo no | "$bin/avdmanager" create avd -n emd-test -k "$IMAGE"
           "$ANDROID_HOME/emulator/emulator" -list-avds
