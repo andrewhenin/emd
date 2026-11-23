@@ -143,6 +143,45 @@ test("reads again what is missing until the limit, and says how long", async () 
   expect(late.calls.screen).toBe(0);
 });
 
+// #247: the screen shows the change before its log line reaches the capture.
+test.each([
+  [3, "passed"],
+  [0, "failed"],
+])(
+  "with %i s of log grace after the screen matched, a late line gives %s",
+  async (logGraceSeconds, verdict) => {
+    const jobId = await launched();
+    let reads = 0;
+    const late = readers(tapped, {
+      recheckSeconds: 1,
+      logGraceSeconds,
+      logs: async ({ tag }) => {
+        reads++;
+        const lines =
+          reads < 3
+            ? []
+            : [
+                {
+                  time: "2026-10-24T18:00:00.000Z",
+                  tag: tag ?? "",
+                  message: "tapped",
+                },
+              ];
+        return { verdict: "ok", lines, total: lines.length };
+      },
+    });
+    const result = await run(
+      {
+        jobId,
+        logs: [{ tag: "smoke", message: "tapped" }],
+        elements: [{ id: "smoke-button" }],
+      },
+      late.deps,
+    );
+    expect(result.verdict).toBe(verdict);
+  },
+);
+
 test("fails after the limit, as one attempt", async () => {
   const jobId = await launched();
   const { deps, calls } = readers(tapped, { recheckSeconds: 2 });
