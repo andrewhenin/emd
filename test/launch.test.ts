@@ -47,6 +47,11 @@ test.each([
     /ios\/ folder and no ios\.bundleIdentifier/,
   ],
   ["a project that does not target iOS", androidOnly, /does not target iOS/],
+  [
+    "a native iOS project, before EMD launches one",
+    () => makeDir({ "App.xcodeproj/project.pbxproj": "" }),
+    /does not launch them yet/,
+  ],
 ])(
   "%s is unsupported: the CLI blocks, MCP starts a job that ends the same",
   async (_name, make, reason) => {

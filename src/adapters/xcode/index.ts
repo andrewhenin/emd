@@ -22,9 +22,10 @@ const adapter: StackAdapter = {
       stack: "xcode",
       platforms: ["ios"],
       appIds: {},
-      ...(tool && {
-        problem: `The project is built with ${tool[1]}. EMD does not build through ${tool[1]} yet.`,
-      }),
+      // launch stops on `problem` before it makes a simulator or DerivedData.
+      problem: tool
+        ? `The project is built with ${tool[1]}. EMD does not build through ${tool[1]} yet.`
+        : "EMD detects native iOS apps but does not launch them yet.",
       notes: [
         ...(project ? [`Xcode project: ${project}.`] : []),
         // Real apps set the ID through variables, xcconfig files and targets.

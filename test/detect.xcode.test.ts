@@ -12,7 +12,7 @@ test("detects the native iOS fixture with no device", () => {
     appIds: {},
     maestroFlows: [".maestro/smoke.yaml"],
   });
-  expect(result.problem).toBeUndefined();
+  expect(result.problem).toContain("does not launch them yet");
   expect(result.commands).toBeUndefined();
   expect(result.notes).toContain("Xcode project: EMDNative.xcodeproj.");
   expect(result.notes.join(" ")).toContain(
