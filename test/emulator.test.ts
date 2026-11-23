@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import {
@@ -64,7 +64,9 @@ describe.skipIf(!avd)("two worktrees' emulators from one AVD", () => {
         }
       } catch (error) {
         for (const port of ports) {
-          const log = readFileSync(join(dir, `${port}.log`), "utf8");
+          const path = join(dir, `${port}.log`);
+          if (!existsSync(path)) continue;
+          const log = readFileSync(path, "utf8");
           console.log(
             `emulator ${port} log:\n${log.split("\n").slice(-30).join("\n")}`,
           );
