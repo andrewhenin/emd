@@ -26,11 +26,3 @@ jobs:
       - name: Build the debug APK
         working-directory: fixtures/android-native
         run: ./gradlew --no-daemon assembleDebug
-
-      - name: Print the APK's app ID
-        shell: bash
-        run: |
-          apk=fixtures/android-native/app/build/outputs/apk/debug/app-debug.apk
-          ls -l "$apk"
-          tools="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
-          "$tools/aapt2" dump badging "$apk" | head -1

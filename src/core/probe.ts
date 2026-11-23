@@ -11,6 +11,7 @@ export const xcodeGenerators: [file: RegExp, tool: string][] = [
 ];
 
 const xcodeProject = /\.(xcworkspace|xcodeproj)$/;
+const gradleSettings = /^settings\.gradle(\.kts)?$/;
 
 // Cheap file probe that decides which adapter to load. No adapter code runs here.
 // Expo comes first: its ios/ and android/ folders hold Xcode and Gradle files
@@ -28,5 +29,3 @@ export async function probeStack(dir: string): Promise<StackId | undefined> {
   if (names.some(marker)) return "xcode";
   return names.some((n) => gradleSettings.test(n)) ? "gradle" : undefined;
 }
-
-const gradleSettings = /^settings\.gradle(\.kts)?$/;

@@ -7,10 +7,16 @@ import type { StackAdapter } from "../../core/index.js";
 const appPlugin = /com\.android\.application|plugins\.android\.application/;
 const buildFiles = ["build.gradle.kts", "build.gradle"];
 
-// The folders, the root or one level down, whose build file applies the app plugin.
+// Folders that hold outputs or packages, never a module of the app.
+const notModules = new Set(["build", "node_modules"]);
+
+// The subfolders whose build file applies the app plugin.
 async function appModules(dir: string): Promise<string[]> {
   const subs = (await readdir(dir, { withFileTypes: true }))
-    .filter((e) => e.isDirectory() && !e.name.startsWith("."))
+    .filter(
+      (e) =>
+        e.isDirectory() && !e.name.startsWith(".") && !notModules.has(e.name),
+    )
     .map((e) => e.name);
   const found: string[] = [];
   for (const module of subs) {
