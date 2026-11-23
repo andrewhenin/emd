@@ -39,6 +39,7 @@ function readers(screen: Screen = {}, overrides: Partial<Deps> = {}) {
   const calls: Calls = { logs: 0, screen: 0, screenshot: 0, order: [] };
   const deps: Deps = {
     recheckSeconds: 0,
+    logGraceSeconds: 0,
     logs: async ({ tag }): Promise<LogsResult> => {
       calls.logs++;
       const messages = screen.logs?.[tag ?? ""] ?? [];
