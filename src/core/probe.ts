@@ -11,10 +11,11 @@ export const xcodeGenerators: [file: RegExp, tool: string][] = [
 ];
 
 const xcodeProject = /\.(xcworkspace|xcodeproj)$/;
+const gradleSettings = /^settings\.gradle(\.kts)?$/;
 
 // Cheap file probe that decides which adapter to load. No adapter code runs here.
-// Expo comes first: its ios/ folder holds Xcode files that do not make the app
-// native iOS. Xcode markers count only in the root folder.
+// Expo comes first: its ios/ and android/ folders hold Xcode and Gradle files
+// that do not make the app native. Native markers count only in the root folder.
 export async function probeStack(dir: string): Promise<StackId | undefined> {
   try {
     const pkg = JSON.parse(await readFile(join(dir, "package.json"), "utf8"));
@@ -25,5 +26,6 @@ export async function probeStack(dir: string): Promise<StackId | undefined> {
   const names = await readdir(dir).catch(() => []);
   const marker = (n: string) =>
     xcodeProject.test(n) || xcodeGenerators.some(([file]) => file.test(n));
-  return names.some(marker) ? "xcode" : undefined;
+  if (names.some(marker)) return "xcode";
+  return names.some((n) => gradleSettings.test(n)) ? "gradle" : undefined;
 }
