@@ -16,11 +16,11 @@ Run `npx -y emd-agents@latest setup --dry-run` and show the user its plan. Run i
 1. Call `detect` with the app folder. At a workspace root it lists the app folders (`apps`): call it again with one of them.
 2. In the code you change, log each event a check needs, and give a testID to each element a check needs:
    - Expo: `console.log("[EMD:<tag>] <message>")` and `testID`.
-   - Native iOS (Swift): `NSLog("[EMD:<tag>] <message>")` and `.accessibilityIdentifier("<id>")` (SwiftUI) or `accessibilityIdentifier` (UIKit). Swift's `print` doesn't reach the log EMD reads.
+   - Native iOS (Swift): `NSLog("[EMD:<tag>] <message>")` and `accessibilityIdentifier`. Swift's `print` doesn't reach the log EMD reads.
 
 ## The loop
 
-After you change code, call `launch` again before you `check` or `tap`. Expo: when nothing native changed, `launch` reloads the running app from the dev server in seconds (`build.action: "reloaded"`). Native iOS: `launch` builds every time, and xcodebuild rebuilds only what changed.
+After you change code, call `launch` again before you `check` or `tap`. Expo: when nothing native changed, `launch` reloads the running app from the dev server in seconds (`build.action: "reloaded"`). Native iOS: `launch` builds every time.
 
 1. `launch` with `dir` set to the app folder. It waits up to 25 s (100 s in Claude Code): a reload or relaunch usually returns its result.
 2. If it returned a job still running, `job_status` with the `jobId`, until `succeeded` or `failed`. A first build takes minutes. A failed launch gives the reason and the first error lines: fix the cause and launch again.

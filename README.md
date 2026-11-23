@@ -43,7 +43,7 @@ npx -y emd-agents@latest detect /path/to/my-app
 
 It must print `"verdict":"detected"` and no `problem`. For example, `"appIds":{"ios":"com.example.myapp"}`. If the app has no iOS app ID, `detect` says so in `notes`: new Expo apps (from `create-expo-app`) have none, and `launch` lets Expo's build set one in the app config (`ios.bundleIdentifier`). EMD writes nothing to the config. Expo's first `run:ios` also creates the `ios/` folder and points the `ios` and `android` scripts in package.json at `expo run:ios` and `expo run:android`. If `problem` appears, install the app's dependencies: EMD reads the config with the app's own Expo CLI.
 
-A native iOS app detects as `"stack":"xcode"`, with no app ID: `launch` reads the ID from the app it builds. `launch` builds the Debug configuration of the scheme named like the workspace or project, or of the only scheme, with `xcodebuild`. Then it installs the app on its own simulator. Projects generated with Tuist, XcodeGen or Bazel show a `problem`: EMD doesn't build through them yet.
+A native iOS app detects as `"stack":"xcode"`, with no app ID: `launch` reads the ID from the app it builds, a Debug build of the scheme named like the workspace or project, or of the only scheme.
 
 ## First run
 
@@ -71,7 +71,7 @@ Output stays on your Mac:
 ## Limits today
 
 - Expo and native iOS apps on the iOS simulator only. No Android launch, no physical devices.
-- Native iOS: a project with several schemes needs one named like the workspace or project. `launch` builds on every call; there is no build reuse yet.
+- Native iOS: a project with several schemes needs one named like the workspace or project. Projects generated with Tuist, XcodeGen or Bazel show a `problem`: EMD doesn't build through them yet. `launch` builds on every call; there is no build reuse yet.
 - `launch` leaves the dev server running. The next `launch` of the same folder stops it and starts a new one. A dev server that EMD did not start on that port still blocks `launch` ("Port N already serves a dev server").
 - `EMD_RETRY_LIMIT` (1 to 10) changes the limit of 3 failed checks.
 - A build can take 900 seconds by default (`timeoutSeconds`, or `--timeout` in the CLI). Two cold builds at the same time can take longer.
