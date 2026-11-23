@@ -36,6 +36,9 @@ export const launchResultSchema = z.object({
   reason: z.string().optional(),
   // First relevant error lines from the build or server log.
   errors: z.array(z.string()).optional(),
+  // The build log's last lines, when a build was stopped for time and no line
+  // looked like an error. Progress, not errors.
+  lastLines: z.array(z.string()).optional(),
   device: z.object({ id: z.string(), name: z.string() }).optional(),
   appId: z.string().optional(),
   appPid: z.number().optional(),
