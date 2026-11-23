@@ -19,6 +19,9 @@ jobs:
     timeout-minutes: 45
     env:
       IMAGE: system-images;android-35;google_apis;x86_64
+      # avdmanager and the emulator can look for AVDs in different folders;
+      # one folder for both.
+      ANDROID_AVD_HOME: /home/runner/.android/avd
     steps:
       - uses: actions/checkout@v7
 
@@ -40,8 +43,9 @@ jobs:
           # yes ends on SIGPIPE when sdkmanager exits, which pipefail counts.
           yes | "$bin/sdkmanager" --licenses > /dev/null || true
           "$bin/sdkmanager" "emulator" "platform-tools" "$IMAGE" > /dev/null
-          echo no | "$bin/avdmanager" create avd -n emd-test -k "$IMAGE"
-          "$ANDROID_HOME/emulator/emulator" -list-avds
+          mkdir -p "$ANDROID_AVD_HOME"
+          echo no | "$bin/avdmanager" create avd -n emd-test -k "$IMAGE" -p "$ANDROID_AVD_HOME/emd-test.avd"
+          "$ANDROID_HOME/emulator/emulator" -list-avds | tee /dev/stderr | grep -qx emd-test
 
       - name: Start, boot and stop two emulators
         env:
