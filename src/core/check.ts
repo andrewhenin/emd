@@ -75,6 +75,9 @@ export type Deps = {
   ) => Promise<string | undefined>;
   // How long a check reads again before it fails (#140).
   recheckSeconds: number;
+  // How long a check still reads the log after every expected element showed
+  // (#247). A line the app wrote with that change can reach the log later.
+  logGraceSeconds: number;
   // Writes the run's evidence folder (#207).
   evidence: (ref: RunRef) => Promise<EvidenceResult>;
   act: (action: CheckAction, ref: RunRef) => Promise<InputResult>;
@@ -84,6 +87,9 @@ const realDeps: Deps = {
   // Measured by the result's `waited` in the e2e log. A tap through AXe
   // returns at once, and in 2 of 2 e2e runs the check after it waited 5 s.
   recheckSeconds: 10,
+  // In e2e run 45103213436 a line reached the log more than 2.5 s after the
+  // app wrote it, while the screen already showed the change.
+  logGraceSeconds: 5,
   logs: allLines,
   evidence: (ref) => writeEvidence(ref),
   act: runAction,
@@ -290,6 +296,8 @@ export async function check(
   // Read, then read again what is still missing until the limit, so a check
   // run a moment after an action doesn't fail on a line still on its way.
   const started = Date.now();
+  let deadline = started + deps.recheckSeconds * 1000;
+  let shown = false;
   let logResults: ReturnType<typeof judge>["logs"] = [];
   let elementResults: ReturnType<typeof judge>["elements"] = [];
   for (let first = true; ; first = false) {
@@ -306,8 +314,16 @@ export async function check(
       if (failure) return error(failure);
     }
     ({ logs: logResults, elements: elementResults } = judge());
+    if (
+      !shown &&
+      elementSpecs.length > 0 &&
+      elementResults.every((r) => r.found)
+    ) {
+      shown = true;
+      deadline = Math.max(deadline, Date.now() + deps.logGraceSeconds * 1000);
+    }
     const missing = [...logResults, ...elementResults].some((r) => !r.found);
-    if (!missing || Date.now() - started >= deps.recheckSeconds * 1000) break;
+    if (!missing || Date.now() >= deadline) break;
     await timed(
       "wait",
       () => new Promise((resolve) => setTimeout(resolve, 1000)),
