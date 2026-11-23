@@ -167,7 +167,7 @@ function buildServer(): McpServer {
     "launch",
     {
       description:
-        "Build the app, install it on an iOS simulator and launch it, leaving its dev server running. Waits up to waitSeconds (default 25, or longer where setup allowed it): a relaunch or reload often ends in time and returns its result. A build takes minutes: then it returns the job, and you call job_status with the jobId until status is succeeded or failed.",
+        "Build the app, install it on an iOS simulator and launch it, leaving its dev server running when the app has one (Expo). Waits up to waitSeconds (default 25, or longer where setup allowed it): a relaunch or reload often ends in time and returns its result. A build takes minutes: then it returns the job, and you call job_status with the jobId until status is succeeded or failed.",
       inputSchema: z.object({
         dir: z
           .string()

@@ -4,7 +4,7 @@ import { launchesIn } from "./jobstore.js";
 import { type LoggedProcess, startLogged } from "./process.js";
 import type { LogsResult } from "./result.js";
 import { resolveRun } from "./run.js";
-import { runTool } from "./tool.js";
+import { plistValue, runTool } from "./tool.js";
 
 // A tagged line is any log message with `[EMD:<tag>]` in it. The app writes it
 // with console.log (or NSLog); the simulator keeps it in its unified log at
@@ -82,20 +82,7 @@ async function readExecutable(device: string, appId: string): Promise<string> {
     ["simctl", "get_app_container", device, appId],
     20,
   );
-  const { stdout: name } = await runTool(
-    "plutil",
-    "plutil",
-    [
-      "-extract",
-      "CFBundleExecutable",
-      "raw",
-      "-o",
-      "-",
-      `${stdout.trim()}/Info.plist`,
-    ],
-    30,
-  );
-  return name.trim();
+  return plistValue(`${stdout.trim()}/Info.plist`, "CFBundleExecutable");
 }
 
 const capturePath = (logDir: string) => join(logDir, "app.ndjson");
