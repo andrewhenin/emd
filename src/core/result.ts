@@ -36,6 +36,9 @@ export const launchResultSchema = z.object({
   reason: z.string().optional(),
   // First relevant error lines from the build or server log.
   errors: z.array(z.string()).optional(),
+  // The platform and device this launch used: a simulator UDID and name, or an
+  // emulator serial and its AVD.
+  platform: z.enum(platforms).optional(),
   device: z.object({ id: z.string(), name: z.string() }).optional(),
   appId: z.string().optional(),
   appPid: z.number().optional(),

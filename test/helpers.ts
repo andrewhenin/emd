@@ -141,3 +141,44 @@ export async function holdPort(state: string, project: string): Promise<void> {
     JSON.stringify(ledger),
   );
 }
+
+export type E2eJob = {
+  jobId: string;
+  status: string;
+  result?: {
+    verdict: string;
+    device?: { id: string; name: string };
+    phases?: Record<string, number>;
+    [key: string]: unknown;
+  };
+};
+
+// An e2e MCP session on dist/bin.js. `run` starts a tool's job and waits on
+// job_status until it ends. The default wait (25-30 s a call) leaves a wide
+// margin under the client's timeout while a native build loads the runner (#229).
+export function e2eSession(name: string) {
+  const client = new Client({ name, version: "0.0.0" });
+  const connect = () =>
+    client.connect(
+      new StdioClientTransport({
+        command: "node",
+        args: ["dist/bin.js", "mcp"],
+        env: { ...process.env, EMD_WAIT_SECONDS: "" } as Record<string, string>,
+      }),
+    );
+  const view = async (tool: string, input: object) =>
+    (
+      await client.callTool(
+        { name: tool, arguments: input as Record<string, unknown> },
+        { timeout: 300_000 },
+      )
+    ).structuredContent as E2eJob;
+  const run = async (tool: string, args: object): Promise<E2eJob> => {
+    let job = await view(tool, args);
+    while (job.status !== "succeeded" && job.status !== "failed") {
+      job = await view("job_status", { jobId: job.jobId });
+    }
+    return job;
+  };
+  return { client, connect, run };
+}

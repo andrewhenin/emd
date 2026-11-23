@@ -46,7 +46,11 @@ test.each([
     () => expoProject({ ...expoConfig({ name: "x" }), "ios/Podfile": "" }),
     /ios\/ folder and no ios\.bundleIdentifier/,
   ],
-  ["a project that does not target iOS", androidOnly, /does not target iOS/],
+  [
+    "an Expo app that targets only Android",
+    androidOnly,
+    /does not launch expo apps on Android yet/,
+  ],
   [
     "a native iOS project built with Tuist",
     () => makeDir({ "Project.swift": "" }),

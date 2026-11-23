@@ -19,7 +19,7 @@ import {
 } from "../core/index.js";
 
 const usage =
-  "Commands: detect [dir], launch [dir] [--device X] [--timeout N], job status <id>, logs <jobId> [--tag T] [--limit N], check <jobId> [--log TAG[=TEXT]] [--element id=X|text=Y] [--name N] [--agent pass|fail], check reset [dir], tap <jobId> --id X|--text Y|--x N --y N, type <jobId> [--] <text>, swipe <jobId> up|down|left|right, evidence <jobId>, gc [--apply], setup [--dry-run] [--yes] [--agent claude-code|codex|cursor], doctor, mcp";
+  "Commands: detect [dir], launch [dir] [--platform ios|android] [--device X] [--timeout N], job status <id>, logs <jobId> [--tag T] [--limit N], check <jobId> [--log TAG[=TEXT]] [--element id=X|text=Y] [--name N] [--agent pass|fail], check reset [dir], tap <jobId> --id X|--text Y|--x N --y N, type <jobId> [--] <text>, swipe <jobId> up|down|left|right, evidence <jobId>, gc [--apply], setup [--dry-run] [--yes] [--agent claude-code|codex|cursor], doctor, mcp";
 
 // --log smoke   or   --log smoke=tapped
 const logSpec = (raw: string) => {
@@ -84,10 +84,20 @@ export async function run(argv: string[]): Promise<number> {
         args,
         allowPositionals: true,
         options: {
+          platform: { type: "string" },
           device: { type: "string" },
           timeout: { type: "string" },
         },
       });
+      const platform = values.platform;
+      if (
+        platform !== undefined &&
+        platform !== "ios" &&
+        platform !== "android"
+      ) {
+        console.error(`emd: --platform must be ios or android. ${usage}`);
+        return 2;
+      }
       const timeoutSeconds = values.timeout
         ? Number(values.timeout)
         : undefined;
@@ -97,6 +107,7 @@ export async function run(argv: string[]): Promise<number> {
       }
       const result = await launchInline({
         dir: positionals[0],
+        platform,
         device: values.device,
         timeoutSeconds,
       });

@@ -1,4 +1,4 @@
-import { readdir, readFile } from "node:fs/promises";
+import { access, readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { StackAdapter } from "../../core/index.js";
 
@@ -35,21 +35,42 @@ async function appModules(dir: string): Promise<string[]> {
 
 const adapter: StackAdapter = {
   id: "gradle",
+  launches: ["android"],
   // A Gradle build with no Android app module is not a mobile app.
   async detect(dir) {
     const modules = await appModules(dir);
     if (modules.length === 0) return undefined;
-    // No app ID: build types and flavors change it, so launch will read it
-    // from the built APK.
+    // No app ID: build types and flavors change it, so launch reads it after
+    // the build.
     return {
       stack: "gradle",
       platforms: ["android"],
       appIds: {},
-      problem: "EMD detects native Android apps but does not launch them yet.",
       notes: [`Android app module: ${modules.join(", ")}.`],
     };
   },
-  launchPlan: async () => undefined,
+  // The Gradle wrapper builds the debug APK of the one app module.
+  async launchPlan(_project, { dir, platform }) {
+    if (platform !== "android") return undefined;
+    const modules = await appModules(dir);
+    if (modules.length > 1) {
+      return `This project has several Android app modules: ${modules.join(", ")}. EMD launches a project with one.`;
+    }
+    const [module] = modules;
+    if (!module) return undefined;
+    if (
+      !(await access(join(dir, "gradlew")).then(
+        () => true,
+        () => false,
+      ))
+    ) {
+      return "This project has no Gradle wrapper (gradlew). Add one with `gradle wrapper`.";
+    }
+    return {
+      build: `./gradlew --console=plain :${module}:assembleDebug`,
+      output: join(module, "build", "outputs", "apk", "debug"),
+    };
+  },
 };
 
 export default adapter;

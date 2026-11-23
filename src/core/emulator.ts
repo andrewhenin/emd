@@ -46,6 +46,72 @@ export function pickEmulatorPort(taken: Set<string>): string {
 
 export const serialOf = (port: string): string => `emulator-${port}`;
 
+// The console ports of the emulators adb lists, EMD's or not.
+export const emulatorPorts = (devices: { serial: string }[]): string[] =>
+  devices.flatMap(({ serial }) => serial.match(/^emulator-(\d+)$/)?.[1] ?? []);
+
+const adb = (serial: string, args: string[], seconds: number) =>
+  runTool(
+    `adb ${args.join(" ")}`,
+    sdkTool("adb"),
+    ["-s", serial, ...args],
+    seconds,
+  );
+
+// The AVD an emulator runs: `adb emu avd name` prints it, then OK.
+export async function avdName(serial: string): Promise<string> {
+  const { stdout } = await adb(serial, ["emu", "avd", "name"], 30);
+  return stdout.split("\n")[0]?.trim() || serial;
+}
+
+export async function installApk(serial: string, apk: string): Promise<void> {
+  await adb(serial, ["install", "-r", apk], 300);
+}
+
+// `cmd package resolve-activity --brief` prints the activity last, as
+// package/class.
+export const parseActivity = (stdout: string): string | undefined =>
+  stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => /^[\w.]+\/[\w.$]+$/.test(line))
+    .at(-1);
+
+// Stops the app if it runs, starts its launcher activity, waits until it shows
+// and returns its pid.
+export async function startApp(serial: string, appId: string): Promise<number> {
+  await adb(serial, ["shell", "am", "force-stop", appId], 30);
+  const resolved = await adb(
+    serial,
+    [
+      "shell",
+      "cmd",
+      "package",
+      "resolve-activity",
+      "--brief",
+      "-c",
+      "android.intent.category.LAUNCHER",
+      appId,
+    ],
+    30,
+  );
+  const activity = parseActivity(resolved.stdout);
+  if (!activity) throw new Error(`${appId} has no launcher activity.`);
+  // am prints an error and still exits 0 on some Android versions.
+  const { stdout } = await adb(
+    serial,
+    ["shell", "am", "start", "-W", "-n", activity],
+    120,
+  );
+  if (/^Error/m.test(stdout)) throw new Error(stdout.trim());
+  const pid = await adb(serial, ["shell", "pidof", appId], 30).then(
+    (result) => Number(result.stdout.trim().split(/\s+/)[0]),
+    () => Number.NaN,
+  );
+  if (!(pid > 0)) throw new Error(`${appId} is not running after the start.`);
+  return pid;
+}
+
 export async function listAvds(): Promise<string[]> {
   const { stdout } = await runTool(
     "emulator -list-avds",
