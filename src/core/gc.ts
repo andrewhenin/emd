@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, rmSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
+import { serialOf, stopEmulator } from "./emulator.js";
 import { diskMB } from "./isolate.js";
 import { firstLine } from "./log.js";
 import { type KeyedLedger, listLedgers, removeLedger } from "./owned.js";
@@ -19,6 +20,8 @@ export type GcResult = {
     key: string;
     root: string;
     simulator?: string;
+    // An Android emulator's serial (emulator-<port>).
+    emulator?: string;
     derivedData?: string;
     // DerivedData and bin folders by `du`; simulator clones share blocks, so
     // their size is left out and the real gain is `freedMB`.
@@ -142,11 +145,13 @@ export async function gc(options: { apply?: boolean } = {}): Promise<GcResult> {
     const derivedData = ledger.resources.find(
       (r) => r.kind === "derivedData",
     )?.id;
+    const emulator = ledger.resources.find((r) => r.kind === "emulator")?.id;
     const reason = problem(ledger, sim);
     entries.push({
       entry: {
         ...base,
         ...(sim && { simulator: sim.id }),
+        ...(emulator && { emulator: serialOf(emulator) }),
         ...(derivedData && { derivedData }),
         mb:
           (await diskMB(join(homeDir(), "derived", ledger.key))) +
@@ -177,6 +182,8 @@ export async function gc(options: { apply?: boolean } = {}): Promise<GcResult> {
     if (entry.status !== "stale") continue;
     try {
       if (sim) await removeSimulator(sim);
+      const emulator = ledger.resources.find((r) => r.kind === "emulator");
+      if (emulator) await stopEmulator(emulator.id);
       rmSync(join(homeDir(), "derived", ledger.key), {
         recursive: true,
         force: true,

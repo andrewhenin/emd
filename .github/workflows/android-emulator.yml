@@ -1,0 +1,55 @@
+name: android-emulator
+
+# Starts two read-only emulators from one AVD on a Linux runner with KVM, the
+# way two worktrees would, and stops them (#254). The android-native e2e pair
+# will replace this (#251).
+on:
+  pull_request:
+    paths:
+      - "src/core/emulator.ts"
+      - "test/emulator.test.ts"
+      - ".github/workflows/android-emulator.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  emulators:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      IMAGE: system-images;android-35;google_apis;x86_64
+      # avdmanager and the emulator can look for AVDs in different folders;
+      # one folder for both.
+      ANDROID_AVD_HOME: /home/runner/.android/avd
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Install the system image and make an AVD
+        shell: bash
+        run: |
+          bin="$ANDROID_HOME/cmdline-tools/latest/bin"
+          # yes ends on SIGPIPE when sdkmanager exits, which pipefail counts.
+          yes | "$bin/sdkmanager" --licenses > /dev/null || true
+          "$bin/sdkmanager" "emulator" "platform-tools" "$IMAGE" > /dev/null
+          mkdir -p "$ANDROID_AVD_HOME"
+          echo no | "$bin/avdmanager" create avd -n emd-test -k "$IMAGE" -p "$ANDROID_AVD_HOME/emd-test.avd"
+          "$ANDROID_HOME/emulator/emulator" -list-avds | tee /dev/stderr | grep -qx emd-test
+
+      - name: Start, boot and stop two emulators
+        env:
+          EMD_TEST_AVD: emd-test
+        run: |
+          npm ci
+          npx vitest run test/emulator.test.ts
