@@ -51,23 +51,20 @@ export async function untilExitOrIdle(
   totalSeconds: number,
 ): Promise<number | "idle" | "timeout"> {
   const started = Date.now();
-  let size = -1;
+  let size: number | undefined;
   let grew = started;
   let timer: NodeJS.Timeout | undefined;
   const stopped = new Promise<"idle" | "timeout">((resolve) => {
-    timer = setInterval(
-      () => {
-        const now = Date.now();
-        const current = statSync(logPath, { throwIfNoEntry: false })?.size;
-        if (current !== size) {
-          size = current ?? -1;
-          grew = now;
-        }
-        if (now - started >= totalSeconds * 1000) resolve("timeout");
-        else if (now - grew >= idleSeconds * 1000) resolve("idle");
-      },
-      Math.min(1000, idleSeconds * 250),
-    );
+    timer = setInterval(() => {
+      const now = Date.now();
+      const current = statSync(logPath, { throwIfNoEntry: false })?.size;
+      if (current !== size) {
+        size = current;
+        grew = now;
+      }
+      if (now - started >= totalSeconds * 1000) resolve("timeout");
+      else if (now - grew >= idleSeconds * 1000) resolve("idle");
+    }, 1000);
   });
   try {
     return await Promise.race([exited, stopped]);

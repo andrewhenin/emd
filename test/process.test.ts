@@ -39,14 +39,14 @@ test("kill stops a long-running process, including its children", async () => {
 // #178: a build stops on a hang, not on slow progress.
 test("a process that keeps writing its log runs past the idle limit", async () => {
   const { process, logPath } = logged(
-    `for i in 1 2 3 4 5 6; do echo "compiling $i"; sleep 0.5; done`,
+    `for i in 1 2 3 4 5 6 7 8; do echo "compiling $i"; sleep 0.5; done`,
   );
-  expect(await untilExitOrIdle(process.exited, logPath, 1.5, 30)).toBe(0);
+  expect(await untilExitOrIdle(process.exited, logPath, 2, 30)).toBe(0);
 });
 
 test("a process whose log stops growing is reported idle, then killed", async () => {
   const { process, logPath } = logged(`echo start; sleep 30`);
-  expect(await untilExitOrIdle(process.exited, logPath, 1.5, 30)).toBe("idle");
+  expect(await untilExitOrIdle(process.exited, logPath, 2, 30)).toBe("idle");
   process.kill();
   expect(await process.exited).toBe(-1);
 });
@@ -55,9 +55,7 @@ test("a process that still writes stops at the total limit", async () => {
   const { process, logPath } = logged(
     `while true; do echo tick; sleep 0.2; done`,
   );
-  expect(await untilExitOrIdle(process.exited, logPath, 1.5, 2)).toBe(
-    "timeout",
-  );
+  expect(await untilExitOrIdle(process.exited, logPath, 2, 3)).toBe("timeout");
   process.kill();
 });
 

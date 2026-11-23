@@ -179,13 +179,9 @@ async function runBuild(
   { reason: string; errors?: string[]; lastLines?: string[] } | undefined
 > {
   const seconds = options.timeoutSeconds ?? defaultTimeoutSeconds;
+  const idle = Math.min(buildIdleSeconds, seconds);
   const build = startLogged(command, { cwd, logPath, env });
-  const outcome = await untilExitOrIdle(
-    build.exited,
-    logPath,
-    Math.min(buildIdleSeconds, seconds),
-    seconds,
-  );
+  const outcome = await untilExitOrIdle(build.exited, logPath, idle, seconds);
   if (outcome === 0) return undefined;
   build.kill();
   const text = await readFile(logPath, "utf8").catch(() => "");
@@ -195,7 +191,7 @@ async function runBuild(
       reason:
         outcome === "timeout"
           ? `The build did not finish in ${seconds}s.`
-          : `The build log did not grow for ${Math.min(buildIdleSeconds, seconds)}s, so the build looked hung and was stopped.`,
+          : `The build log did not grow for ${idle}s, so the build looked hung and was stopped.`,
       ...(errors.length > 0 ? { errors } : { lastLines: lastLines(text) }),
     };
   }
