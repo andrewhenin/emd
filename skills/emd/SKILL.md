@@ -14,6 +14,8 @@ Run `npx -y emd-agents@latest setup --dry-run` and show the user its plan. Run i
 ## Before you change code
 
 1. Call `detect` with the app folder. At a workspace root it lists the app folders (`apps`): call it again with one of them.
+   - If it gives `needsPrepare`, a setup step makes the native project. Find in the project's docs (README, AGENTS.md, CLAUDE.md, Makefile) the command that makes it, and for iOS the scheme you run and its configuration. Pass them to every `launch` as `prepare`, `scheme` and `configuration`. If the docs don't say, ask the user once, then offer to add them to the project's agent notes.
+   - A native iOS app with several schemes stops with a list. Pass `scheme` the same way.
 2. In the code you change, log each event a check needs, and give a testID to each element a check needs:
    - Expo: `console.log("[EMD:<tag>] <message>")` and `testID`.
    - Native iOS (Swift): `NSLog("[EMD:<tag>] <message>")` and `accessibilityIdentifier`. Swift's `print` doesn't reach the log EMD reads.

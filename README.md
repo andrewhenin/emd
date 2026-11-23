@@ -44,7 +44,7 @@ npx -y emd-agents@latest detect /path/to/my-app
 
 It must print `"verdict":"detected"` and no `problem`. For example, `"appIds":{"ios":"com.example.myapp"}`. If the app has no iOS app ID, `detect` says so in `notes`: new Expo apps (from `create-expo-app`) have none, and `launch` lets Expo's build set one in the app config (`ios.bundleIdentifier`). EMD writes nothing to the config. Expo's first `run:ios` also creates the `ios/` folder and points the `ios` and `android` scripts in package.json at `expo run:ios` and `expo run:android`. If `problem` appears, install the app's dependencies: EMD reads the config with the app's own Expo CLI.
 
-A native iOS app detects as `"stack":"xcode"`, with no app ID: `launch` reads the ID from the app it builds, a Debug build of the scheme named like the workspace or project, or of the only scheme.
+A native iOS app detects as `"stack":"xcode"`, with no app ID: `launch` reads the ID from the app it builds. It builds the scheme named like the workspace or project, or the only scheme, or the one in `scheme`, with the configuration its Run action uses, as Xcode does.
 
 A native Android app detects as `"stack":"gradle"`, with no app ID: `launch` builds the debug APK of the one app module and reads the ID that the build records.
 
@@ -76,7 +76,7 @@ Output stays on your Mac:
 - No physical devices.
 - Expo on Android: `launch` builds on every call, with no reload yet. When the app has no `android/` folder, the first Android launch runs `expo prebuild --platform android` to make it, as `expo run:android` does.
 - Native Android: one app module and its debug build, with no product flavors. `launch` builds on every call; Gradle's own build is incremental. Through adb, `type` types ASCII text only; other text goes through Maestro.
-- Native iOS: a project with several schemes needs one named like the workspace or project. Projects generated with Tuist, XcodeGen or Bazel show a `problem`: EMD doesn't build through them yet. `launch` builds on every call; there is no build reuse yet.
+- Native iOS: with several schemes and none named like the workspace or project, `launch` needs `scheme`. A project made by a setup step (Tuist, XcodeGen, Bazel, or a `make` around them) shows `needsPrepare`: pass the setup command as `prepare`, and EMD runs it before each build. An app that Bazel builds with no Xcode project doesn't work yet. `launch` builds on every call; there is no build reuse yet.
 - `launch` leaves the dev server running. The next `launch` of the same folder stops it and starts a new one. A dev server that EMD did not start on that port still blocks `launch` ("Port N already serves a dev server").
 - `EMD_RETRY_LIMIT` (1 to 10) changes the limit of 3 failed checks.
 - A build can take 900 seconds by default (`timeoutSeconds`, or `--timeout` in the CLI). Two cold builds at the same time can take longer.
@@ -148,7 +148,7 @@ EMD is open source but does not accept pull requests from outside contributors y
 Run them as `npx -y emd-agents@latest <command>`, or `node dist/bin.js <command>` in a clone. Below, `emd` means either.
 
 - `detect [dir]`: same as the tool.
-- `launch [dir] [--platform ios|android] [--device X] [--timeout N]`: same as the tool, but waits for the result.
+- `launch [dir] [--platform ios|android] [--prepare CMD] [--scheme S] [--configuration C] [--device X] [--timeout N]`: same as the tool, but waits for the result.
 - `job status <id>`: reads a job.
 - `logs <jobId> [--tag T] [--limit N]`: same as the tool.
 - `check <jobId> [--log TAG[=TEXT]] [--element id=X|text=Y] [--name N] [--agent pass|fail]`: same as the tool, but waits.

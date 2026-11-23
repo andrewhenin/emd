@@ -18,6 +18,7 @@ export const detectResultSchema = z.object({
   // dependencies are not installed), or an ios/ folder exists with no iOS app ID
   // in the config.
   problem: z.string().optional(),
+  needsPrepare: z.string().optional(),
   commands: z.object({ run: perPlatform, server: z.string() }).optional(),
   packageManager: z.enum(packageManagers).optional(),
   maestroFlows: z.array(z.string()).optional(),

@@ -105,6 +105,13 @@ export type LaunchOptions = {
   dir?: string;
   // Default: iOS when the project targets it, else Android.
   platform?: Platform;
+  // A command run in the project folder before anything reads its native
+  // project, such as the `make` that generates it (XcodeGen, Tuist, Bazel).
+  prepare?: string;
+  // iOS: the scheme to build, and its configuration. Default: the scheme named
+  // like the project, or the only one; the configuration its Run action uses.
+  scheme?: string;
+  configuration?: string;
   // iOS: the simulator to clone for this worktree, by name or UDID. Default:
   // the newest shut-down iPhone. Android: the AVD to run. Default: the first
   // one listed. Ignored once the worktree has its own device.
@@ -257,6 +264,7 @@ async function runBuild(
   logPath: string,
   env: Record<string, string>,
   options: LaunchOptions,
+  step = "build",
 ): Promise<{ reason: string; errors: string[] } | undefined> {
   const seconds = options.timeoutSeconds ?? defaultTimeoutSeconds;
   const build = startLogged(command, { cwd, logPath, env });
@@ -267,9 +275,9 @@ async function runBuild(
   // Expo's own open step timed out after the install; EMD opens the app next.
   if (outcome !== "timeout" && onlyOpenFailed(text)) return undefined;
   const fix = knownFix(text);
-  let reason = `The build failed (exit ${outcome}).`;
+  let reason = `The ${step} failed (exit ${outcome}).`;
   if (outcome === "timeout") {
-    reason = `The build did not finish in ${seconds}s.`;
+    reason = `The ${step} did not finish in ${seconds}s.`;
   } else if (fix) {
     reason = fix;
   } else if (text.includes("\u203a Build Succeeded")) {
@@ -370,8 +378,31 @@ export async function launch(
     );
   }
   if (detected.problem) return unsupported(detected.problem);
+  if (detected.needsPrepare && !options.prepare) {
+    return unsupported(detected.needsPrepare);
+  }
+  if (platform === "ios" && process.platform !== "darwin") {
+    return unsupported("iOS simulators need macOS.");
+  }
+  // The project's own setup step, such as `make`, runs before anything reads
+  // the native project it may write.
+  const logDir = runDir(root);
+  if (options.prepare) {
+    phase("prepare", "running the prepare command");
+    const failure = await runBuild(
+      options.prepare,
+      root,
+      join(logDir, "prepare.log"),
+      {},
+      options,
+      "prepare command",
+    );
+    if (failure) {
+      return failed(failure.reason, { logDir, errors: failure.errors });
+    }
+  }
   if (platform === "android") {
-    return launchAndroid(root, adapter, options, {
+    return launchAndroid(root, adapter, logDir, options, {
       phase,
       failed,
       unsupported,
@@ -381,9 +412,6 @@ export async function launch(
   // Without an ID, Expo's own build sets one (ios.bundleIdentifier) and the
   // ID is read again after it. EMD writes nothing to the app config.
   let appId = detected.appIds?.ios;
-  if (process.platform !== "darwin") {
-    return unsupported("iOS simulators need macOS.");
-  }
 
   // Each worktree gets its own simulator, DerivedData and Metro port, recorded
   // as EMD-owned before they exist (decision 0006).
@@ -460,6 +488,8 @@ export async function launch(
       platform: "ios",
       deviceId: device.id,
       port,
+      ...(options.scheme && { scheme: options.scheme }),
+      ...(options.configuration && { configuration: options.configuration }),
     });
   } catch (error) {
     return failed("Could not plan the build.", {
@@ -471,7 +501,6 @@ export async function launch(
   // Without a dev server the build only builds, and EMD installs the app.
   const { server, build } = plan;
 
-  const logDir = runDir(root);
   const buildLog = join(logDir, "build.log");
   const metroLog = join(logDir, "metro.log");
   const where = {
@@ -807,6 +836,7 @@ type Steps = {
 async function launchAndroid(
   root: string,
   adapter: StackAdapter,
+  logDir: string,
   options: LaunchOptions,
   { phase, failed, unsupported, done }: Steps,
 ): Promise<LaunchResult> {
@@ -827,7 +857,6 @@ async function launchAndroid(
     });
   }
 
-  const logDir = runDir(root);
   const metroLog = join(logDir, "metro.log");
   const serial = serialOf(emulatorPort);
   const where = {

@@ -180,6 +180,24 @@ function buildServer(): McpServer {
           .enum(platforms)
           .optional()
           .describe("Default: ios when the project targets iOS, else android."),
+        prepare: z
+          .string()
+          .optional()
+          .describe(
+            "A command run in the project folder first, such as `make`, when a setup step makes the native project (XcodeGen, Tuist, Bazel). detect says when it is needed; the project's docs name it.",
+          ),
+        scheme: z
+          .string()
+          .optional()
+          .describe(
+            "iOS: the scheme to build. Default: the one named like the project, or the only one.",
+          ),
+        configuration: z
+          .string()
+          .optional()
+          .describe(
+            "iOS: the build configuration. Default: the one the scheme's Run action uses.",
+          ),
         device: z
           .string()
           .optional()

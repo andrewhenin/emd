@@ -19,6 +19,9 @@ export type StackDetection = {
   appIds: Partial<Record<Platform, string>>;
   // Why `launch` cannot go on; it stops on it before building.
   problem?: string;
+  // Why launch needs a `prepare` command first: the native project is made by
+  // a setup step (XcodeGen, Tuist, Bazel).
+  needsPrepare?: string;
   // What an agent should know about this app, in one line each.
   notes?: string[];
   // None for a stack with no dev server or run command of its own.
@@ -56,6 +59,9 @@ export interface StackAdapter {
       // Android: the device's CPU ABI, so a debug build compiles native code
       // for it alone.
       abi?: string;
+      // iOS: the scheme and configuration the caller asked for.
+      scheme?: string;
+      configuration?: string;
     },
   ): Promise<LaunchPlan | string | undefined>;
   // A hash of everything that needs a new native build when it changes. Throws

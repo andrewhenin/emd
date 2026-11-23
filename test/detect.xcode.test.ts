@@ -31,10 +31,11 @@ test.each([
   ["XcodeGen", "project.yml"],
   ["Bazel", "MODULE.bazel"],
   ["Bazel", "WORKSPACE"],
-])("%s (%s) is named as the reason launch stops", (tool, file) => {
+])("%s (%s): launch needs a prepare command first", (tool, file) => {
   const result = detect(makeDir({ [file]: "" }));
   expect(result).toMatchObject({ verdict: "detected", stack: "xcode" });
-  expect(result.problem).toContain(tool);
+  expect(result.problem).toBeUndefined();
+  expect(result.needsPrepare).toContain(`with ${tool} (${file})`);
 });
 
 test("an Expo app with an ios/ workspace still detects as expo", () => {

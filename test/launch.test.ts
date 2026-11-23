@@ -39,9 +39,9 @@ test.each([
     /ios\/ folder and no ios\.bundleIdentifier/,
   ],
   [
-    "a native iOS project built with Tuist",
+    "a Tuist project with no prepare command",
     () => makeDir({ "Project.swift": "" }),
-    /built with Tuist/,
+    /with Tuist \(Project\.swift\)\. Pass prepare/,
   ],
 ])(
   "%s is unsupported: the CLI blocks, MCP starts a job that ends the same",
