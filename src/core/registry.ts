@@ -4,6 +4,7 @@ import type { StackAdapter, StackId } from "./adapter.js";
 const loaders: Record<StackId, () => Promise<{ default: StackAdapter }>> = {
   expo: () => import("../adapters/expo/index.js"),
   xcode: () => import("../adapters/xcode/index.js"),
+  gradle: () => import("../adapters/gradle/index.js"),
 };
 
 const loaded = new Set<StackId>();

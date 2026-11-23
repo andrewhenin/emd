@@ -1,4 +1,4 @@
-export const stackIds = ["expo", "xcode"] as const;
+export const stackIds = ["expo", "xcode", "gradle"] as const;
 export const platforms = ["ios", "android"] as const;
 export const packageManagers = ["npm", "yarn", "pnpm", "bun"] as const;
 
