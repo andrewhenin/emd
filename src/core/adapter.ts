@@ -42,6 +42,7 @@ export interface StackAdapter {
     projectDir: string,
     project: ProjectInfo,
   ): Promise<StackDetection | undefined>;
+  // A string says why this project cannot launch as it is.
   launchPlan(
     project: ProjectInfo,
     request: {
@@ -50,7 +51,7 @@ export interface StackAdapter {
       deviceId: string;
       port: number;
     },
-  ): Promise<LaunchPlan | undefined>;
+  ): Promise<LaunchPlan | string | undefined>;
   // A hash of everything that needs a new native build when it changes. Throws
   // when it cannot be computed. A stack without one builds on every launch.
   fingerprint?(projectDir: string, platform: Platform): Promise<string>;

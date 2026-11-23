@@ -67,9 +67,7 @@ const adapter: StackAdapter = {
     );
     const picked = pickScheme(JSON.parse(stdout));
     if (!("scheme" in picked)) {
-      throw new Error(
-        `${project} has several schemes and none is named like it: ${picked.schemes.join(", ")}.`,
-      );
+      return `${project} has several schemes and none is named like it: ${picked.schemes.join(", ")}.`;
     }
     return {
       build: [

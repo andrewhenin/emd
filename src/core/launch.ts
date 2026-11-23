@@ -357,7 +357,7 @@ export async function launch(
   }
 
   const adapter = await loadAdapter(detected.stack);
-  let plan: LaunchPlan | undefined;
+  let plan: LaunchPlan | string | undefined;
   try {
     plan = await adapter.launchPlan(await inspectProject(root), {
       dir: root,
@@ -366,10 +366,11 @@ export async function launch(
       port,
     });
   } catch (error) {
-    return unsupported(
-      (String(error).split("\n")[0] ?? "").replace(/^Error: /, ""),
-    );
+    return failed("Could not plan the build.", {
+      errors: String(error).split("\n").slice(0, 3),
+    });
   }
+  if (typeof plan === "string") return unsupported(plan);
   if (!plan) return unsupported(`${detected.stack} cannot launch on iOS.`);
   // Without a dev server the build only builds, and EMD installs the app.
   const { server, build } = plan;
