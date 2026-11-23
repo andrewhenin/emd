@@ -16,7 +16,7 @@ import { homeDir } from "./state.js";
 // resource EMD created for it. An entry is written as "creating" before the
 // resource exists and stays until a cleanup succeeds. A ledger that cannot be
 // read throws, so unknown is never taken for absent.
-export type Kind = "simulator" | "derivedData" | "port";
+export type Kind = "simulator" | "derivedData" | "port" | "emulator";
 export type Entry = { kind: Kind; id: string; state: "creating" | "owned" };
 type Ledger = { root: string; resources: Entry[] };
 // A ledger with its file name, which is the key it was written under.
