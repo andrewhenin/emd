@@ -1,4 +1,4 @@
-export const stackIds = ["expo"] as const;
+export const stackIds = ["expo", "xcode"] as const;
 export const platforms = ["ios", "android"] as const;
 export const packageManagers = ["npm", "yarn", "pnpm", "bun"] as const;
 
@@ -21,7 +21,8 @@ export type StackDetection = {
   problem?: string;
   // What an agent should know about this app, in one line each.
   notes?: string[];
-  commands: {
+  // None for a stack with no dev server or run command of its own.
+  commands?: {
     // Build, install and launch on a simulator or emulator.
     run: Partial<Record<Platform, string>>;
     // Start the dev server on its own.

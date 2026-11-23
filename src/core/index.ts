@@ -23,6 +23,7 @@ export {
   waitForJob,
 } from "./jobs.js";
 export { logs } from "./logs.js";
+export { xcodeGenerators } from "./probe.js";
 export { loadedAdapters } from "./registry.js";
 export {
   type CheckResult,

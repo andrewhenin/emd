@@ -3,6 +3,7 @@ import type { StackAdapter, StackId } from "./adapter.js";
 // The only place that may import an adapter, and only dynamically (decision 0001).
 const loaders: Record<StackId, () => Promise<{ default: StackAdapter }>> = {
   expo: () => import("../adapters/expo/index.js"),
+  xcode: () => import("../adapters/xcode/index.js"),
 };
 
 const loaded = new Set<StackId>();
