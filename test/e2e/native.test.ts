@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import { Client } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
@@ -34,6 +35,19 @@ describe.skipIf(!process.env.EMD_E2E_SANDBOX || process.platform !== "darwin")(
     let launched: Job;
 
     beforeAll(async () => {
+      // The Expo suite leaves EMD's own simulator booted. A second booted
+      // simulator starved the runner: a clone's boot timed out at 300 s in
+      // run 45107506814. Only simulators EMD named (emd-) are shut down.
+      const { devices } = JSON.parse(
+        execFileSync("xcrun", ["simctl", "list", "devices", "booted", "-j"], {
+          encoding: "utf8",
+        }),
+      ) as { devices: Record<string, { name: string; udid: string }[]> };
+      for (const device of Object.values(devices).flat()) {
+        if (device.name.startsWith("emd-")) {
+          execFileSync("xcrun", ["simctl", "shutdown", device.udid]);
+        }
+      }
       await client.connect(
         new StdioClientTransport({
           command: "node",
