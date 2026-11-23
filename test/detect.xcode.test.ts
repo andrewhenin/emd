@@ -1,4 +1,5 @@
 import { expect, test } from "vitest";
+import { pickScheme } from "../src/adapters/xcode/index.ts";
 import { cli, expoConfig, makeDir } from "./helpers.ts";
 
 const detect = (dir: string) => JSON.parse(cli("detect", dir).stdout);
@@ -12,7 +13,7 @@ test("detects the native iOS fixture with no device", () => {
     appIds: {},
     maestroFlows: [".maestro/smoke.yaml"],
   });
-  expect(result.problem).toContain("does not launch them yet");
+  expect(result.problem).toBeUndefined();
   expect(result.commands).toBeUndefined();
   expect(result.notes).toEqual(["Xcode project: EMDNative.xcodeproj."]);
 });
@@ -49,4 +50,29 @@ test("an Expo app with an ios/ workspace still detects as expo", () => {
 test("Xcode files below the root folder do not count", () => {
   const dir = makeDir({ "ios/App.xcodeproj/project.pbxproj": "" });
   expect(detect(dir).verdict).toBe("none");
+});
+
+test.each([
+  [
+    "the scheme named like the project",
+    { project: { name: "App", schemes: ["Lib", "App"] } },
+    { scheme: "App" },
+  ],
+  [
+    "the scheme named like the workspace",
+    { workspace: { name: "App", schemes: ["Pods-App", "App"] } },
+    { scheme: "App" },
+  ],
+  [
+    "the only scheme",
+    { project: { name: "App", schemes: ["Other"] } },
+    { scheme: "Other" },
+  ],
+  [
+    "no guess among several",
+    { project: { name: "App", schemes: ["A", "B"] } },
+    { schemes: ["A", "B"] },
+  ],
+])("launch builds %s", (_name, list, picked) => {
+  expect(pickScheme(list)).toEqual(picked);
 });

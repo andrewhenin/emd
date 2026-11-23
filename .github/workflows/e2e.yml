@@ -1,6 +1,7 @@
 name: e2e
 
-# A real launch of fixtures/expo on an iOS simulator (decision 0007).
+# A real launch of fixtures/expo and fixtures/ios-native on an iOS simulator
+# (decision 0007).
 # The paths are checked in the first step, not in a `paths:` filter, so the
 # `e2e` label can force a run on any PR's pushes.
 # No `labeled` type: a label event started a second run on the same commit

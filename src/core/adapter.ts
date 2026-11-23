@@ -30,10 +30,11 @@ export type StackDetection = {
   };
 };
 
-// How to get an app onto one device: a long-lived dev server, and a build that
-// installs and launches without starting its own server (that one would die
-// with the build process).
-export type LaunchPlan = { server: string; build: string };
+// How to get an app onto one device. With a dev server: a long-lived server,
+// and a build that installs and launches without starting its own server (that
+// one would die with the build process). Without one: a build only, and core
+// installs the built app.
+export type LaunchPlan = { server?: string; build: string };
 
 export interface StackAdapter {
   id: StackId;
@@ -43,9 +44,14 @@ export interface StackAdapter {
   ): Promise<StackDetection | undefined>;
   launchPlan(
     project: ProjectInfo,
-    request: { platform: Platform; deviceId: string; port: number },
-  ): LaunchPlan | undefined;
+    request: {
+      dir: string;
+      platform: Platform;
+      deviceId: string;
+      port: number;
+    },
+  ): Promise<LaunchPlan | undefined>;
   // A hash of everything that needs a new native build when it changes. Throws
-  // when it cannot be computed.
-  fingerprint(projectDir: string, platform: Platform): Promise<string>;
+  // when it cannot be computed. A stack without one builds on every launch.
+  fingerprint?(projectDir: string, platform: Platform): Promise<string>;
 }

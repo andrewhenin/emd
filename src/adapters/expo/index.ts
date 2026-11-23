@@ -108,7 +108,7 @@ const adapter: StackAdapter = {
       commands: { run, server: `${expo} start` },
     };
   },
-  launchPlan(project, { platform, deviceId, port }) {
+  async launchPlan(project, { platform, deviceId, port }) {
     if (platform !== "ios") return undefined;
     const expo = `${project.exec} expo`;
     return {

@@ -48,9 +48,9 @@ test.each([
   ],
   ["a project that does not target iOS", androidOnly, /does not target iOS/],
   [
-    "a native iOS project, before EMD launches one",
-    () => makeDir({ "App.xcodeproj/project.pbxproj": "" }),
-    /does not launch them yet/,
+    "a native iOS project built with Tuist",
+    () => makeDir({ "Project.swift": "" }),
+    /built with Tuist/,
   ],
 ])(
   "%s is unsupported: the CLI blocks, MCP starts a job that ends the same",

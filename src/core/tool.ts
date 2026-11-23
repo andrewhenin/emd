@@ -55,3 +55,14 @@ export function runTool(
     });
   });
 }
+
+// One value of a property list (an app's Info.plist), as text. macOS only.
+export async function plistValue(path: string, key: string): Promise<string> {
+  const { stdout } = await runTool(
+    "plutil",
+    "plutil",
+    ["-extract", key, "raw", "-o", "-", path],
+    30,
+  );
+  return stdout.trim();
+}
