@@ -50,16 +50,18 @@ test("an emulator port is the first free even port from 5554", () => {
 const avd = process.env.EMD_TEST_AVD;
 describe.skipIf(!avd)("two worktrees' emulators from one AVD", () => {
   test(
-    "both boot at once, and stopping one leaves the other",
+    "a second boots while the first runs, and stopping one leaves the other",
     async () => {
       expect(await listAvds()).toContain(avd);
       const dir = makeDir();
       const ports = ["5560", "5562"];
-      for (const port of ports) {
-        startEmulator(avd ?? "", port, join(dir, `${port}.log`));
-      }
+      // One after the other, as two worktrees launch: two cold boots at once
+      // starved a 4-core runner (the second did not boot in 600 s).
       try {
-        await Promise.all(ports.map((p) => untilBooted(serialOf(p), 600)));
+        for (const port of ports) {
+          startEmulator(avd ?? "", port, join(dir, `${port}.log`));
+          await untilBooted(serialOf(port), 600);
+        }
       } catch (error) {
         for (const port of ports) {
           const log = readFileSync(join(dir, `${port}.log`), "utf8");
