@@ -74,20 +74,15 @@ describe.skipIf(!avd)("two worktrees' emulators from one AVD", () => {
         throw error;
       }
       await stopEmulator("5560");
-      const states = async () =>
+      const running = async () =>
         (await adbDevices())
           .map((d) => d.serial)
-          .filter((s) => s.startsWith("emulator-556"));
-      for (
-        let i = 0;
-        i < 30 && (await states()).includes("emulator-5560");
-        i++
-      ) {
+          .filter((s) => ports.some((p) => s === serialOf(p)));
+      for (let i = 0; i < 30 && (await running()).length > 1; i++) {
         await new Promise((resolve) => setTimeout(resolve, 1000));
       }
-      expect(await states()).toEqual(["emulator-5562"]);
+      expect(await running()).toEqual(["emulator-5562"]);
       await stopEmulator("5562");
-      await stopEmulator("5560");
     },
     15 * 60_000,
   );
