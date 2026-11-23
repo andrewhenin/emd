@@ -1,1 +1,1 @@
-^(src/core/(simulator|launch|isolate|jobs|process|logs|tool|setup|doctor)\.ts|src/core/device/|src/adapters/|test/e2e/|fixtures/|package(-lock)?\.json|\.github/workflows/e2e\.yml|\.github/e2e-paths\.txt)
+^(src/core/(simulator|launch|isolate|jobs|process|logs|tool|setup|doctor)\.ts|src/core/device/|src/adapters/|test/e2e/|fixtures/(expo|ios-native)/|package(-lock)?\.json|\.github/workflows/e2e\.yml|\.github/e2e-paths\.txt)
