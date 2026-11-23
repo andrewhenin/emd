@@ -21,7 +21,7 @@ Run `npx -y emd-agents@latest setup --dry-run` and show the user its plan. Run i
 
 ## The loop
 
-After you change code, call `launch` again before you `check` or `tap`. Expo: when nothing native changed, `launch` reloads the running app from the dev server in seconds (`build.action: "reloaded"`). Native iOS and Android: `launch` builds every time.
+After you change code, call `launch` again before you `check` or `tap`. Expo on iOS: when nothing native changed, `launch` reloads the running app from the dev server in seconds (`build.action: "reloaded"`). Expo on Android and native apps: `launch` builds every time. For an Expo app, `launch` picks iOS; pass `platform: "android"` for Android.
 
 1. `launch` with `dir` set to the app folder. It waits up to 25 s (100 s in Claude Code): a reload or relaunch usually returns its result.
 2. If it returned a job still running, `job_status` with the `jobId`, until `succeeded` or `failed`. A first build takes minutes. A failed launch gives the reason and the first error lines: fix the cause and launch again.

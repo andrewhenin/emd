@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "vitest";
+import expo from "../src/adapters/expo/index.ts";
 import gradle from "../src/adapters/gradle/index.ts";
 import { builtApk } from "../src/core/buildrecord.ts";
 import { createJob, runJob } from "../src/core/jobs.ts";
@@ -45,6 +46,25 @@ test.each([
   ],
 ])("a project with %s cannot launch", async (_name, files, reason) => {
   expect(await plan(makeDir(files))).toMatch(reason);
+});
+
+test("an Expo app builds as run:android does, with the port and the ABI", async () => {
+  const request = {
+    dir: "/work/app",
+    platform: "android" as const,
+    deviceId: "emulator-5556",
+    port: 8090,
+  };
+  expect(await expo.launchPlan(project, { ...request, abi: "x86_64" })).toEqual(
+    {
+      server: "npx expo start --port 8090",
+      build:
+        "{ [ -d android ] || npx expo prebuild --platform android --no-install; } && cd android && ./gradlew --console=plain app:assembleDebug -PreactNativeDevServerPort=8090 -PreactNativeArchitectures=x86_64",
+      output: join("android", "app", "build", "outputs", "apk", "debug"),
+    },
+  );
+  const plain = await expo.launchPlan(project, request);
+  expect(typeof plain === "object" && plain.build).not.toMatch(/Architectures/);
 });
 
 test("the APK and app ID come from the build's output-metadata.json", () => {

@@ -59,7 +59,7 @@ const nonEmpty = (value: unknown): string | undefined =>
 
 const adapter: StackAdapter = {
   id: "expo",
-  launches: ["ios"],
+  launches: ["ios", "android"],
   async detect(dir, project) {
     const { config, error } = await readExpoConfig(dir);
     const declared = Array.isArray(config.platforms)
@@ -109,12 +109,24 @@ const adapter: StackAdapter = {
       commands: { run, server: `${expo} start` },
     };
   },
-  async launchPlan(project, { platform, deviceId, port }) {
-    if (platform !== "ios") return undefined;
+  async launchPlan(project, { platform, deviceId, port, abi }) {
     const expo = `${project.exec} expo`;
+    const server = `${expo} start --port ${port}`;
+    if (platform === "ios") {
+      return {
+        server,
+        build: `${expo} run:ios --device ${deviceId} --no-bundler`,
+      };
+    }
+    // The build `expo run:android` runs, without its device pick: the AVD
+    // name it matches by is the same for every worktree's emulator. Prebuild
+    // makes android/ when it is missing, as run:android does. Gradle bakes the
+    // dev server port into the debug build.
+    const abis = abi ? ` -PreactNativeArchitectures=${abi}` : "";
     return {
-      server: `${expo} start --port ${port}`,
-      build: `${expo} run:ios --device ${deviceId} --no-bundler`,
+      server,
+      build: `{ [ -d android ] || ${expo} prebuild --platform android --no-install; } && cd android && ./gradlew --console=plain app:assembleDebug -PreactNativeDevServerPort=${port}${abis}`,
+      output: join("android", "app", "build", "outputs", "apk", "debug"),
     };
   },
   fingerprint: expoFingerprint,

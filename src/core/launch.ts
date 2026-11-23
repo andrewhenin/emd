@@ -29,11 +29,13 @@ import { detectEnvironment, untilReadable } from "./device/backend.js";
 import {
   adbDevices,
   avdName,
+  deviceAbi,
   emulatorPorts,
   installApk,
   listAvds,
   pickAvd,
   pickEmulatorPort,
+  reversePort,
   serialOf,
   startApp,
   startEmulator,
@@ -92,6 +94,9 @@ const screenReadSeconds = 180;
 const emptyTreeSeconds = 5;
 // How long a reload may take to show a new bundle request in the dev server log.
 const bundleSeconds = 60;
+// How long an Expo app on Android may take to get its first bundle: the dev
+// server builds it on the first request. A hang limit, not a speed target.
+const androidBundleSeconds = 300;
 // How long an emulator may take to boot: a hang limit, not a speed target. A cold
 // boot on a 4-core CI runner took about 75 s (decision 0015).
 const emulatorBootSeconds = 600;
@@ -211,6 +216,38 @@ const runDir = (root: string) =>
 
 const logTail = async (path: string): Promise<string[]> =>
   firstErrors(await readFile(path, "utf8").catch(() => ""));
+
+// Starts the dev server on `port` and waits until it answers. Returns the
+// process, or why it did not start. With CI set Metro does not watch files, so
+// an edit never reaches the next bundle: the server runs without it. It has no
+// terminal (stdin is closed), so it asks nothing.
+async function startServer(
+  command: string,
+  root: string,
+  port: number,
+  logPath: string,
+  env: Record<string, string>,
+): Promise<LoggedProcess | { reason: string; errors: string[] }> {
+  const metro = startLogged(command, {
+    cwd: root,
+    logPath,
+    env: { ...env, CI: undefined },
+  });
+  const state = await untilReady(
+    () => metroRunning(port),
+    metro.exited,
+    metroStartSeconds,
+  );
+  if (state === "ready") return metro;
+  metro.kill();
+  return {
+    reason:
+      state === "exited"
+        ? "The dev server exited before it was ready."
+        : `The dev server was not ready after ${metroStartSeconds}s.`,
+    errors: await logTail(logPath),
+  };
+}
 
 // Runs the build and install. Returns why it failed; undefined when the app is
 // installed.
@@ -512,7 +549,10 @@ export async function launch(
           metroLog,
         );
         await sendReload(port);
-        if (await untilBundled(earlier.logDir, before, bundleSeconds)) {
+        if (
+          (await untilBundled(earlier.logDir, before, bundleSeconds)) ===
+          "bundled"
+        ) {
           const axe = (await detectEnvironment()).axe;
           phase("screen", "waiting for the screen");
           const screen = axe
@@ -566,30 +606,14 @@ export async function launch(
     RCT_METRO_PORT: String(port),
     PATH: `${shimDir}:${process.env.PATH}`,
   };
-  // With CI set Metro does not watch files, so an edit never reaches the next
-  // bundle. The server has no terminal (stdin is closed), so it asks nothing.
   let metro: LoggedProcess | undefined;
   if (server) {
     phase("server", "starting the dev server");
-    metro = startLogged(server, {
-      cwd: root,
-      logPath: metroLog,
-      env: { ...env, CI: undefined },
-    });
-    const metroState = await untilReady(
-      () => metroRunning(port),
-      metro.exited,
-      metroStartSeconds,
-    );
-    if (metroState !== "ready") {
-      metro.kill();
-      return stuck(
-        metroState === "exited"
-          ? "The dev server exited before it was ready."
-          : `The dev server was not ready after ${metroStartSeconds}s.`,
-        { errors: await logTail(metroLog) },
-      );
+    const started = await startServer(server, root, port, metroLog, env);
+    if ("reason" in started) {
+      return stuck(started.reason, { errors: started.errors });
     }
+    metro = started;
   }
 
   await keyboard;
@@ -776,43 +800,36 @@ type Steps = {
 
 // Builds the debug APK, installs it on this worktree's emulator and opens the
 // app. The emulator runs the base AVD read-only on the worktree's own port
-// (decision 0015) and keeps running for the next launch. Gradle's own build is
-// incremental, so every launch builds.
+// (decision 0015) and keeps running for the next launch. With a dev server
+// (Expo), the server starts first, the emulator reaches it through adb
+// reverse, and launch waits until the app has its JavaScript. Gradle's own
+// build is incremental, so every launch builds.
 async function launchAndroid(
   root: string,
   adapter: StackAdapter,
   options: LaunchOptions,
   { phase, failed, unsupported, done }: Steps,
 ): Promise<LaunchResult> {
-  let plan: LaunchPlan | string | undefined;
-  let port: string;
+  let emulatorPort: string;
+  let port: number;
   try {
-    port = (
+    emulatorPort = (
       await reserve(root, "emulator", async (taken) =>
         pickEmulatorPort(
           new Set([...taken, ...emulatorPorts(await adbDevices())]),
         ),
       )
     ).id;
-    plan = await adapter.launchPlan(await inspectProject(root), {
-      dir: root,
-      platform: "android",
-      deviceId: serialOf(port),
-      port: Number(port),
-    });
+    port = Number((await reserve(root, "port", pickPort)).id);
   } catch (error) {
-    return failed("Could not set up this worktree's emulator and build.", {
+    return failed("Could not set up this worktree's emulator.", {
       errors: errorLines(error),
     });
   }
-  if (typeof plan === "string") return unsupported(plan);
-  const output = plan?.output;
-  if (!plan || !output) {
-    return unsupported(`${adapter.id} gave no Android build output.`);
-  }
 
   const logDir = runDir(root);
-  const serial = serialOf(port);
+  const metroLog = join(logDir, "metro.log");
+  const serial = serialOf(emulatorPort);
   const where = {
     platform: "android" as const,
     device: { id: serial, name: serial },
@@ -824,6 +841,7 @@ async function launchAndroid(
       ...(error !== undefined && { errors: errorLines(error) }),
     });
 
+  let abi: string;
   try {
     const state = (await adbDevices()).find((d) => d.serial === serial)?.state;
     if (state !== "device") {
@@ -837,14 +855,53 @@ async function launchAndroid(
               : "No Android virtual device (AVD) exists. Create one in Android Studio's Device Manager.",
           );
         }
-        startEmulator(avd, port, join(logDir, "emulator.log"));
+        startEmulator(avd, emulatorPort, join(logDir, "emulator.log"));
         confirm(root, "emulator");
       }
       await untilBooted(serial, emulatorBootSeconds);
     }
     where.device.name = await avdName(serial);
+    abi = await deviceAbi(serial);
   } catch (error) {
     return stuck("The emulator did not boot.", error);
+  }
+
+  let plan: LaunchPlan | string | undefined;
+  try {
+    plan = await adapter.launchPlan(await inspectProject(root), {
+      dir: root,
+      platform: "android",
+      deviceId: serial,
+      port,
+      abi,
+    });
+  } catch (error) {
+    return stuck("Could not plan the build.", error);
+  }
+  if (typeof plan === "string") return unsupported(plan);
+  const output = plan?.output;
+  if (!plan || !output) {
+    return unsupported(`${adapter.id} gave no Android build output.`);
+  }
+
+  // The server starts before the build, as on iOS: the app asks it for its
+  // JavaScript as soon as it opens.
+  let metro: LoggedProcess | undefined;
+  const stop = () => metro?.kill();
+  if (plan.server) {
+    await stopEarlierServer(root, port);
+    if (await metroRunning(port)) {
+      return stuck(
+        `Port ${port} already serves a dev server. Stop it and retry.`,
+      );
+    }
+    phase("server", "starting the dev server");
+    const started = await startServer(plan.server, root, port, metroLog, {});
+    if ("reason" in started) {
+      return failed(started.reason, { ...where, errors: started.errors });
+    }
+    metro = started;
+    confirm(root, "port");
   }
 
   phase("build", "building the app");
@@ -852,22 +909,26 @@ async function launchAndroid(
     plan.build,
     root,
     join(logDir, "build.log"),
-    {},
+    { CI: "1" },
     options,
   );
   if (failure) {
+    stop();
     return failed(failure.reason, { ...where, errors: failure.errors });
   }
   let built: { apk: string; appId: string };
   try {
     built = builtApk(join(root, output));
   } catch (error) {
+    stop();
     return stuck("Built, but EMD could not find the APK.", error);
   }
   phase("install", "installing the app");
   try {
     await installApk(serial, built.apk);
+    if (metro) await reversePort(serial, port);
   } catch (error) {
+    stop();
     return stuck("Built, but installing the APK failed.", error);
   }
   phase("open", "launching the app");
@@ -877,6 +938,7 @@ async function launchAndroid(
     await stopCaptures(root);
     capture = await startLogcat(serial, join(logDir, "app.logcat"));
   } catch (error) {
+    stop();
     return stuck("Built, but could not capture the app's log.", error);
   }
   let appPid: number;
@@ -884,7 +946,22 @@ async function launchAndroid(
     appPid = await startApp(serial, built.appId);
   } catch (error) {
     capture.kill();
+    stop();
     return stuck(`Built, but launching ${built.appId} failed.`, error);
+  }
+  if (metro) {
+    phase("bundle", "waiting for the app's JavaScript");
+    const bundle = await untilBundled(logDir, 0, androidBundleSeconds, 0);
+    if (bundle !== "bundled") {
+      capture.kill();
+      stop();
+      return failed(
+        bundle === "failed"
+          ? "The app opened, but the dev server could not build its JavaScript."
+          : `The app opened, but did not get its JavaScript from the dev server in ${androidBundleSeconds}s.`,
+        { ...where, errors: await logTail(metroLog) },
+      );
+    }
   }
   return {
     verdict: "launched",
@@ -893,6 +970,7 @@ async function launchAndroid(
     appId: built.appId,
     appPid,
     build: { action: "built", reason: "this stack builds on every launch" },
+    ...(metro && { metro: { pid: metro.pid, port } }),
     logStream: { pid: capture.pid },
     ...done(),
   };

@@ -19,14 +19,6 @@ const state = makeDir();
 process.env.EMD_STATE_DIR = state;
 const { client, call, finished } = mcpSession(state);
 
-const androidOnly = () =>
-  expoProject(
-    expoConfig({
-      platforms: ["android"],
-      android: { package: "com.emd.sandbox" },
-    }),
-  );
-
 test("MCP server exposes launch and job_status", async () => {
   const { tools } = await client.listTools();
   expect(tools.map((t) => t.name)).toEqual(
@@ -45,11 +37,6 @@ test.each([
     "an ios/ folder and no iOS app ID in the config",
     () => expoProject({ ...expoConfig({ name: "x" }), "ios/Podfile": "" }),
     /ios\/ folder and no ios\.bundleIdentifier/,
-  ],
-  [
-    "an Expo app that targets only Android",
-    androidOnly,
-    /does not launch expo apps on Android yet/,
   ],
   [
     "a native iOS project built with Tuist",
@@ -87,7 +74,8 @@ test.each([
 );
 
 test("a CLI launch leaves a launch record that the next launch in the worktree reads", () => {
-  const dir = androidOnly();
+  // Unsupported, so it ends before any device work.
+  const dir = makeDir({ "Project.swift": "" });
   const run = cli("launch", dir);
   expect(launchesIn(dir)).toEqual([JSON.parse(run.stdout)]);
 });
