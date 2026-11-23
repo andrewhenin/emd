@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import {
@@ -57,7 +58,17 @@ describe.skipIf(!avd)("two worktrees' emulators from one AVD", () => {
       for (const port of ports) {
         startEmulator(avd ?? "", port, join(dir, `${port}.log`));
       }
-      await Promise.all(ports.map((p) => untilBooted(serialOf(p), 600)));
+      try {
+        await Promise.all(ports.map((p) => untilBooted(serialOf(p), 600)));
+      } catch (error) {
+        for (const port of ports) {
+          const log = readFileSync(join(dir, `${port}.log`), "utf8");
+          console.log(
+            `emulator ${port} log:\n${log.split("\n").slice(-30).join("\n")}`,
+          );
+        }
+        throw error;
+      }
       await stopEmulator("5560");
       const states = async () =>
         (await adbDevices())

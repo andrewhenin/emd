@@ -81,7 +81,8 @@ export function startEmulator(
       `-avd ${quote(avd)}`,
       "-read-only",
       `-port ${port}`,
-      "-no-window -no-audio -no-boot-anim -no-snapshot-save",
+      // Software rendering: with no window, a host GPU may be missing (CI).
+      "-no-window -gpu swiftshader_indirect -no-audio -no-boot-anim -no-snapshot-save",
     ].join(" "),
     { cwd: process.cwd(), logPath },
   );
