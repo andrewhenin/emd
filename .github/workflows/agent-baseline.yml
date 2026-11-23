@@ -32,10 +32,12 @@ on:
 permissions:
   contents: read
 
-# Rounds run one after another: a second start waits for the first.
+# Rounds run one at a time. queue: max keeps every waiting start; without
+# it, each new start cancels the one that waits.
 concurrency:
   group: agent-baseline
   cancel-in-progress: false
+  queue: max
 
 jobs:
   trial:
