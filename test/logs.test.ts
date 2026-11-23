@@ -5,6 +5,7 @@ import { expect, test } from "vitest";
 import { write } from "../src/core/jobstore.ts";
 import {
   logs,
+  parseLogcat,
   parseTagged,
   predicateFor,
   stopCaptures,
@@ -64,6 +65,34 @@ test("keeps order, multi-word messages and a tag filter", () => {
 test("a timestamp it cannot parse is kept as it came", () => {
   const out = entry("[EMD:a] b", "not a time");
   expect(parseTagged(out)[0]?.time).toBe("not a time");
+});
+
+test("logcat lines give the epoch time, tag and message; other lines go", () => {
+  const text = [
+    "--------- beginning of main",
+    "1795431772.512  4087  4087 I EMD     : [EMD:smoke] started",
+    "1795431780.004  4087  4087 D Compose : no marker here",
+    "1795431781.250  4087  4087 I EMD     : [EMD:smoke] tapped twice: ok",
+    "1795431782.000  4087  4087 W Other   : [EMD:net] retry",
+  ].join("\n");
+  expect(parseLogcat(text)).toEqual([
+    {
+      time: new Date(1795431772512).toISOString(),
+      tag: "smoke",
+      message: "started",
+    },
+    {
+      time: new Date(1795431781250).toISOString(),
+      tag: "smoke",
+      message: "tapped twice: ok",
+    },
+    {
+      time: new Date(1795431782000).toISOString(),
+      tag: "net",
+      message: "retry",
+    },
+  ]);
+  expect(parseLogcat(text, "net").map((l) => l.message)).toEqual(["retry"]);
 });
 
 test("the predicate names the app's process and the tag marker", () => {

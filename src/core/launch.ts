@@ -37,6 +37,7 @@ import {
   serialOf,
   startApp,
   startEmulator,
+  startLogcat,
   untilBooted,
 } from "./emulator.js";
 import {
@@ -870,10 +871,19 @@ async function launchAndroid(
     return stuck("Built, but installing the APK failed.", error);
   }
   phase("open", "launching the app");
+  // The capture starts before the app, so no line of its start is missed.
+  let capture: LoggedProcess;
+  try {
+    await stopCaptures(root);
+    capture = await startLogcat(serial, join(logDir, "app.logcat"));
+  } catch (error) {
+    return stuck("Built, but could not capture the app's log.", error);
+  }
   let appPid: number;
   try {
     appPid = await startApp(serial, built.appId);
   } catch (error) {
+    capture.kill();
     return stuck(`Built, but launching ${built.appId} failed.`, error);
   }
   return {
@@ -883,6 +893,7 @@ async function launchAndroid(
     appId: built.appId,
     appPid,
     build: { action: "built", reason: "this stack builds on every launch" },
+    logStream: { pid: capture.pid },
     ...done(),
   };
 }

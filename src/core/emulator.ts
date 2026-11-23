@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { type LoggedProcess, startLogged } from "./process.js";
 import { runTool } from "./tool.js";
 
@@ -13,6 +13,8 @@ function sdkTool(name: "adb" | "emulator"): string {
   if (!home) return file;
   return join(home, name === "adb" ? "platform-tools" : "emulator", file);
 }
+
+const quote = (s: string) => `'${s.replaceAll("'", "'\\''")}'`;
 
 // `emulator -list-avds` prints one AVD name a line, after any INFO lines.
 export const parseAvds = (stdout: string): string[] =>
@@ -140,7 +142,6 @@ export function startEmulator(
   port: string,
   logPath: string,
 ): LoggedProcess {
-  const quote = (s: string) => `'${s.replaceAll("'", "'\\''")}'`;
   return startLogged(
     [
       quote(sdkTool("emulator")),
@@ -189,4 +190,25 @@ export async function stopEmulator(port: string): Promise<void> {
     ["-s", serial, "emu", "kill"],
     30,
   );
+}
+
+// Streams the app's tagged lines to logPath. The buffer is cleared first, so
+// the file holds only this run: the emulator keeps earlier runs' lines while it
+// runs. logcat's -e keeps only messages that match, so the file stays small.
+export async function startLogcat(
+  serial: string,
+  logPath: string,
+): Promise<LoggedProcess> {
+  await adb(serial, ["logcat", "-c"], 30);
+  return startLogged(
+    `${quote(sdkTool("adb"))} -s ${serial} logcat -v epoch -e EMD:`,
+    { cwd: dirname(logPath), logPath },
+  );
+}
+
+// A PNG of the screen at `path`.
+export async function screenshot(serial: string, path: string): Promise<void> {
+  const remote = "/data/local/tmp/emd-screenshot.png";
+  await adb(serial, ["shell", "screencap", "-p", remote], 60);
+  await adb(serial, ["pull", remote, path], 60);
 }

@@ -47,7 +47,13 @@ async function act(
   const resolved = resolveRun({ jobId });
   if ("reason" in resolved)
     return { verdict: "failed", reason: resolved.reason };
-  const { device, appId } = resolved.run;
+  const { device, appId, platform } = resolved.run;
+  if (platform === "android") {
+    return {
+      verdict: "failed",
+      reason: "EMD does not tap, type or swipe on Android yet.",
+    };
+  }
   let first: Pick<InputResult, "backend" | "fellBack"> = {};
   try {
     const env = await detectEnvironment();

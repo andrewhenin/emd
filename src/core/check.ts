@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import type { Platform } from "./adapter.js";
 import {
   dropped,
   type Expected,
@@ -15,6 +16,7 @@ import {
 } from "./device/backend.js";
 import { maestroBackend } from "./device/maestro.js";
 import { type ElementSpec, hasElement } from "./device/screen.js";
+import { screenshot as emulatorScreenshot } from "./emulator.js";
 import { recordCheck, evidence as writeEvidence } from "./evidence.js";
 import { swipe, type TapOptions, tap, typeText } from "./input.js";
 import { firstLine } from "./log.js";
@@ -66,7 +68,11 @@ export type Deps = {
   logs: (options: Omit<LogsOptions, "limit">) => Promise<LogsResult>;
   screen: (device: string) => Promise<ScreenRead>;
   // Undefined when the screenshot was saved, otherwise why not, in one line.
-  screenshot: (device: string, path: string) => Promise<string | undefined>;
+  screenshot: (
+    device: string,
+    path: string,
+    platform: Platform,
+  ) => Promise<string | undefined>;
   // How long a check reads again before it fails (#140).
   recheckSeconds: number;
   // Writes the run's evidence folder (#207).
@@ -83,8 +89,14 @@ const realDeps: Deps = {
   act: runAction,
   screen: async (device) =>
     readScreen(device, await detectEnvironment(), [axeBackend, maestroBackend]),
-  screenshot: async (device, path) => {
+  screenshot: async (device, path, platform) => {
     mkdirSync(dirname(path), { recursive: true });
+    if (platform === "android") {
+      return emulatorScreenshot(device, path).then(
+        () => undefined,
+        (error: unknown) => `adb screencap: ${firstLine(error)}`,
+      );
+    }
     const shoot = (extra: string[]) =>
       runTool(
         "simctl screenshot",
@@ -176,7 +188,15 @@ export async function check(
 
   const resolved = resolveRun(options);
   if ("reason" in resolved) return error(resolved.reason);
-  const { device, root, logDir } = resolved.run;
+  const { device, root, logDir, platform } = resolved.run;
+  if (
+    platform === "android" &&
+    (elementSpecs.length > 0 || (options.actions?.length ?? 0) > 0)
+  ) {
+    return error(
+      "EMD does not read the screen or act on Android yet. Check log lines only.",
+    );
+  }
 
   // Failed checks count per worktree, across relaunches, because a fix
   // usually means launching again.
@@ -301,7 +321,7 @@ export async function check(
   const stamp = Date.now();
   const shotPath = join(logDir, `check-${stamp}.png`);
   const shotError = await timed("screenshot", () =>
-    deps.screenshot(device, shotPath),
+    deps.screenshot(device, shotPath, platform),
   );
   const shot = shotError === undefined ? shotPath : undefined;
   // What the screen reader got, next to the screenshot, for when they disagree.
