@@ -22,7 +22,7 @@ describe.skipIf(!process.env.EMD_E2E_SANDBOX || process.platform !== "darwin")(
         (
           await client.callTool(
             { name, arguments: input as Record<string, unknown> },
-            { timeout: 150_000 },
+            { timeout: 300_000 },
           )
         ).structuredContent as Job;
       let job = await view(tool, args);
@@ -38,13 +38,16 @@ describe.skipIf(!process.env.EMD_E2E_SANDBOX || process.platform !== "darwin")(
         new StdioClientTransport({
           command: "node",
           args: ["dist/bin.js", "mcp"],
-          env: { ...process.env, EMD_WAIT_SECONDS: "100" } as Record<
+          // The default wait (25-30 s a call) leaves a wide margin under the
+          // client's timeout while a native build loads the runner (#229).
+          env: { ...process.env, EMD_WAIT_SECONDS: "" } as Record<
             string,
             string
           >,
         }),
       );
       launched = await run("launch", { dir: resolve("fixtures/ios-native") });
+      console.log(`native launch: ${JSON.stringify(launched.result)}`);
     }, 20 * 60_000);
 
     afterAll(() => client.close());
