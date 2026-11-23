@@ -276,6 +276,20 @@ offMac(
 );
 
 offMac(
+  "on macOS, setup for a project that targets only Android installs no AXe",
+  async () => {
+    const dir = inProcessHome();
+    const archive = fakeAxeArchive();
+    const plan = await setup(
+      { dir: "fixtures/android-native" },
+      onMac(dir, archive.path, archive.sha256),
+    );
+    expect(plan.verdict).toBe("planned");
+    expect(plan.axe).toBeUndefined();
+  },
+);
+
+offMac(
   "an AXe archive with the wrong SHA-256 stops setup before any config changes",
   async () => {
     const dir = inProcessHome();
