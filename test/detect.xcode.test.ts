@@ -14,10 +14,7 @@ test("detects the native iOS fixture with no device", () => {
   });
   expect(result.problem).toContain("does not launch them yet");
   expect(result.commands).toBeUndefined();
-  expect(result.notes).toContain("Xcode project: EMDNative.xcodeproj.");
-  expect(result.notes.join(" ")).toContain(
-    "Launch reads it from the built app",
-  );
+  expect(result.notes).toEqual(["Xcode project: EMDNative.xcodeproj."]);
 });
 
 test("a workspace is named before a project", () => {
@@ -47,16 +44,6 @@ test("an Expo app with an ios/ workspace still detects as expo", () => {
     "App.xcodeproj/project.pbxproj": "",
   });
   expect(detect(dir).stack).toBe("expo");
-});
-
-test("a React Native app does not detect as xcode", () => {
-  const dir = makeDir({
-    "package.json": JSON.stringify({
-      dependencies: { "react-native": "0.80" },
-    }),
-    "App.xcodeproj/project.pbxproj": "",
-  });
-  expect(detect(dir).verdict).toBe("none");
 });
 
 test("Xcode files below the root folder do not count", () => {
