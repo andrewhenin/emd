@@ -168,7 +168,7 @@ function buildServer(): McpServer {
     "launch",
     {
       description:
-        "Build the app, install it on an iOS simulator or Android emulator and launch it, leaving its dev server running when the app has one (Expo). Android: native Gradle apps only; check reads log lines there, not yet the screen, and tap, type and swipe do not work there yet. Waits up to waitSeconds (default 25, or longer where setup allowed it): a relaunch or reload often ends in time and returns its result. A build takes minutes: then it returns the job, and you call job_status with the jobId until status is succeeded or failed.",
+        "Build the app, install it on an iOS simulator or Android emulator and launch it, leaving its dev server running when the app has one (Expo). Android: native Gradle apps only. Waits up to waitSeconds (default 25, or longer where setup allowed it): a relaunch or reload often ends in time and returns its result. A build takes minutes: then it returns the job, and you call job_status with the jobId until status is succeeded or failed.",
       inputSchema: z.object({
         dir: z
           .string()
@@ -281,7 +281,7 @@ function buildServer(): McpServer {
     "check",
     {
       description:
-        "Check a run against what you expect, from signals a machine can read, not your own judgment: tagged log events the app wrote ([EMD:<tag>] lines) and elements on the simulator's screen (by testID or by text). Give the taps, typing and swipes that lead to the moment as actions, or check right after them; a check reads again for up to 10 s what is still missing. Waits up to waitSeconds (default 25, or longer where setup allowed it) and returns the finished result when the check ends in time; otherwise returns the job: call job_status until it finishes. The result's verdict is passed, failed (fix the cause and check again), stopped (the retry limit is reached: stop and report what is missing) or error (the check could not run; not counted). Your reading of the returned screenshot may be passed as agentReading; it is recorded as a second opinion and never changes the verdict. Each check rewrites the run's evidence folder and returns its path (evidenceDir) and the check names whose last verdict is not passed (notPassed).",
+        "Check a run against what you expect, from signals a machine can read, not your own judgment: tagged log events the app wrote ([EMD:<tag>] lines) and elements on the device's screen (by testID or by text; on Android a resource-id, or a Compose test tag with testTagsAsResourceId). Give the taps, typing and swipes that lead to the moment as actions, or check right after them; a check reads again for up to 10 s what is still missing. Waits up to waitSeconds (default 25, or longer where setup allowed it) and returns the finished result when the check ends in time; otherwise returns the job: call job_status until it finishes. The result's verdict is passed, failed (fix the cause and check again), stopped (the retry limit is reached: stop and report what is missing) or error (the check could not run; not counted). Your reading of the returned screenshot may be passed as agentReading; it is recorded as a second opinion and never changes the verdict. Each check rewrites the run's evidence folder and returns its path (evidenceDir) and the check names whose last verdict is not passed (notPassed).",
       inputSchema: z.object({
         jobId: z.string().describe("The launch job whose run to check."),
         logs: z

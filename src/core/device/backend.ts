@@ -1,6 +1,7 @@
 import { accessSync, constants } from "node:fs";
 import { homedir } from "node:os";
-import { delimiter, join } from "node:path";
+import { delimiter, isAbsolute, join } from "node:path";
+import { sdkTool } from "../emulator.js";
 import { firstLine } from "../log.js";
 import { axeDir } from "./axe.js";
 import type { UiNode } from "./screen.js";
@@ -9,7 +10,7 @@ import type { UiNode } from "./screen.js";
 // one that is available on this machine, falling back to the next. Tap, type
 // and swipe joined reading the screen in decision 0009.
 
-export const backendIds = ["axe", "maestro"] as const;
+export const backendIds = ["axe", "maestro", "adb"] as const;
 export type BackendId = (typeof backendIds)[number];
 
 // What to act on: an element by testID or by visible text or label, or a point.
@@ -25,7 +26,8 @@ export type Direction = (typeof directions)[number];
 // The app a gesture goes to. Maestro's flows name the app; AXe only the device.
 export type Where = { device: string; appId: string };
 
-// A tool that can act on a simulator: read its screen, tap, type and swipe.
+// A tool that can act on a simulator or emulator: read its screen, tap, type
+// and swipe.
 export interface DeviceBackend {
   id: BackendId;
   // `seconds`, when given, replaces the backend's own limit for the call.
@@ -199,9 +201,23 @@ function findExecutable(name: string, extraDirs: string[]): string | undefined {
   return undefined;
 }
 
+// The adb that starts EMD's emulators (the SDK's), so two adb versions never
+// restart each other's server.
+function sdkAdb(): string | undefined {
+  const adb = sdkTool("adb");
+  if (!isAbsolute(adb)) return findExecutable(adb, []);
+  try {
+    accessSync(adb, constants.X_OK);
+    return adb;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function detectEnvironment(): Promise<Environment> {
   return {
     axe: findExecutable("axe", [axeDir()]),
     maestro: findExecutable("maestro", [join(homedir(), ".maestro", "bin")]),
+    adb: sdkAdb(),
   };
 }
