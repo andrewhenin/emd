@@ -9,8 +9,10 @@ import {
 } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
+import type { LaunchPlan } from "./adapter.js";
 import {
   builtApp,
+  builtAppId,
   readBuildRecord,
   whyBuild,
   writeBuildRecord,
@@ -358,11 +360,24 @@ export async function launch(
     );
   }
 
-  const plan = (await loadAdapter(detected.stack)).launchPlan(
-    await inspectProject(root),
-    { platform: "ios", deviceId: device.id, port },
-  );
+  const adapter = await loadAdapter(detected.stack);
+  let plan: LaunchPlan | string | undefined;
+  try {
+    plan = await adapter.launchPlan(await inspectProject(root), {
+      dir: root,
+      platform: "ios",
+      deviceId: device.id,
+      port,
+    });
+  } catch (error) {
+    return failed("Could not plan the build.", {
+      errors: String(error).split("\n").slice(0, 3),
+    });
+  }
+  if (typeof plan === "string") return unsupported(plan);
   if (!plan) return unsupported(`${detected.stack} cannot launch on iOS.`);
+  // Without a dev server the build only builds, and EMD installs the app.
+  const { server, build } = plan;
 
   const logDir = join(
     stateDir(),
@@ -398,14 +413,14 @@ export async function launch(
   }
 
   // Reuse the installed build when nothing native changed. A fingerprint that
-  // cannot be computed means a normal build.
+  // cannot be computed means a normal build. A stack without one always
+  // builds; xcodebuild's own build is incremental.
   let fingerprint: string | undefined;
-  let why: string | undefined;
+  let why: string | undefined = adapter.fingerprint
+    ? undefined
+    : "this stack builds on every launch";
   try {
-    fingerprint = await (await loadAdapter(detected.stack)).fingerprint(
-      root,
-      "ios",
-    );
+    fingerprint = await adapter.fingerprint?.(root, "ios");
   } catch (error) {
     why = `fingerprint failed: ${String(error).split("\n")[0]}`;
   }
@@ -481,7 +496,7 @@ export async function launch(
     await rm(join(logDir, "app.ndjson"), { force: true });
   }
   await stopEarlierServer(root, port);
-  if (await metroRunning(port)) {
+  if (server && (await metroRunning(port))) {
     return stuck(
       `Port ${port} already serves a dev server. Stop it and retry.`,
     );
@@ -491,7 +506,6 @@ export async function launch(
   // app starts. A failed write is not a launch failure: `type` still checks
   // its text.
   const keyboard = plainKeyboard(device).catch(() => {});
-  phase("server", "starting the dev server");
   const env = {
     CI: "1",
     RCT_METRO_PORT: String(port),
@@ -499,24 +513,28 @@ export async function launch(
   };
   // With CI set Metro does not watch files, so an edit never reaches the next
   // bundle. The server has no terminal (stdin is closed), so it asks nothing.
-  const metro = startLogged(plan.server, {
-    cwd: root,
-    logPath: metroLog,
-    env: { ...env, CI: undefined },
-  });
-  const metroState = await untilReady(
-    () => metroRunning(port),
-    metro.exited,
-    metroStartSeconds,
-  );
-  if (metroState !== "ready") {
-    metro.kill();
-    return stuck(
-      metroState === "exited"
-        ? "The dev server exited before it was ready."
-        : `The dev server was not ready after ${metroStartSeconds}s.`,
-      { errors: await logTail(metroLog) },
+  let metro: LoggedProcess | undefined;
+  if (server) {
+    phase("server", "starting the dev server");
+    metro = startLogged(server, {
+      cwd: root,
+      logPath: metroLog,
+      env: { ...env, CI: undefined },
+    });
+    const metroState = await untilReady(
+      () => metroRunning(port),
+      metro.exited,
+      metroStartSeconds,
     );
+    if (metroState !== "ready") {
+      metro.kill();
+      return stuck(
+        metroState === "exited"
+          ? "The dev server exited before it was ready."
+          : `The dev server was not ready after ${metroStartSeconds}s.`,
+        { errors: await logTail(metroLog) },
+      );
+    }
   }
 
   await keyboard;
@@ -534,14 +552,25 @@ export async function launch(
   const buildApp = async (): Promise<LaunchResult | undefined> => {
     phase("build", "building and installing the app");
     const buildStarted = Date.now();
-    const failure = await runBuild(plan.build, root, buildLog, env, options);
+    const failure = await runBuild(build, root, buildLog, env, options);
     xcodebuildSeconds = await recordTiming(root, buildLog, buildStarted);
     if (failure) {
-      metro.kill();
+      metro?.kill();
       return stuck(failure.reason, {
         ...(failure.errors && { errors: failure.errors }),
         ...(failure.lastLines && { lastLines: failure.lastLines }),
       });
+    }
+    if (!server) {
+      const app = builtApp(derivedData);
+      try {
+        if (!app) throw new Error("no single .app in DerivedData");
+        await installApp(device, app);
+      } catch (error) {
+        return stuck("Built, but installing the app failed.", {
+          errors: String(error).split("\n").slice(0, 3),
+        });
+      }
     }
     if (fingerprint !== undefined) {
       try {
@@ -574,30 +603,30 @@ export async function launch(
     }
   }
 
+  // An ID the build wrote to the app config (Expo), else the built app's own.
   let appIdSet: string | undefined;
   if (appId === undefined) {
-    appId = (await detect(root)).appIds?.ios;
+    appIdSet = (await detect(root)).appIds?.ios;
+    appId = appIdSet ?? (await builtAppId(derivedData));
     if (appId === undefined) {
-      metro.kill();
+      metro?.kill();
       return stuck(
-        "The build finished, but the app config still has no iOS app ID. Expo may have built from an existing ios/ project.",
+        "The build finished, but neither the app config nor the built app names an iOS app ID.",
         { errors: await logTail(buildLog) },
       );
     }
-    appIdSet = appId;
     // The config changed, so the fingerprint did too. A failure here only costs
     // one rebuild on the next launch.
-    try {
-      fingerprint = await (await loadAdapter(detected.stack)).fingerprint(
-        root,
-        "ios",
-      );
-      writeBuildRecord(derivedData, { fingerprint, port });
-    } catch {}
+    if (appIdSet && adapter.fingerprint) {
+      try {
+        fingerprint = await adapter.fingerprint(root, "ios");
+        writeBuildRecord(derivedData, { fingerprint, port });
+      } catch {}
+    }
   }
 
   const captureFailed = (error: unknown) => {
-    metro.kill();
+    metro?.kill();
     return stuck("Built, but could not capture the app's log.", {
       errors: String(error).split("\n").slice(0, 3),
     });
@@ -624,12 +653,13 @@ export async function launch(
   let appPid: number;
   try {
     // A running app still talks to the dev server it started with; a restart
-    // makes it load the new JavaScript from this one.
-    if (why === undefined) await terminateApp(device, appId);
+    // makes it load the new JavaScript from this one. A native app restarts so
+    // the new build runs.
+    if (why === undefined || !server) await terminateApp(device, appId);
     appPid = await launchApp(device, appId);
   } catch (error) {
     capture.kill();
-    metro.kill();
+    metro?.kill();
     return stuck(
       `${why === undefined ? "Reused the build" : "Built"}, but launching ${appId} failed.`,
       {
@@ -676,7 +706,7 @@ export async function launch(
             reason: why,
             ...(xcodebuildSeconds !== undefined && { xcodebuildSeconds }),
           },
-    metro: { pid: metro.pid, port },
+    ...(metro && { metro: { pid: metro.pid, port } }),
     logStream: { pid: capture.pid },
     derivedData,
     diskMB: await sizes(),

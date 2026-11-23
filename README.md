@@ -8,13 +8,13 @@ Your coding agent shouldn't grade its own mobile work. EMD builds the app, launc
 
 `setup` registers EMD with Claude Code, Codex and Cursor. Tested end to end in Claude Code.
 
-Status: early. Expo apps on the iOS simulator only.
+Status: early. Expo apps and native iOS apps (SwiftUI or UIKit) on the iOS simulator.
 
 ## Requirements
 
 - A Mac with Xcode 26 or 27 and at least one iPhone simulator.
 - Node 22 or newer.
-- An Expo app with its dependencies installed. [Check your app](#check-your-app) shows how to check it.
+- An Expo app with its dependencies installed, or a native iOS app with an `.xcworkspace` or `.xcodeproj` in its root folder. [Check your app](#check-your-app) shows how to check it.
 
 Tested: Expo SDK 58 on Xcode 26 and 27. On Xcode 27, apps below Expo SDK 56 can't build (Expo's bug). Use Xcode 26, or upgrade the app to SDK 56 or newer.
 
@@ -43,13 +43,15 @@ npx -y emd-agents@latest detect /path/to/my-app
 
 It must print `"verdict":"detected"` and no `problem`. For example, `"appIds":{"ios":"com.example.myapp"}`. If the app has no iOS app ID, `detect` says so in `notes`: new Expo apps (from `create-expo-app`) have none, and `launch` lets Expo's build set one in the app config (`ios.bundleIdentifier`). EMD writes nothing to the config. Expo's first `run:ios` also creates the `ios/` folder and points the `ios` and `android` scripts in package.json at `expo run:ios` and `expo run:android`. If `problem` appears, install the app's dependencies: EMD reads the config with the app's own Expo CLI.
 
+A native iOS app detects as `"stack":"xcode"`, with no app ID: `launch` reads the ID from the app it builds, a Debug build of the scheme named like the workspace or project, or of the only scheme.
+
 ## First run
 
 Ask your agent for a small change, with the full path of your app:
 
 > In /path/to/my-app, add a button that shows "Saved" when tapped. Prove it on the iOS simulator with EMD, then tell me the evidence folder.
 
-The agent follows EMD's skill. It adds a tagged log line, such as `console.log("[EMD:saved] button tapped")`, and a testID. Then it launches the app, taps, checks the log line and the screen, and gathers the evidence. A first build takes minutes.
+The agent follows EMD's skill. It adds a tagged log line, such as `console.log("[EMD:saved] button tapped")` (Expo) or `NSLog("[EMD:saved] button tapped")` (Swift), and a testID. Then it launches the app, taps, checks the log line and the screen, and gathers the evidence. A first build takes minutes.
 
 Each check ends with one verdict:
 
@@ -68,7 +70,8 @@ Output stays on your Mac:
 
 ## Limits today
 
-- Expo apps on the iOS simulator only. No native iOS or Android projects, no Android launch, no physical devices.
+- Expo and native iOS apps on the iOS simulator only. No Android launch, no physical devices.
+- Native iOS: a project with several schemes needs one named like the workspace or project. Projects generated with Tuist, XcodeGen or Bazel show a `problem`: EMD doesn't build through them yet. `launch` builds on every call; there is no build reuse yet.
 - `launch` leaves the dev server running. The next `launch` of the same folder stops it and starts a new one. A dev server that EMD did not start on that port still blocks `launch` ("Port N already serves a dev server").
 - `EMD_RETRY_LIMIT` (1 to 10) changes the limit of 3 failed checks.
 - A build stops when its log has not grown for 600 seconds, or after 3600 seconds in total (`timeoutSeconds`, or `--timeout` in the CLI). Two cold builds at the same time take longer.

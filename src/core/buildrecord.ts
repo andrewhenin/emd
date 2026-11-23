@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { plistValue } from "./tool.js";
 
 // What the last successful build of a worktree was made from. It sits in the
 // worktree's DerivedData, next to the build it describes, so it goes when the
@@ -52,4 +53,18 @@ export function builtApp(derivedData: string): string | undefined {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
     throw error;
   }
+}
+
+// The built app's own ID (CFBundleIdentifier), whatever set it: the app config,
+// build settings or an xcconfig file.
+export async function builtAppId(
+  derivedData: string,
+): Promise<string | undefined> {
+  const app = builtApp(derivedData);
+  if (!app) return undefined;
+  return (
+    (await plistValue(join(app, "Info.plist"), "CFBundleIdentifier").catch(
+      () => "",
+    )) || undefined
+  );
 }
