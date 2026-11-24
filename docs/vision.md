@@ -33,6 +33,7 @@ Several agents can run this loop at the same time, each on its own PR or feature
 - **Evidence over claims.** "Done" means screenshots plus matching log lines, not the agent saying it works.
 - **Independent checks.** The agent doesn't grade its own work. Pass or fail comes from machine-checkable signals (expected log events, on-screen elements in the accessibility tree). The agent's reading of a screenshot is a second opinion.
 - **No weakened checks.** Flag any change that deletes a log tag, loosens an assertion, or skips a test or Maestro step, and list it in the PR.
+- **Testing philosophy.** What EMD believes about tests, what it enforces and what is planned: [testing-philosophy.md](testing-philosophy.md).
 - **Small answers first.** Tools return a verdict, the matching log lines and paths to screenshots; full logs and images only on request. Cost is measured in agent tokens per completed task, then time, then CPU and memory.
 - **Own what you create.** EMD marks every worktree, simulator, port and build folder it creates. `gc` removes only marked resources, and a resource whose cleanup failed stays owned until a retry succeeds. Unknown is never treated as absent.
 - **Safe by default.** Preview changes, back up configs, and never touch signing, provisioning or release settings.
