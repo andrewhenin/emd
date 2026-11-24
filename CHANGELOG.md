@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.17.0](https://github.com/andrewhenin/emd/compare/emd-agents-v0.16.2...emd-agents-v0.17.0) (2026-11-24)
+
+
+### Features
+
+* an Android emulator per worktree ([#255](https://github.com/andrewhenin/emd/issues/255)) ([618d5dd](https://github.com/andrewhenin/emd/commit/618d5dd1c8370aec9bd1aa4c5da7ab432ff807ee))
+* detect native Android projects and add a native Android fixture ([#253](https://github.com/andrewhenin/emd/issues/253)) ([b817168](https://github.com/andrewhenin/emd/commit/b81716855ecdc3d8ad610d4d86088a6ecde58ae9))
+* detect native iOS projects and add a native iOS fixture ([#244](https://github.com/andrewhenin/emd/issues/244)) ([03be211](https://github.com/andrewhenin/emd/commit/03be211539710c4e80fec137c918cfae1374ddd0))
+* doctor and setup for Android ([#264](https://github.com/andrewhenin/emd/issues/264)) ([c7b4ed2](https://github.com/andrewhenin/emd/commit/c7b4ed23a583bdb35d67c437589ef2c0aa2b2602))
+* launch builds and runs a native Android app on an emulator ([#258](https://github.com/andrewhenin/emd/issues/258)) ([74a30ca](https://github.com/andrewhenin/emd/commit/74a30ca497f5760cbdb09780b92e04051ff7ffc9))
+* launch builds and runs a native iOS app ([#245](https://github.com/andrewhenin/emd/issues/245)) ([b322735](https://github.com/andrewhenin/emd/commit/b32273568b3fab8be7e4fa607adc9cfecca1d22c))
+* launch, logs, checks and input for Expo apps on Android ([#268](https://github.com/andrewhenin/emd/issues/268)) ([220ea0d](https://github.com/andrewhenin/emd/commit/220ea0d2ebccee8d25fe7ae6e8afde445addc094))
+* logs and log checks on Android ([#260](https://github.com/andrewhenin/emd/issues/260)) ([931a441](https://github.com/andrewhenin/emd/commit/931a44164f4e75a82e14551e911af59edefe1f59))
+* prepare, scheme and configuration inputs for native iOS launch ([#270](https://github.com/andrewhenin/emd/issues/270)) ([4663cd5](https://github.com/andrewhenin/emd/commit/4663cd5a1f9f5ae3eb28cdc52a8646a19655bdf2))
+* screen reads, taps, typing and swipes on Android ([#262](https://github.com/andrewhenin/emd/issues/262)) ([013cabd](https://github.com/andrewhenin/emd/commit/013cabda45d56a9906c960e3fea9b6862a8124ff))
+
+
+### Bug Fixes
+
+* a build stops on a hang, not on slow progress ([#248](https://github.com/andrewhenin/emd/issues/248)) ([6ba9705](https://github.com/andrewhenin/emd/commit/6ba97053a266c71280b2bd209f4d23e08981271f))
+* a check reads the log a little longer after the screen matched ([#250](https://github.com/andrewhenin/emd/issues/250)) ([f3b09bb](https://github.com/andrewhenin/emd/commit/f3b09bb248eb5e2bab668b612f5309b591a66803))
+
 ## [0.16.2](https://github.com/andrewhenin/emd/compare/emd-agents-v0.16.1...emd-agents-v0.16.2) (2026-11-21)
 
 
