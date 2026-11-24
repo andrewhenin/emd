@@ -22,6 +22,14 @@ permissions:
 
 jobs:
   android:
+    # Release Please's own PR changes only versions and the changelog; its
+    # commits were tested in their own PRs, so no emulator starts for it. The
+    # same skip as e2e.yml: both the bot and the branch must match, and the e2e
+    # label still forces a run.
+    if: >-
+      !(github.event.pull_request.user.login == 'github-actions[bot]' &&
+        startsWith(github.head_ref, 'release-please--') &&
+        !contains(github.event.pull_request.labels.*.name, 'e2e'))
     runs-on: ubuntu-latest
     timeout-minutes: 75
     env:
