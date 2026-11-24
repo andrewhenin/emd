@@ -145,6 +145,9 @@ test("reads again what is missing until the limit, and says how long", async () 
 });
 
 // #247: the screen shows the change before its log line reaches the capture.
+// The line shows on the 4th log read. With no grace, the 1 s window gives 2
+// reads, or 3 when the 1 s wait ends at 999 ms by Date.now(). With 3 s of
+// grace, the 4th read comes at about 3 s.
 test.each([
   [3, "passed"],
   [0, "failed"],
@@ -159,7 +162,7 @@ test.each([
       logs: async ({ tag }) => {
         reads++;
         const lines =
-          reads < 3
+          reads < 4
             ? []
             : [
                 {
