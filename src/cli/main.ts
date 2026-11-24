@@ -19,7 +19,7 @@ import {
 } from "../core/index.js";
 
 const usage =
-  "Commands: detect [dir], launch [dir] [--platform ios|android] [--device X] [--timeout N], job status <id>, logs <jobId> [--tag T] [--limit N], check <jobId> [--log TAG[=TEXT]] [--element id=X|text=Y] [--name N] [--agent pass|fail], check reset [dir], tap <jobId> --id X|--text Y|--x N --y N, type <jobId> [--] <text>, swipe <jobId> up|down|left|right, evidence <jobId>, gc [--apply], setup [--dry-run] [--yes] [--agent claude-code|codex|cursor], doctor [dir], mcp";
+  "Commands: detect [dir], launch [dir] [--platform ios|android] [--prepare CMD] [--scheme S] [--configuration C] [--device X] [--timeout N], job status <id>, logs <jobId> [--tag T] [--limit N], check <jobId> [--log TAG[=TEXT]] [--element id=X|text=Y] [--name N] [--agent pass|fail], check reset [dir], tap <jobId> --id X|--text Y|--x N --y N, type <jobId> [--] <text>, swipe <jobId> up|down|left|right, evidence <jobId>, gc [--apply], setup [--dry-run] [--yes] [--agent claude-code|codex|cursor], doctor [dir], mcp";
 
 // --log smoke   or   --log smoke=tapped
 const logSpec = (raw: string) => {
@@ -85,6 +85,9 @@ export async function run(argv: string[]): Promise<number> {
         allowPositionals: true,
         options: {
           platform: { type: "string" },
+          prepare: { type: "string" },
+          scheme: { type: "string" },
+          configuration: { type: "string" },
           device: { type: "string" },
           timeout: { type: "string" },
         },
@@ -108,6 +111,9 @@ export async function run(argv: string[]): Promise<number> {
       const result = await launchInline({
         dir: positionals[0],
         platform,
+        prepare: values.prepare,
+        scheme: values.scheme,
+        configuration: values.configuration,
         device: values.device,
         timeoutSeconds,
       });
