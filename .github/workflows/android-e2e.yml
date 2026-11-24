@@ -1,20 +1,25 @@
-name: android-emulator
+name: android-e2e
 
-# Starts two read-only emulators from one AVD on a Linux runner with KVM, the
-# way two worktrees would, and stops them (#254). The android-native e2e pair
-# will replace this (#251).
+# On a Linux runner with KVM: two read-only emulators from one AVD, the way two
+# worktrees run them (#254), then a real launch of fixtures/android-native
+# through the MCP server (decision 0007).
 on:
+  workflow_dispatch:
   pull_request:
     paths:
-      - "src/core/emulator.ts"
+      - "src/**"
+      - "fixtures/android-native/**"
       - "test/emulator.test.ts"
-      - ".github/workflows/android-emulator.yml"
+      - "test/e2e/android.test.ts"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/android-e2e.yml"
 
 permissions:
   contents: read
 
 jobs:
-  emulators:
+  android:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -29,6 +34,11 @@ jobs:
         with:
           node-version: 22
           cache: npm
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 17
 
       - name: Enable KVM
         run: |
@@ -47,9 +57,10 @@ jobs:
           echo no | "$bin/avdmanager" create avd -n emd-test -k "$IMAGE" -p "$ANDROID_AVD_HOME/emd-test.avd"
           "$ANDROID_HOME/emulator/emulator" -list-avds | tee /dev/stderr | grep -qx emd-test
 
-      - name: Start, boot and stop two emulators
+      - name: Emulators, then a real launch
         env:
           EMD_TEST_AVD: emd-test
         run: |
           npm ci
-          npx vitest run test/emulator.test.ts
+          npm run build
+          npx vitest run test/emulator.test.ts test/e2e/android.test.ts --no-file-parallelism

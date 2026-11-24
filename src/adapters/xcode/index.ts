@@ -35,6 +35,7 @@ const quote = (s: string) => `'${s.replaceAll("'", "'\\''")}'`;
 
 const adapter: StackAdapter = {
   id: "xcode",
+  launches: ["ios"],
   async detect(dir) {
     const names = await readdir(dir);
     const tool = xcodeGenerators.find(([file]) =>

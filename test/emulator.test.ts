@@ -3,7 +3,9 @@ import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import {
   adbDevices,
+  emulatorPorts,
   listAvds,
+  parseActivity,
   parseAdbDevices,
   parseAvds,
   pickAvd,
@@ -45,8 +47,27 @@ test("an emulator port is the first free even port from 5554", () => {
   expect(serialOf("5558")).toBe("emulator-5558");
 });
 
+test("the ports of running emulators come from their serials", () => {
+  expect(
+    emulatorPorts([
+      { serial: "emulator-5554" },
+      { serial: "R58M123ABC" },
+      { serial: "emulator-5560" },
+    ]),
+  ).toEqual(["5554", "5560"]);
+});
+
+test("the launcher activity is the last line resolve-activity prints", () => {
+  expect(
+    parseActivity(
+      "priority=0 preferredOrder=0 match=0x108000 specificIndex=-1 isDefault=true\ncom.emd.androidfixture/.MainActivity\n",
+    ),
+  ).toBe("com.emd.androidfixture/.MainActivity");
+  expect(parseActivity("No activity found\n")).toBeUndefined();
+});
+
 // A real start of two read-only emulators from one AVD. Runs where an AVD is
-// named in EMD_TEST_AVD: the android-emulator workflow on a Linux runner.
+// named in EMD_TEST_AVD: the android-e2e workflow on a Linux runner.
 const avd = process.env.EMD_TEST_AVD;
 describe.skipIf(!avd)("two worktrees' emulators from one AVD", () => {
   test(
