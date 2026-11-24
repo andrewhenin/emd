@@ -190,7 +190,9 @@ function buildServer(): McpServer {
           .number()
           .positive()
           .optional()
-          .describe("How long the build may take. Default 900."),
+          .describe(
+            "How long the build may take in total. Default 3600. A build whose log stops growing for 600 s stops sooner.",
+          ),
         waitSeconds,
       }),
       outputSchema: jobViewSchema,

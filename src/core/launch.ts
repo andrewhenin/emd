@@ -47,10 +47,17 @@ import {
   xcodebuildShim,
 } from "./isolate.js";
 import { launchesIn } from "./jobstore.js";
-import { buildTiming, firstErrors, knownFix, onlyOpenFailed } from "./log.js";
+import {
+  buildTiming,
+  errorLines,
+  firstErrors,
+  knownFix,
+  lastLines,
+  onlyOpenFailed,
+} from "./log.js";
 import { startCapture, stopCaptures } from "./logs.js";
 import { confirm, reserve, worktreeKey } from "./owned.js";
-import { type LoggedProcess, startLogged } from "./process.js";
+import { type LoggedProcess, startLogged, untilExitOrIdle } from "./process.js";
 import { inspectProject } from "./project.js";
 import { loadAdapter } from "./registry.js";
 import {
@@ -83,7 +90,10 @@ import { runTool } from "./tool.js";
 
 const metroStartSeconds = 120;
 const stopSeconds = 10;
-const defaultTimeoutSeconds = 900;
+// A build stops when its log has not grown for buildIdleSeconds (a hang), or
+// after the total limit. A slow build that still prints goes on (decision 0014).
+const defaultTimeoutSeconds = 3600;
+const buildIdleSeconds = 600;
 // How long AXe may take to read the screen after the app started, about twice
 // the slowest measurement: first launch 7.8 to 51.4 s on CI iOS 26 and up to
 // 86 s on iOS 27.1; relaunch 5.9 to 31.3 s.
@@ -182,24 +192,8 @@ async function untilReady(
   return "timeout";
 }
 
-// Resolves with the exit code, or "timeout". Clears its timer so a finished
-// build does not keep the process alive.
-async function withTimeout(
-  exited: Promise<number>,
-  seconds: number,
-): Promise<number | "timeout"> {
-  let timer: NodeJS.Timeout | undefined;
-  const timeout = new Promise<"timeout">((resolve) => {
-    timer = setTimeout(() => resolve("timeout"), seconds * 1000);
-  });
-  try {
-    return await Promise.race([exited, timeout]);
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-const errorLines = (error: unknown) => String(error).split("\n").slice(0, 3);
+const errorMessageLines = (error: unknown) =>
+  String(error).split("\n").slice(0, 3);
 
 // This launch's folder for its build, server and app logs.
 const runDir = (root: string) =>
@@ -220,20 +214,31 @@ async function runBuild(
   logPath: string,
   env: Record<string, string>,
   options: LaunchOptions,
-): Promise<{ reason: string; errors: string[] } | undefined> {
+): Promise<
+  { reason: string; errors?: string[]; lastLines?: string[] } | undefined
+> {
   const seconds = options.timeoutSeconds ?? defaultTimeoutSeconds;
+  const idle = Math.min(buildIdleSeconds, seconds);
   const build = startLogged(command, { cwd, logPath, env });
-  const outcome = await withTimeout(build.exited, seconds);
+  const outcome = await untilExitOrIdle(build.exited, logPath, idle, seconds);
   if (outcome === 0) return undefined;
   build.kill();
   const text = await readFile(logPath, "utf8").catch(() => "");
+  if (outcome === "timeout" || outcome === "idle") {
+    const errors = errorLines(text);
+    return {
+      reason:
+        outcome === "timeout"
+          ? `The build did not finish in ${seconds}s.`
+          : `The build log did not grow for ${idle}s, so the build looked hung and was stopped.`,
+      ...(errors.length > 0 ? { errors } : { lastLines: lastLines(text) }),
+    };
+  }
   // Expo's own open step timed out after the install; EMD opens the app next.
-  if (outcome !== "timeout" && onlyOpenFailed(text)) return undefined;
+  if (onlyOpenFailed(text)) return undefined;
   const fix = knownFix(text);
   let reason = `The build failed (exit ${outcome}).`;
-  if (outcome === "timeout") {
-    reason = `The build did not finish in ${seconds}s.`;
-  } else if (fix) {
+  if (fix) {
     reason = fix;
   } else if (text.includes("\u203a Build Succeeded")) {
     reason = `The app compiled, but the install or open step failed (exit ${outcome}).`;
@@ -611,7 +616,10 @@ export async function launch(
     xcodebuildSeconds = await recordTiming(root, buildLog, buildStarted);
     if (failure) {
       metro?.kill();
-      return stuck(failure.reason, { errors: failure.errors });
+      return stuck(failure.reason, {
+        ...(failure.errors && { errors: failure.errors }),
+        ...(failure.lastLines && { lastLines: failure.lastLines }),
+      });
     }
     if (!server) {
       const app = builtApp(derivedData);
@@ -802,7 +810,7 @@ async function launchAndroid(
     });
   } catch (error) {
     return failed("Could not set up this worktree's emulator and build.", {
-      errors: errorLines(error),
+      errors: errorMessageLines(error),
     });
   }
   if (typeof plan === "string") return unsupported(plan);
@@ -821,7 +829,7 @@ async function launchAndroid(
   const stuck = (reason: string, error?: unknown) =>
     failed(reason, {
       ...where,
-      ...(error !== undefined && { errors: errorLines(error) }),
+      ...(error !== undefined && { errors: errorMessageLines(error) }),
     });
 
   try {
@@ -856,7 +864,11 @@ async function launchAndroid(
     options,
   );
   if (failure) {
-    return failed(failure.reason, { ...where, errors: failure.errors });
+    return failed(failure.reason, {
+      ...where,
+      ...(failure.errors && { errors: failure.errors }),
+      ...(failure.lastLines && { lastLines: failure.lastLines }),
+    });
   }
   let built: { apk: string; appId: string };
   try {
