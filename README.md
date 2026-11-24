@@ -65,7 +65,7 @@ Each check ends with one verdict:
 
 A check name keeps its first expectations. A later check with the same name can add expectations, but not drop them. The evidence lists each check name whose last verdict is not `passed`.
 
-Output stays on your Mac:
+Output stays on your machine:
 
 - Each launch has a run folder, `$TMPDIR/emd/runs/<time>-<app folder>/`. The launch result gives it as `logDir`. It holds `build.log`, `metro.log`, the app's log (`app.ndjson`, or `app.logcat` on Android), the check screenshots, and `evidence/` (`manifest.json`, `logs.json`, `screenshots/`, `flows/`).
 - Jobs are in `$TMPDIR/emd/jobs/<jobId>.json`.
@@ -110,7 +110,7 @@ npx -y skills@1.7.6 remove emd -g -y
 
 In Cursor, delete the `emd` entry from `~/.cursor/mcp.json`.
 
-To remove what EMD made on your Mac:
+To remove what EMD made on your machine:
 
 1. Delete its simulators. `xcrun simctl list devices | grep emd-` lists them. `xcrun simctl delete <id>` deletes one. Stop its Android emulators: `adb devices` lists them, and `adb -s <serial> emu kill` stops one. EMD makes no AVDs.
 2. Delete `~/.emd/`. It holds AXe, build folders, EMD's records and the config backups from setup. Copy a backup first if you want to keep it.
@@ -164,7 +164,7 @@ Run them as `npx -y emd-agents@latest <command>`, or `node dist/bin.js <command>
 
 - An Expo app with `expo` in package.json. EMD reads its app config (app.json, app.config.js or app.config.ts) with the app's own `expo config`. Without `ios.bundleIdentifier`, Expo's build sets one and `launch` reports it (`appIdSet`).
 - The app's dependencies, installed. EMD does not install them.
-- macOS. On other systems `detect` works, and `launch` returns "iOS simulators need macOS."
+- iOS: macOS. On other systems `detect` and Android work, and an iOS `launch` returns "iOS simulators need macOS."
 - Xcode, tested with Xcode 26 and 27. Expo SDK 58 apps need Xcode 26 or newer. Without Xcode, `launch` fails: "Could not set up this worktree's simulator and build folders."
 - An iOS simulator runtime and at least one shut-down iPhone simulator. EMD clones it once per app folder, as `emd-<key>`. Without one, `launch` fails: "No shut-down iPhone simulator is available to clone."
 - AXe or Maestro, for taps, typing, swipes and element checks. EMD tries AXe first, then Maestro.
