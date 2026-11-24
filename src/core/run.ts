@@ -1,10 +1,13 @@
+import type { Platform } from "./adapter.js";
 import { readJob } from "./jobstore.js";
 import type { LaunchResult } from "./result.js";
 
-// A run is one app on one simulator, from the time its launch job started.
+// A run is one app on one simulator or emulator, from the time its launch job
+// started.
 export type RunRef = { jobId: string };
 
 export type Run = {
+  platform: Platform;
   device: string;
   appId: string;
   since: Date;
@@ -25,14 +28,10 @@ export function resolveRun({
   if (!result?.device || !result.appId || !result.logDir || !job.startedAt) {
     return { reason: "That job has not launched an app (yet)." };
   }
-  if (result.platform === "android") {
-    return {
-      reason:
-        "EMD launches Android apps but does not read their logs or screen yet.",
-    };
-  }
   return {
     run: {
+      // Launches before Android support carry no platform.
+      platform: result.platform ?? "ios",
       device: result.device.id,
       appId: result.appId,
       since: new Date(job.startedAt),

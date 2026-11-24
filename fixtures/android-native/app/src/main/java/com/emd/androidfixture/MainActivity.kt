@@ -25,6 +25,7 @@ class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalComposeUiApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Log.i("EMD", "[EMD:smoke] started")
         setContent {
             MaterialTheme {
                 var label by remember { mutableStateOf("Ready") }

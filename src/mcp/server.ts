@@ -168,7 +168,7 @@ function buildServer(): McpServer {
     "launch",
     {
       description:
-        "Build the app, install it on an iOS simulator or Android emulator and launch it, leaving its dev server running when the app has one (Expo). Android: native Gradle apps only, and logs, check and input do not work there yet. Waits up to waitSeconds (default 25, or longer where setup allowed it): a relaunch or reload often ends in time and returns its result. A build takes minutes: then it returns the job, and you call job_status with the jobId until status is succeeded or failed.",
+        "Build the app, install it on an iOS simulator or Android emulator and launch it, leaving its dev server running when the app has one (Expo). Android: native Gradle apps only; check reads log lines there, not yet the screen, and tap, type and swipe do not work there yet. Waits up to waitSeconds (default 25, or longer where setup allowed it): a relaunch or reload often ends in time and returns its result. A build takes minutes: then it returns the job, and you call job_status with the jobId until status is succeeded or failed.",
       inputSchema: z.object({
         dir: z
           .string()

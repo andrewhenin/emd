@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import type { Platform } from "./adapter.js";
 import { launchesIn } from "./jobstore.js";
 import { type LoggedProcess, startLogged } from "./process.js";
 import type { LogsResult } from "./result.js";
@@ -7,8 +8,8 @@ import { resolveRun } from "./run.js";
 import { plistValue, runTool } from "./tool.js";
 
 // A tagged line is any log message with `[EMD:<tag>]` in it. The app writes it
-// with console.log (or NSLog); the simulator keeps it in its unified log at
-// Info level, so `log stream` needs --info to see it.
+// with console.log, NSLog or Log.i; the simulator keeps it in its unified log
+// at Info level, so `log stream` needs --info to see it.
 const taggedLine = /\[EMD:([A-Za-z0-9_.-]+)\]\s?(.*)$/s;
 export const tagPattern = /^[A-Za-z0-9_.-]{1,40}$/;
 const executable = /^[A-Za-z0-9_. -]+$/;
@@ -61,6 +62,26 @@ export function parseTagged(ndjson: string, tag?: string): TaggedLine[] {
   return lines;
 }
 
+// `adb logcat -v epoch`: seconds.millis, pid, tid, priority, tag, then ": " and
+// the message.
+const logcatLine = /^\s*(\d+\.\d+)\s+\d+\s+\d+\s+[A-Z]\s+.*?: (.*)$/;
+
+// Tagged lines from `adb logcat -v epoch` output, oldest first.
+export function parseLogcat(text: string, tag?: string): TaggedLine[] {
+  const lines: TaggedLine[] = [];
+  for (const raw of text.split("\n")) {
+    const line = raw.match(logcatLine);
+    const match = line?.[2]?.match(taggedLine);
+    if (!line || !match?.[1] || (tag && match[1] !== tag)) continue;
+    lines.push({
+      time: new Date(Number(line[1]) * 1000).toISOString(),
+      tag: match[1],
+      message: match[2] ?? "",
+    });
+  }
+  return lines;
+}
+
 // simctl can fail to answer for a while after a boot, even after bootstatus:
 // in the #14 pilot, a reused build fell back to a 194 s rebuild. So a few short
 // tries, 2 s apart, as other simulator tools retry such calls.
@@ -85,7 +106,9 @@ async function readExecutable(device: string, appId: string): Promise<string> {
   return plistValue(`${stdout.trim()}/Info.plist`, "CFBundleExecutable");
 }
 
-const capturePath = (logDir: string) => join(logDir, "app.ndjson");
+// Where a run's captured log is: the simulator's ndjson stream or logcat's.
+const capturePath = (logDir: string, platform: Platform = "ios") =>
+  join(logDir, platform === "android" ? "app.logcat" : "app.ndjson");
 
 // Info lines live only in the simulator's memory buffers and are purged as
 // they fill, so reading them after the fact can miss lines the app wrote
@@ -118,7 +141,7 @@ export async function stopCaptures(root: string): Promise<void> {
         ["-o", "command=", "-p", `${pid}`],
         60,
       );
-      if (stdout.includes("log stream")) process.kill(-pid, "SIGTERM");
+      if (/log stream|logcat/.test(stdout)) process.kill(-pid, "SIGTERM");
     } catch {}
   }
 }
@@ -138,10 +161,14 @@ export async function allLines(
 
   const resolved = resolveRun(options);
   if ("reason" in resolved) return failed(resolved.reason);
-  const { since, logDir } = resolved.run;
-  const file = capturePath(logDir);
+  const { since, logDir, platform } = resolved.run;
+  const file = capturePath(logDir, platform);
   if (!existsSync(file)) return failed("This run has no captured log.");
-  const lines = parseTagged(readFileSync(file, "utf8"), options.tag);
+  const text = readFileSync(file, "utf8");
+  const lines =
+    platform === "android"
+      ? parseLogcat(text, options.tag)
+      : parseTagged(text, options.tag);
   return {
     verdict: "ok",
     since: since.toISOString(),

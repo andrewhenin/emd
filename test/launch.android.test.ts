@@ -1,3 +1,4 @@
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "vitest";
 import gradle from "../src/adapters/gradle/index.ts";
@@ -80,8 +81,9 @@ test("launch refuses a platform the project does not target", () => {
   expect(cli("launch", dir, "--platform", "web").status).toBe(2);
 });
 
-test("logs on an Android run say what does not work there yet", async () => {
+test("on an Android run, logs read logcat's capture, and screen and input wait", async () => {
   const job = createJob("launch", { dir: "/work/app" });
+  const logDir = join(state, "runs", job.id);
   await runJob(job.id, {
     launch: async () => ({
       verdict: "launched",
@@ -89,12 +91,23 @@ test("logs on an Android run say what does not work there yet", async () => {
       platform: "android",
       appId: "com.emd.androidfixture",
       device: { id: "emulator-5554", name: "emd-test" },
-      logDir: join(state, "runs", job.id),
+      logDir,
     }),
     check: async () => ({ verdict: "error" }),
   });
-  const run = cli("logs", job.id);
-  expect(JSON.parse(run.stdout).reason).toMatch(
-    /does not read their logs or screen yet/,
+  mkdirSync(logDir, { recursive: true });
+  writeFileSync(
+    join(logDir, "app.logcat"),
+    "1795431772.512  4087  4087 I EMD     : [EMD:smoke] started\n",
   );
+  expect(JSON.parse(cli("logs", job.id).stdout)).toMatchObject({
+    verdict: "ok",
+    lines: [{ tag: "smoke", message: "started" }],
+  });
+  expect(
+    JSON.parse(cli("tap", job.id, "--id", "smoke-button").stdout).reason,
+  ).toBe("EMD does not tap, type or swipe on Android yet.");
+  expect(
+    JSON.parse(cli("check", job.id, "--element", "text=Ready").stdout).reason,
+  ).toMatch(/does not read the screen or act on Android yet/);
 });

@@ -41,6 +41,23 @@ describe.skipIf(!avd)("native Android on a real emulator", () => {
   });
 
   test(
+    "a check finds the line the app logs at start, with a screenshot",
+    async () => {
+      const checked = await run("check", {
+        jobId: first.jobId,
+        name: "android-start",
+        logs: [{ tag: "smoke", message: "started" }],
+      });
+      expect(checked.result, JSON.stringify(checked.result)).toMatchObject({
+        verdict: "passed",
+        logs: [{ tag: "smoke", message: "started", found: true }],
+        secondOpinion: { screenshot: expect.stringMatching(/\.png$/) },
+      });
+    },
+    5 * 60_000,
+  );
+
+  test(
     "a second launch reuses the running emulator",
     async () => {
       const second = await run("launch", { dir });
