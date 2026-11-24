@@ -7,7 +7,7 @@ import { runTool } from "./tool.js";
 // (#254). The port is the owned resource (decision 0006).
 
 // An SDK tool from ANDROID_HOME (or ANDROID_SDK_ROOT), else from PATH.
-function sdkTool(name: "adb" | "emulator"): string {
+export function sdkTool(name: "adb" | "emulator"): string {
   const home = process.env.ANDROID_HOME || process.env.ANDROID_SDK_ROOT;
   const file = process.platform === "win32" ? `${name}.exe` : name;
   if (!home) return file;

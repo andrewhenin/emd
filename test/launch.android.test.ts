@@ -81,7 +81,7 @@ test("launch refuses a platform the project does not target", () => {
   expect(cli("launch", dir, "--platform", "web").status).toBe(2);
 });
 
-test("on an Android run, logs read logcat's capture, and screen and input wait", async () => {
+test("on an Android run, logs read logcat's capture", async () => {
   const job = createJob("launch", { dir: "/work/app" });
   const logDir = join(state, "runs", job.id);
   await runJob(job.id, {
@@ -104,10 +104,4 @@ test("on an Android run, logs read logcat's capture, and screen and input wait",
     verdict: "ok",
     lines: [{ tag: "smoke", message: "started" }],
   });
-  expect(
-    JSON.parse(cli("tap", job.id, "--id", "smoke-button").stdout).reason,
-  ).toBe("EMD does not tap, type or swipe on Android yet.");
-  expect(
-    JSON.parse(cli("check", job.id, "--element", "text=Ready").stdout).reason,
-  ).toMatch(/does not read the screen or act on Android yet/);
 });

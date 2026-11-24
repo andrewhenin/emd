@@ -8,17 +8,15 @@ import {
   readRecord,
   writeRecord,
 } from "./checkrecord.js";
-import { axeBackend } from "./device/axe.js";
 import {
   detectEnvironment,
   readScreen,
   type ScreenRead,
 } from "./device/backend.js";
-import { maestroBackend } from "./device/maestro.js";
 import { type ElementSpec, hasElement } from "./device/screen.js";
 import { screenshot as emulatorScreenshot } from "./emulator.js";
 import { recordCheck, evidence as writeEvidence } from "./evidence.js";
-import { swipe, type TapOptions, tap, typeText } from "./input.js";
+import { backendsFor, swipe, type TapOptions, tap, typeText } from "./input.js";
 import { firstLine } from "./log.js";
 import {
   allLines,
@@ -66,7 +64,7 @@ function runAction(action: CheckAction, ref: RunRef): Promise<InputResult> {
 // What the check reads. The real ones read the simulator; tests pass their own.
 export type Deps = {
   logs: (options: Omit<LogsOptions, "limit">) => Promise<LogsResult>;
-  screen: (device: string) => Promise<ScreenRead>;
+  screen: (device: string, platform: Platform) => Promise<ScreenRead>;
   // Undefined when the screenshot was saved, otherwise why not, in one line.
   screenshot: (
     device: string,
@@ -93,8 +91,8 @@ const realDeps: Deps = {
   logs: allLines,
   evidence: (ref) => writeEvidence(ref),
   act: runAction,
-  screen: async (device) =>
-    readScreen(device, await detectEnvironment(), [axeBackend, maestroBackend]),
+  screen: async (device, platform) =>
+    readScreen(device, await detectEnvironment(), backendsFor(platform)),
   screenshot: async (device, path, platform) => {
     mkdirSync(dirname(path), { recursive: true });
     if (platform === "android") {
@@ -195,14 +193,6 @@ export async function check(
   const resolved = resolveRun(options);
   if ("reason" in resolved) return error(resolved.reason);
   const { device, root, logDir, platform } = resolved.run;
-  if (
-    platform === "android" &&
-    (elementSpecs.length > 0 || (options.actions?.length ?? 0) > 0)
-  ) {
-    return error(
-      "EMD does not read the screen or act on Android yet. Check log lines only.",
-    );
-  }
 
   // Failed checks count per worktree, across relaunches, because a fix
   // usually means launching again.
@@ -271,7 +261,7 @@ export async function check(
   let screen: ScreenRead | undefined;
   const readTheScreen = async (): Promise<string | undefined> => {
     try {
-      screen = await deps.screen(device);
+      screen = await deps.screen(device, platform);
     } catch (failure) {
       return `Could not read the screen: ${firstLine(failure)}`;
     }

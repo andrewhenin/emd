@@ -58,6 +58,25 @@ describe.skipIf(!avd)("native Android on a real emulator", () => {
   );
 
   test(
+    "a check taps the button, then finds the tagged log line and the new label",
+    async () => {
+      const checked = await run("check", {
+        jobId: first.jobId,
+        name: "android-tap",
+        actions: [{ tap: { id: "smoke-button" } }],
+        logs: [{ tag: "smoke", message: "tapped" }],
+        elements: [{ id: "smoke-label", text: "Tapped" }],
+      });
+      expect(checked.result, JSON.stringify(checked.result)).toMatchObject({
+        verdict: "passed",
+        actions: [{ verdict: "ok", backend: "adb" }],
+        backend: "adb",
+      });
+    },
+    5 * 60_000,
+  );
+
+  test(
     "a second launch reuses the running emulator",
     async () => {
       const second = await run("launch", { dir });

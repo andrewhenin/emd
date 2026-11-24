@@ -1,3 +1,5 @@
+import type { Platform } from "./adapter.js";
+import { adbBackend } from "./device/adb.js";
 import { axeBackend } from "./device/axe.js";
 import {
   type DeviceBackend,
@@ -20,7 +22,11 @@ import { type RunRef, resolveRun } from "./run.js";
 // Taps, typing and swipes on a launched app (decision 0009). Each acts once
 // and says which backend did it; whether the app reacted is for `check`.
 
-const backends = [axeBackend, maestroBackend];
+// Best first (decisions 0004, 0005). Maestro works on both platforms.
+export const backendsFor = (platform: Platform): DeviceBackend[] =>
+  platform === "android"
+    ? [adbBackend, maestroBackend]
+    : [axeBackend, maestroBackend];
 
 type Gesture = (
   backend: DeviceBackend,
@@ -48,12 +54,7 @@ async function act(
   if ("reason" in resolved)
     return { verdict: "failed", reason: resolved.reason };
   const { device, appId, platform } = resolved.run;
-  if (platform === "android") {
-    return {
-      verdict: "failed",
-      reason: "EMD does not tap, type or swipe on Android yet.",
-    };
-  }
+  const backends = backendsFor(platform);
   let first: Pick<InputResult, "backend" | "fellBack"> = {};
   try {
     const env = await detectEnvironment();
