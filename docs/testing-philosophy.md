@@ -56,6 +56,6 @@ An agent with an unrestricted shell can edit EMD's records. Your agent's permiss
 [^property]: Stateful property-based testing generates sequences of actions and shrinks a failure to a minimal case. See the quickcheck-state-machine docs ([Hackage](https://hackage.haskell.org/package/quickcheck-state-machine)).
 [^clock]: Martin Fowler's site, "Deterministic Simulation Testing": to repeat a run, the test must control the clock ([article](https://martinfowler.com/articles/deterministic-simulation-testing.html)).
 [^flaky]: J. Micco, "Flaky Tests at Google and How We Mitigate Them," Google Testing Blog, 2016 ([post](https://testing.googleblog.com/2016/05/flaky-tests-at-google-and-how-we.html)).
-[^selection]: Meta Engineering, "Predictive test selection," 2018 ([post](https://engineering.fb.com/2018/11/21/developer-tools/predictive-test-selection/)); M. Machalica et al., "Predictive Test Selection," 2018 ([arXiv](https://arxiv.org/abs/1810.05286)).
+[^selection]: Meta Engineering, "Predictive test selection," 2018 ([post](https://engineering.fb.com/2018/11/21/developer-tools/predictive-test-selection/)).
 [^failfirst]: Anthropic, "Claude Code: Best practices for agentic coding": write a failing test that reproduces the issue, then fix it ([post](https://www.anthropic.com/engineering/claude-code-best-practices)).
-[^mutation-at-scale]: G. Petrović et al., "Practical Mutation Testing at Scale: A view from Google," IEEE TSE 2021 ([arXiv](https://arxiv.org/abs/2102.11378)); C. Foster et al., "Mutation-Guided LLM-based Test Generation at Meta," FSE 2025 ([arXiv](https://arxiv.org/abs/2501.12862)).
+[^mutation-at-scale]: G. Petrović et al., "Practical Mutation Testing at Scale: A view from Google," IEEE TSE 2021 ([arXiv](https://arxiv.org/abs/2102.11378)).

@@ -14,7 +14,7 @@ The repo is EMD's memory. Keep it small enough that every session can read what 
 |---|---|---|
 | Rule agents must follow | `AGENTS.md` | One imperative line |
 | What EMD is, principles, scope | `docs/vision.md` | Edit in place |
-| How EMD tests: beliefs, what it enforces, what is planned | `docs/testing-philosophy.md` | One line per claim, with its source. Each planned item links its issue; the PR that ships it moves it to "Enforced today" |
+| How EMD tests: beliefs, what it enforces, what is planned | `docs/testing-philosophy.md` | Each claim cites a primary source. Each planned item links its issue; the PR that ships it moves it to "Enforced today" |
 | A decision and why | `docs/decisions/NNNN-title.md` | One file per decision. Once accepted, don't rewrite it; supersede it with a new one |
 | Observation that isn't a rule yet (gotcha, measurement, idea) | `docs/findings.md` | One dated line with a source |
 | Measurement (before/after, benchmark) | `experiments/<topic>.md` plus its reproduction script | Results, setup and negative results; raw data stays out of the repo |
