@@ -1,14 +1,16 @@
 name: android-e2e
 
 # On a Linux runner with KVM: two read-only emulators from one AVD, the way two
-# worktrees run them (#254), then a real launch of fixtures/android-native
-# through the MCP server (decision 0007).
+# worktrees run them (#254), then real launches and checks of
+# fixtures/android-native and fixtures/expo through the MCP server (decision
+# 0007).
 on:
   workflow_dispatch:
   pull_request:
     paths:
       - "src/**"
       - "fixtures/android-native/**"
+      - "fixtures/expo/**"
       - "test/emulator.test.ts"
       - "test/e2e/android.test.ts"
       - "package.json"
@@ -21,7 +23,7 @@ permissions:
 jobs:
   android:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 75
     env:
       IMAGE: system-images;android-35;google_apis;x86_64
       # avdmanager and the emulator can look for AVDs in different folders;
@@ -62,5 +64,6 @@ jobs:
           EMD_TEST_AVD: emd-test
         run: |
           npm ci
+          npm ci --prefix fixtures/expo
           npm run build
           npx vitest run test/emulator.test.ts test/e2e/android.test.ts --no-file-parallelism

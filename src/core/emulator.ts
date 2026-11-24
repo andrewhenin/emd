@@ -192,6 +192,22 @@ export async function stopEmulator(port: string): Promise<void> {
   );
 }
 
+// The CPU ABI the emulator runs, such as x86_64 or arm64-v8a.
+export async function deviceAbi(serial: string): Promise<string> {
+  const { stdout } = await adb(
+    serial,
+    ["shell", "getprop", "ro.product.cpu.abi"],
+    30,
+  );
+  return stdout.trim();
+}
+
+// Makes `port` on the emulator reach `port` on this machine, so the app finds
+// its dev server at localhost.
+export async function reversePort(serial: string, port: number): Promise<void> {
+  await adb(serial, ["reverse", `tcp:${port}`, `tcp:${port}`], 30);
+}
+
 // Streams the app's tagged lines to logPath. The buffer is cleared first, so
 // the file holds only this run: the emulator keeps earlier runs' lines while it
 // runs. logcat's -e keeps only messages that match, so the file stays small.

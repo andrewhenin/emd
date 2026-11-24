@@ -53,6 +53,9 @@ export interface StackAdapter {
       platform: Platform;
       deviceId: string;
       port: number;
+      // Android: the device's CPU ABI, so a debug build compiles native code
+      // for it alone.
+      abi?: string;
     },
   ): Promise<LaunchPlan | string | undefined>;
   // A hash of everything that needs a new native build when it changes. Throws

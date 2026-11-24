@@ -62,8 +62,9 @@ export const earlierLaunch = (
   // with its start time) is the one whose log window is open.
   launchesIn(root)
     .filter(
-      ({ verdict, metro, device, logDir }) =>
+      ({ verdict, platform, metro, device, logDir }) =>
         verdict === "launched" &&
+        (platform ?? "ios") === "ios" &&
         metro?.port === port &&
         listening.includes(metro.pid) &&
         device &&
@@ -74,22 +75,28 @@ export const earlierLaunch = (
     )[0];
 
 const bundled = /Bundled \d+ms/g;
+const bundleFailed = /Bundling failed/g;
+const read = (path: string) => readFile(path, "utf8").catch(() => "");
 const count = async (path: string) =>
-  ((await readFile(path, "utf8").catch(() => "")).match(bundled) ?? []).length;
+  ((await read(path)).match(bundled) ?? []).length;
 
-// Resolves when the dev server log shows a bundle served after `before` bundles.
+// Resolves when the dev server log shows a bundle served after `before`
+// bundles, or a bundle that failed to build after `failedBefore` failures.
 export async function untilBundled(
   logDir: string,
   before: number,
   seconds: number,
-): Promise<boolean> {
+  failedBefore = Number.POSITIVE_INFINITY,
+): Promise<"bundled" | "failed" | "timeout"> {
   const path = join(logDir, "metro.log");
   const deadline = Date.now() + seconds * 1000;
   while (Date.now() < deadline) {
-    if ((await count(path)) > before) return true;
+    const text = await read(path);
+    if ((text.match(bundled) ?? []).length > before) return "bundled";
+    if ((text.match(bundleFailed) ?? []).length > failedBefore) return "failed";
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
-  return false;
+  return "timeout";
 }
 
 export const bundlesServed = (logDir: string) =>

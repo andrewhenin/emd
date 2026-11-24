@@ -8,7 +8,7 @@ Your coding agent shouldn't grade its own mobile work. EMD builds the app, launc
 
 `setup` registers EMD with Claude Code, Codex and Cursor. Tested end to end in Claude Code.
 
-Status: early. Expo apps and native iOS apps (SwiftUI or UIKit) on the iOS simulator, and native Android apps (Kotlin, Compose or Views) on an Android emulator.
+Status: early. Expo apps on the iOS simulator and an Android emulator, native iOS apps (SwiftUI or UIKit) on the iOS simulator, and native Android apps (Kotlin, Compose or Views) on an Android emulator.
 
 ## Requirements
 
@@ -73,7 +73,8 @@ Output stays on your Mac:
 
 ## Limits today
 
-- Expo apps launch on iOS only. No physical devices.
+- No physical devices.
+- Expo on Android: `launch` builds on every call, with no reload yet. When the app has no `android/` folder, the first Android launch runs `expo prebuild --platform android` to make it, as `expo run:android` does.
 - Native Android: one app module and its debug build, with no product flavors. `launch` builds on every call; Gradle's own build is incremental. Through adb, `type` types ASCII text only; other text goes through Maestro.
 - Native iOS: a project with several schemes needs one named like the workspace or project. Projects generated with Tuist, XcodeGen or Bazel show a `problem`: EMD doesn't build through them yet. `launch` builds on every call; there is no build reuse yet.
 - `launch` leaves the dev server running. The next `launch` of the same folder stops it and starts a new one. A dev server that EMD did not start on that port still blocks `launch` ("Port N already serves a dev server").
@@ -183,7 +184,7 @@ npm run build
 node dist/bin.js detect fixtures/expo
 ```
 
-The last line must print `"verdict":"detected"` and `"appIds":{"ios":"com.emd.sandbox"}`. Then `node dist/bin.js setup` registers this clone's build with your agents.
+The last line must print `"verdict":"detected"` and `"appIds":{"ios":"com.emd.sandbox","android":"com.emd.sandbox"}`. Then `node dist/bin.js setup` registers this clone's build with your agents.
 
 ### Clean up
 
