@@ -63,13 +63,16 @@ function readJobs(): Job[] {
   }
 }
 
-// The results of the launch jobs that finished in this worktree.
+// The results of the launch jobs that finished in this worktree, newest first.
 export const launchesIn = (root: string): LaunchResult[] =>
-  readJobs().flatMap((job) => {
-    const result =
-      job.kind === "launch" ? (job.result as LaunchResult) : undefined;
-    return result?.root === root ? [result] : [];
-  });
+  readJobs()
+    .filter(
+      (job) =>
+        job.kind === "launch" &&
+        (job.result as LaunchResult | undefined)?.root === root,
+    )
+    .sort((a, b) => (b.finishedAt ?? "").localeCompare(a.finishedAt ?? ""))
+    .map((job) => job.result as LaunchResult);
 
 export function update(id: string, patch: Partial<Job>): void {
   const job = readJob(id);

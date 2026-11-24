@@ -52,8 +52,9 @@ import { launchesIn } from "./jobstore.js";
 import {
   buildTiming,
   errorLines,
+  type Fix,
   firstErrors,
-  knownFix,
+  knownCause,
   lastLines,
   onlyOpenFailed,
 } from "./log.js";
@@ -260,7 +261,8 @@ async function runBuild(
   options: LaunchOptions,
   step = "build",
 ): Promise<
-  { reason: string; errors?: string[]; lastLines?: string[] } | undefined
+  | { reason: string; errors?: string[]; lastLines?: string[]; fix?: Fix }
+  | undefined
 > {
   const seconds = options.timeoutSeconds ?? defaultTimeoutSeconds;
   const idle = Math.min(buildIdleSeconds, seconds);
@@ -281,13 +283,11 @@ async function runBuild(
   }
   // Expo's own open step timed out after the install; EMD opens the app next.
   if (onlyOpenFailed(text)) return undefined;
-  const fix = knownFix(text);
-  let reason = `The ${step} failed (exit ${outcome}).`;
-  if (fix) {
-    reason = fix;
-  } else if (text.includes("\u203a Build Succeeded")) {
-    reason = `The app compiled, but the install or open step failed (exit ${outcome}).`;
-  }
+  const known = knownCause(text);
+  if (known) return { ...known, errors: firstErrors(text) };
+  const reason = text.includes("\u203a Build Succeeded")
+    ? `The app compiled, but the install or open step failed (exit ${outcome}).`
+    : `The ${step} failed (exit ${outcome}).`;
   return { reason, errors: firstErrors(text) };
 }
 
@@ -403,11 +403,8 @@ export async function launch(
       "prepare command",
     );
     if (failure) {
-      return failed(failure.reason, {
-        logDir,
-        ...(failure.errors && { errors: failure.errors }),
-        ...(failure.lastLines && { lastLines: failure.lastLines }),
-      });
+      const { reason, ...details } = failure;
+      return failed(reason, { logDir, ...details });
     }
   }
   if (platform === "android") {
@@ -537,8 +534,14 @@ export async function launch(
   try {
     await boot(device);
   } catch (error) {
+    // On a loaded machine a boot passes its limit; on its own runner the same
+    // simulator booted (#280).
     return stuck("The simulator did not boot.", {
       errors: String(error).split("\n").slice(0, 3),
+      fix: {
+        do: "Close other simulators and heavy apps, then launch again.",
+        safe: false,
+      },
     });
   }
 
@@ -673,10 +676,8 @@ export async function launch(
     xcodebuildSeconds = await recordTiming(root, buildLog, buildStarted);
     if (failure) {
       metro?.kill();
-      return stuck(failure.reason, {
-        ...(failure.errors && { errors: failure.errors }),
-        ...(failure.lastLines && { lastLines: failure.lastLines }),
-      });
+      const { reason, ...details } = failure;
+      return stuck(reason, details);
     }
     if (!server) {
       const app = builtApp(derivedData);
@@ -955,11 +956,8 @@ async function launchAndroid(
   );
   if (failure) {
     stop();
-    return failed(failure.reason, {
-      ...where,
-      ...(failure.errors && { errors: failure.errors }),
-      ...(failure.lastLines && { lastLines: failure.lastLines }),
-    });
+    const { reason, ...details } = failure;
+    return failed(reason, { ...where, ...details });
   }
   let built: { apk: string; appId: string };
   try {
