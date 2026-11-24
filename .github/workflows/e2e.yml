@@ -35,10 +35,15 @@ jobs:
     # PRs run on Xcode 26 only; the nightly and manual runs also run on Xcode 27
     # (#124). Xcode 27 is advisory until it has passed: its failure does not
     # fail the run.
+    # Each suite runs on its own runner, so each runner boots one simulator.
+    # When both suites ran on one runner, the native suite's boot passed its
+    # 300 s limit (runs 45292340576 and 45299793413, #271). A job leaves out
+    # the other suite's file, so a new e2e file runs in both jobs.
     strategy:
       fail-fast: false
       matrix:
         runner: ${{ fromJSON(github.event_name == 'pull_request' && '["macos-26"]' || '["macos-26","xcode-27"]') }}
+        suite: [expo, native]
     runs-on: ${{ matrix.runner }}
     continue-on-error: ${{ matrix.runner == 'xcode-27' }}
     timeout-minutes: 60
@@ -46,6 +51,7 @@ jobs:
     # in src/core/device/axe.ts: setup installs it below.
     env:
       MAESTRO_VERSION: 2.12.1
+      SUITE: ${{ matrix.suite }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -89,7 +95,7 @@ jobs:
         shell: bash
         run: |
           npm ci
-          npm ci --prefix fixtures/expo
+          if [ "$SUITE" = expo ]; then npm ci --prefix fixtures/expo; fi
           # The script installs MAESTRO_VERSION from the job env.
           curl -fsSL "https://get.maestro.mobile.dev" | bash
           echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
@@ -136,13 +142,16 @@ jobs:
         shell: bash
         env:
           EMD_STATE_DIR: ${{ runner.temp }}/emd-state
-        run: npm run test:e2e 2>&1 | tee e2e-output.txt
+        run: |
+          other=native
+          if [ "$SUITE" = native ]; then other=launch; fi
+          npm run test:e2e -- --exclude "test/e2e/$other.test.ts" 2>&1 | tee e2e-output.txt
 
       - name: Upload output and run logs
         if: always() && steps.gate.outputs.run == 'true'
         uses: actions/upload-artifact@v7
         with:
-          name: e2e-${{ github.run_id }}-${{ matrix.runner }}
+          name: e2e-${{ github.run_id }}-${{ matrix.runner }}-${{ matrix.suite }}
           path: |
             e2e-output.txt
             ${{ runner.temp }}/emd-state/runs
