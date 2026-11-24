@@ -79,7 +79,7 @@ Output stays on your Mac:
 - Native iOS: with several schemes and none named like the workspace or project, `launch` needs `scheme`. A project made by a setup step (Tuist, XcodeGen, Bazel, or a `make` around them) shows `needsPrepare`: pass the setup command as `prepare`, and EMD runs it before each build. An app that Bazel builds with no Xcode project doesn't work yet. `launch` builds on every call; there is no build reuse yet.
 - `launch` leaves the dev server running. The next `launch` of the same folder stops it and starts a new one. A dev server that EMD did not start on that port still blocks `launch` ("Port N already serves a dev server").
 - `EMD_RETRY_LIMIT` (1 to 10) changes the limit of 3 failed checks.
-- A build can take 900 seconds by default (`timeoutSeconds`, or `--timeout` in the CLI). Two cold builds at the same time can take longer.
+- A build stops when its log has not grown for 600 seconds, or after 3600 seconds in total (`timeoutSeconds`, or `--timeout` in the CLI). Two cold builds at the same time take longer.
 - The CLI `launch` waits and does not make a job. `logs`, `check` and `evidence` need the `jobId` of a `launch` that the agent started.
 
 ## FAQ
