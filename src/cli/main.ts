@@ -19,7 +19,7 @@ import {
 } from "../core/index.js";
 
 const usage =
-  "Commands: detect [dir], launch [dir] [--platform ios|android] [--device X] [--timeout N], job status <id>, logs <jobId> [--tag T] [--limit N], check <jobId> [--log TAG[=TEXT]] [--element id=X|text=Y] [--name N] [--agent pass|fail], check reset [dir], tap <jobId> --id X|--text Y|--x N --y N, type <jobId> [--] <text>, swipe <jobId> up|down|left|right, evidence <jobId>, gc [--apply], setup [--dry-run] [--yes] [--agent claude-code|codex|cursor], doctor, mcp";
+  "Commands: detect [dir], launch [dir] [--platform ios|android] [--device X] [--timeout N], job status <id>, logs <jobId> [--tag T] [--limit N], check <jobId> [--log TAG[=TEXT]] [--element id=X|text=Y] [--name N] [--agent pass|fail], check reset [dir], tap <jobId> --id X|--text Y|--x N --y N, type <jobId> [--] <text>, swipe <jobId> up|down|left|right, evidence <jobId>, gc [--apply], setup [--dry-run] [--yes] [--agent claude-code|codex|cursor], doctor [dir], mcp";
 
 // --log smoke   or   --log smoke=tapped
 const logSpec = (raw: string) => {
@@ -250,7 +250,7 @@ export async function run(argv: string[]): Promise<number> {
       return failed ? 1 : 0;
     }
     case "doctor": {
-      const result = await doctor();
+      const result = await doctor({ dir: args[0] });
       console.log(JSON.stringify(result));
       return result.verdict === "ready" ? 0 : 1;
     }

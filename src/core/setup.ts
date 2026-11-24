@@ -10,6 +10,7 @@ import {
 import { homedir } from "node:os";
 import { dirname, join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { detect } from "./detect.js";
 import { axeDir, axePin } from "./device/axe.js";
 import { detectEnvironment } from "./device/backend.js";
 import { type DoctorResult, doctor } from "./doctor.js";
@@ -48,6 +49,8 @@ export type SetupResult = {
 
 export type SetupOptions = {
   apply?: boolean;
+  // The project setup is for. Default: the working directory.
+  dir?: string;
   // Only these agents. Default: every agent found.
   only?: string[];
 };
@@ -192,9 +195,15 @@ export async function setup(
     };
   }
   const steps = commands(picked.map((a) => a.id));
-  // Every supported stack on macOS is iOS today, so a Mac gets AXe.
+  // AXe is for iOS: a Mac gets it unless the project here targets only
+  // Android, which needs nothing installed (adb comes with the SDK).
+  const detected = await detect(options.dir).catch(() => undefined);
+  const iosOff =
+    detected?.verdict === "detected" &&
+    detected.platforms !== undefined &&
+    !detected.platforms.includes("ios");
   const axe =
-    deps.platform === "darwin" && !(await detectEnvironment()).axe
+    deps.platform === "darwin" && !iosOff && !(await detectEnvironment()).axe
       ? { ...deps.axe, dir: axeDir() }
       : undefined;
   const plan = {
@@ -265,6 +274,6 @@ export async function setup(
     ...plan,
     agents: withBackups,
     restart: listed.map((a) => a.id),
-    doctor: await doctor(),
+    doctor: await doctor({ dir: options.dir }),
   };
 }
