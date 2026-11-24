@@ -14,14 +14,23 @@ export const firstLine = (error: unknown): string =>
 
 export const stripAnsi = (text: string): string => text.replace(ansi, "");
 
-// The first few lines of a build or server log that say what went wrong:
-// located compile errors first, then other error lines. Falls back to the last
-// lines when nothing looks like an error.
-export function firstErrors(log: string, max = 5): string[] {
-  const lines = stripAnsi(log)
+const logLines = (log: string): string[] =>
+  stripAnsi(log)
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);
+
+// A log's last lines, as they are.
+export const lastLines = (log: string, max = 5): string[] =>
+  logLines(log)
+    .slice(-max)
+    .map((l) => l.slice(0, maxLine));
+
+// The first few lines of a build or server log that say what went wrong:
+// located compile errors first, then other error lines. None when nothing
+// looks like an error.
+export function errorLines(log: string, max = 5): string[] {
+  const lines = logLines(log);
 
   const compile = lines.flatMap((line, i) => {
     const place = line.match(located)?.[1];
@@ -35,12 +44,15 @@ export function firstErrors(log: string, max = 5): string[] {
   });
   const other = lines.filter((l) => errorLine.test(l) && !summary.test(l));
 
-  const found = [...new Set([...compile, ...other])].map((l) =>
-    l.slice(0, maxLine),
-  );
-  return (
-    found.length > 0 ? found : lines.slice(-max).map((l) => l.slice(0, maxLine))
-  ).slice(0, max);
+  return [...new Set([...compile, ...other])]
+    .map((l) => l.slice(0, maxLine))
+    .slice(0, max);
+}
+
+// Error lines, or the last lines when nothing looks like an error.
+export function firstErrors(log: string, max = 5): string[] {
+  const found = errorLines(log, max);
+  return found.length > 0 ? found : lastLines(log, max);
 }
 
 // The fix, when a build log shows a known cause whose own message points the
