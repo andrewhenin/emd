@@ -1,6 +1,6 @@
 ---
 name: emd
-description: Build, run and check a change to a mobile app (Expo or native iOS apps on the iOS simulator today) with EMD's MCP tools, and prove it with screenshots and log lines. Use when a task changes a mobile app and the result must be seen on a simulator.
+description: Build, run and check a change to a mobile app (Expo or native iOS apps on the iOS simulator, native Android apps on an emulator) with EMD's MCP tools, and prove it with screenshots and log lines. Use when a task changes a mobile app and the result must be seen on a simulator or emulator.
 ---
 
 # EMD
@@ -17,10 +17,11 @@ Run `npx -y emd-agents@latest setup --dry-run` and show the user its plan. Run i
 2. In the code you change, log each event a check needs, and give a testID to each element a check needs:
    - Expo: `console.log("[EMD:<tag>] <message>")` and `testID`.
    - Native iOS (Swift): `NSLog("[EMD:<tag>] <message>")` and `accessibilityIdentifier`. Swift's `print` doesn't reach the log EMD reads.
+   - Native Android (Kotlin): `Log.i("EMD", "[EMD:<tag>] <message>")`. Compose: `Modifier.testTag("<id>")`, with `Modifier.semantics { testTagsAsResourceId = true }` once on a parent, or EMD can't see the tags. Views: an `android:id`; give its name without the package.
 
 ## The loop
 
-After you change code, call `launch` again before you `check` or `tap`. Expo: when nothing native changed, `launch` reloads the running app from the dev server in seconds (`build.action: "reloaded"`). Native iOS: `launch` builds every time.
+After you change code, call `launch` again before you `check` or `tap`. Expo: when nothing native changed, `launch` reloads the running app from the dev server in seconds (`build.action: "reloaded"`). Native iOS and Android: `launch` builds every time.
 
 1. `launch` with `dir` set to the app folder. It waits up to 25 s (100 s in Claude Code): a reload or relaunch usually returns its result.
 2. If it returned a job still running, `job_status` with the `jobId`, until `succeeded` or `failed`. A first build takes minutes. A failed launch gives the reason and the first error lines: fix the cause and launch again.

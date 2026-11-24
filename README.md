@@ -4,17 +4,18 @@
 
 An MCP server, CLI and agent skill for coding agents that change mobile apps.
 
-Your coding agent shouldn't grade its own mobile work. EMD builds the app, launches it on the iOS simulator, and passes or fails each change from the app's own log lines and screen. It keeps the evidence: checks, log lines and screenshots.
+Your coding agent shouldn't grade its own mobile work. EMD builds the app, launches it on an iOS simulator or Android emulator, and passes or fails each change from the app's own log lines and screen. It keeps the evidence: checks, log lines and screenshots.
 
 `setup` registers EMD with Claude Code, Codex and Cursor. Tested end to end in Claude Code.
 
-Status: early. Expo apps and native iOS apps (SwiftUI or UIKit) on the iOS simulator.
+Status: early. Expo apps and native iOS apps (SwiftUI or UIKit) on the iOS simulator, and native Android apps (Kotlin, Compose or Views) on an Android emulator.
 
 ## Requirements
 
-- A Mac with Xcode 26 or 27 and at least one iPhone simulator.
+- iOS: a Mac with Xcode 26 or 27 and at least one iPhone simulator.
+- Android: the Android SDK with `ANDROID_HOME` set, at least one AVD, and JDK 17 or newer. Tested on Linux.
 - Node 22 or newer.
-- An Expo app with its dependencies installed, or a native iOS app with an `.xcworkspace` or `.xcodeproj` in its root folder. [Check your app](#check-your-app) shows how to check it.
+- An Expo app with its dependencies installed, a native iOS app with an `.xcworkspace` or `.xcodeproj` in its root folder, or a native Android app with a Gradle wrapper. [Check your app](#check-your-app) shows how to check it.
 
 Tested: Expo SDK 58 on Xcode 26 and 27. On Xcode 27, apps below Expo SDK 56 can't build (Expo's bug). Use Xcode 26, or upgrade the app to SDK 56 or newer.
 
@@ -26,7 +27,7 @@ More detail: [Requirements in detail](#requirements-in-detail).
 npx -y emd-agents@latest setup
 ```
 
-It finds Claude Code, Codex and Cursor, prints its plan and asks once. On a Mac without AXe, it installs AXe, the tool EMD uses to tap and read the screen. Then it registers EMD with each agent and installs EMD's skill, which tells the agent how to use EMD. It backs up each agent config to `~/.emd/backups/` first.
+It finds Claude Code, Codex and Cursor, prints its plan and asks once. On a Mac without AXe, it installs AXe, the tool EMD uses to tap and read the screen on iOS, unless the app targets only Android. Android needs nothing more: EMD uses the SDK's adb. Then it registers EMD with each agent and installs EMD's skill, which tells the agent how to use EMD. It backs up each agent config to `~/.emd/backups/` first.
 
 At the end it runs `doctor`. For each check marked `missing`, do what its `fix` says. Then restart your agents.
 
@@ -45,13 +46,15 @@ It must print `"verdict":"detected"` and no `problem`. For example, `"appIds":{"
 
 A native iOS app detects as `"stack":"xcode"`, with no app ID: `launch` reads the ID from the app it builds, a Debug build of the scheme named like the workspace or project, or of the only scheme.
 
+A native Android app detects as `"stack":"gradle"`, with no app ID: `launch` builds the debug APK of the one app module and reads the ID that the build records.
+
 ## First run
 
 Ask your agent for a small change, with the full path of your app:
 
 > In /path/to/my-app, add a button that shows "Saved" when tapped. Prove it on the iOS simulator with EMD, then tell me the evidence folder.
 
-The agent follows EMD's skill. It adds a tagged log line, such as `console.log("[EMD:saved] button tapped")` (Expo) or `NSLog("[EMD:saved] button tapped")` (Swift), and a testID. Then it launches the app, taps, checks the log line and the screen, and gathers the evidence. A first build takes minutes.
+The agent follows EMD's skill. It adds a tagged log line, such as `console.log("[EMD:saved] button tapped")` (Expo), `NSLog("[EMD:saved] button tapped")` (Swift) or `Log.i("EMD", "[EMD:saved] button tapped")` (Kotlin), and a testID. Then it launches the app, taps, checks the log line and the screen, and gathers the evidence. A first build takes minutes.
 
 Each check ends with one verdict:
 
@@ -64,13 +67,14 @@ A check name keeps its first expectations. A later check with the same name can 
 
 Output stays on your Mac:
 
-- Each launch has a run folder, `$TMPDIR/emd/runs/<time>-<app folder>/`. The launch result gives it as `logDir`. It holds `build.log`, `metro.log`, the app's log (`app.ndjson`), the check screenshots, and `evidence/` (`manifest.json`, `logs.json`, `screenshots/`, `flows/`).
+- Each launch has a run folder, `$TMPDIR/emd/runs/<time>-<app folder>/`. The launch result gives it as `logDir`. It holds `build.log`, `metro.log`, the app's log (`app.ndjson`, or `app.logcat` on Android), the check screenshots, and `evidence/` (`manifest.json`, `logs.json`, `screenshots/`, `flows/`).
 - Jobs are in `$TMPDIR/emd/jobs/<jobId>.json`.
 - Data that must stay after a restart is in `~/.emd/`: the record of what EMD made (`owned/`), build folders (`derived/`) and failed-check counts (`checks/`).
 
 ## Limits today
 
-- Expo and native iOS apps on the iOS simulator only. No Android launch, no physical devices.
+- Expo apps launch on iOS only. No physical devices.
+- Native Android: one app module and its debug build, with no product flavors. `launch` builds on every call; Gradle's own build is incremental. Through adb, `type` types ASCII text only; other text goes through Maestro.
 - Native iOS: a project with several schemes needs one named like the workspace or project. Projects generated with Tuist, XcodeGen or Bazel show a `problem`: EMD doesn't build through them yet. `launch` builds on every call; there is no build reuse yet.
 - `launch` leaves the dev server running. The next `launch` of the same folder stops it and starts a new one. A dev server that EMD did not start on that port still blocks `launch` ("Port N already serves a dev server").
 - `EMD_RETRY_LIMIT` (1 to 10) changes the limit of 3 failed checks.
@@ -87,7 +91,7 @@ Each project's README says what it does. [agent-device](https://github.com/calls
 - A check name keeps its first expectations, so the agent can't pass it by dropping one.
 - After 3 failed checks, every later check returns `stopped` until a person resets the count.
 
-For taps and screen reads, EMD uses AXe, with Maestro as the fallback.
+For taps and screen reads, EMD uses AXe on iOS and adb on Android, with Maestro as the fallback.
 
 ### How do I upgrade?
 
@@ -107,7 +111,7 @@ In Cursor, delete the `emd` entry from `~/.cursor/mcp.json`.
 
 To remove what EMD made on your Mac:
 
-1. Delete its simulators. `xcrun simctl list devices | grep emd-` lists them. `xcrun simctl delete <id>` deletes one.
+1. Delete its simulators. `xcrun simctl list devices | grep emd-` lists them. `xcrun simctl delete <id>` deletes one. Stop its Android emulators: `adb devices` lists them, and `adb -s <serial> emu kill` stops one. EMD makes no AVDs.
 2. Delete `~/.emd/`. It holds AXe, build folders, EMD's records and the config backups from setup. Copy a backup first if you want to keep it.
 
 ## Report a problem
@@ -116,7 +120,7 @@ Open an [issue](https://github.com/andrewhenin/emd/issues) with:
 
 - What you asked the agent, and the tool or command that failed, with its JSON result.
 - The output of `npx -y emd-agents@latest doctor` and `npx -y emd-agents@latest detect /path/to/my-app`.
-- Versions: EMD's (the `emd-agents@<version>` in your agent's MCP config, or `node dist/bin.js` and `git rev-parse --short HEAD` in a clone), `sw_vers` (macOS), `xcodebuild -version`, `node --version`, and `axe --version` or `maestro --version` if you use them.
+- Versions: EMD's (the `emd-agents@<version>` in your agent's MCP config, or `node dist/bin.js` and `git rev-parse --short HEAD` in a clone), `sw_vers` (macOS), `xcodebuild -version`, `node --version`, and `axe --version` or `maestro --version` if you use them. On Android: `adb version` and `java --version`.
 - From the run folder: `build.log` and `metro.log`, or the lines near the error.
 - Before you attach logs or screenshots, remove private details: names, tokens, keys, internal URLs and user data.
 
@@ -131,10 +135,10 @@ EMD is open source but does not accept pull requests from outside contributors y
 `emd mcp` serves these tools:
 
 - `detect`: finds the stack, platforms, app IDs, run commands and package manager of a folder. At a workspace root, it lists the app folders instead (`apps`).
-- `launch`: builds the app, installs and opens it on an iOS simulator, and keeps its dev server running. Waits up to 25 s (`waitSeconds`): a reload or relaunch returns its result, a build returns a job.
+- `launch`: builds the app, installs and opens it on an iOS simulator or Android emulator (`platform`), and keeps its dev server running. Waits up to 25 s (`waitSeconds`): a reload or relaunch returns its result, a build returns a job.
 - `job_status`: the state of a job (queued, running, succeeded, failed) and, at the end, its result. It waits up to 30 s (`waitSeconds`) and returns when the job ends. In Claude Code, `setup` raises the default wait of `launch`, `check` and `job_status` to 100 s (`EMD_WAIT_SECONDS`), so a build takes fewer calls; a client that cancels a call gets the short waits again.
 - `logs`: the `[EMD:<tag>]` lines that the app wrote during the run of a launch job.
-- `tap`, `type`, `swipe`: act on the launched app. `tap` takes a testID, a visible text or a point. Each says which tool did it (AXe or Maestro).
+- `tap`, `type`, `swipe`: act on the launched app. `tap` takes a testID, a visible text or a point. Each says which tool did it (AXe, adb or Maestro).
 - `check`: passes or fails a run from tagged log lines and on-screen elements (by testID or text). Waits up to 25 s (`waitSeconds`) and usually returns the verdict; a longer check returns a job. It can run taps, typing and swipes first (`actions`). Each check rewrites the run's evidence folder and returns its path.
 - `evidence`: puts the checks, log lines, screenshots and Maestro flows of a run in one folder.
 
@@ -143,7 +147,7 @@ EMD is open source but does not accept pull requests from outside contributors y
 Run them as `npx -y emd-agents@latest <command>`, or `node dist/bin.js <command>` in a clone. Below, `emd` means either.
 
 - `detect [dir]`: same as the tool.
-- `launch [dir] [--device X] [--timeout N]`: same as the tool, but waits for the result.
+- `launch [dir] [--platform ios|android] [--device X] [--timeout N]`: same as the tool, but waits for the result.
 - `job status <id>`: reads a job.
 - `logs <jobId> [--tag T] [--limit N]`: same as the tool.
 - `check <jobId> [--log TAG[=TEXT]] [--element id=X|text=Y] [--name N] [--agent pass|fail]`: same as the tool, but waits.
@@ -152,7 +156,7 @@ Run them as `npx -y emd-agents@latest <command>`, or `node dist/bin.js <command>
 - `gc [--apply]`: lists, then removes, what EMD made for app folders that no longer exist.
 - `tap <jobId> --id X|--text Y|--x N --y N`, `type <jobId> <text>`, `swipe <jobId> up|down|left|right`: same as the tools.
 - `setup [--dry-run] [--yes] [--agent X]`: registers EMD with your agents and installs the skill.
-- `doctor`: checks that this Mac has what EMD needs (Node, macOS, Xcode, an iPhone simulator, AXe or Maestro) and says how to add what is missing.
+- `doctor [dir]`: checks that this machine has what the app's platforms need (iOS: macOS, Xcode, an iPhone simulator, AXe or Maestro; Android: adb, an AVD, JDK 17), and says how to add what is missing.
 - `mcp`: starts the MCP server on stdio.
 
 ### Requirements in detail
@@ -166,6 +170,8 @@ Run them as `npx -y emd-agents@latest <command>`, or `node dist/bin.js <command>
   - AXe (about 40 times faster for checks, 60 for taps): `setup` installs it into `~/.emd/tools/`, from AXe's pinned release archive, checked by SHA-256. With Xcode 27, Device Hub must be running.
   - Maestro: `curl -fsSL "https://get.maestro.mobile.dev" | bash`. It needs Java 17 or newer, with `JAVA_HOME` set.
   - With neither, taps, typing and swipes fail, and a check with elements returns `error`. `launch`, `logs`, log checks and `evidence` still work.
+- Android: the SDK's `platform-tools` and `emulator`, found through `ANDROID_HOME` (or `ANDROID_SDK_ROOT`). EMD runs an AVD read-only on its own port for each app folder, so it never changes the AVD. `device` names the AVD; the default is the first one `emulator -list-avds` prints.
+- Android: JDK 17 or newer, in `JAVA_HOME` or on PATH, for Gradle. Screen reads and input use `uiautomator` and `input` through adb, with Maestro as the fallback.
 
 ### Install from source
 
@@ -181,7 +187,7 @@ The last line must print `"verdict":"detected"` and `"appIds":{"ios":"com.emd.sa
 
 ### Clean up
 
-`gc` removes what EMD made for app folders that no longer exist, for example a deleted git worktree: the simulator clone and its `~/.emd/` folders. It removes only what EMD recorded as its own. For a folder that still exists, it removes nothing. It is a CLI command only, not an MCP tool.
+`gc` removes what EMD made for app folders that no longer exist, for example a deleted git worktree: the simulator clone, its Android emulator and its `~/.emd/` folders. It removes only what EMD recorded as its own. For a folder that still exists, it removes nothing. It is a CLI command only, not an MCP tool.
 
 ```sh
 emd gc          # dry run: lists what it would remove, and the size
