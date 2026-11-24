@@ -39,6 +39,9 @@ export const launchResultSchema = z.object({
   // The build log's last lines, when a build was stopped for time and no line
   // looked like an error. Progress, not errors.
   lastLines: z.array(z.string()).optional(),
+  // The platform and device this launch used: a simulator UDID and name, or an
+  // emulator serial and its AVD.
+  platform: z.enum(platforms).optional(),
   device: z.object({ id: z.string(), name: z.string() }).optional(),
   appId: z.string().optional(),
   appPid: z.number().optional(),

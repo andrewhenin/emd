@@ -7,6 +7,7 @@ export type {
   StackDetection,
   StackId,
 } from "./adapter.js";
+export { platforms } from "./adapter.js";
 export { check } from "./check.js";
 export { resetChecks } from "./checkrecord.js";
 export { detect } from "./detect.js";

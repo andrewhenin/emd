@@ -9,7 +9,6 @@ test("detects the native Android fixture with no device", () => {
     stack: "gradle",
     platforms: ["android"],
     appIds: {},
-    problem: expect.stringContaining("does not launch them yet"),
     notes: ["Android app module: app."],
     maestroFlows: [".maestro/smoke.yaml"],
   });

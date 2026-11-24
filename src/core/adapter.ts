@@ -33,11 +33,14 @@ export type StackDetection = {
 // How to get an app onto one device. With a dev server: a long-lived server,
 // and a build that installs and launches without starting its own server (that
 // one would die with the build process). Without one: a build only, and core
-// installs the built app.
-export type LaunchPlan = { server?: string; build: string };
+// installs the built app. `output`: the folder, relative to the project, where
+// an Android build writes its APK.
+export type LaunchPlan = { server?: string; build: string; output?: string };
 
 export interface StackAdapter {
   id: StackId;
+  // The platforms EMD launches this stack on.
+  launches: Platform[];
   detect(
     projectDir: string,
     project: ProjectInfo,

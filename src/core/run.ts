@@ -25,6 +25,12 @@ export function resolveRun({
   if (!result?.device || !result.appId || !result.logDir || !job.startedAt) {
     return { reason: "That job has not launched an app (yet)." };
   }
+  if (result.platform === "android") {
+    return {
+      reason:
+        "EMD launches Android apps but does not read their logs or screen yet.",
+    };
+  }
   return {
     run: {
       device: result.device.id,

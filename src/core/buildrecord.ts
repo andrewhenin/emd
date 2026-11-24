@@ -55,6 +55,27 @@ export function builtApp(derivedData: string): string | undefined {
   }
 }
 
+// The APK in an Android build's output folder and its app ID. The Android Gradle
+// plugin writes both to output-metadata.json next to the APK, after build types
+// and flavors changed the ID, so no SDK tool has to read the APK.
+export function builtApk(dir: string): { apk: string; appId: string } {
+  const path = join(dir, "output-metadata.json");
+  const metadata = JSON.parse(readFileSync(path, "utf8")) as {
+    applicationId?: string;
+    elements?: { outputFile?: string }[];
+  };
+  const files = (metadata.elements ?? []).flatMap((e) =>
+    e.outputFile ? [e.outputFile] : [],
+  );
+  const [file] = files;
+  if (!metadata.applicationId || !file || files.length > 1) {
+    throw new Error(
+      `${path} must name one APK and its applicationId; it names ${files.length} APKs.`,
+    );
+  }
+  return { apk: join(dir, file), appId: metadata.applicationId };
+}
+
 // The built app's own ID (CFBundleIdentifier), whatever set it: the app config,
 // build settings or an xcconfig file.
 export async function builtAppId(

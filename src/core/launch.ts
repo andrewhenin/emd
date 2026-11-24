@@ -9,8 +9,14 @@ import {
 } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
-import type { LaunchPlan } from "./adapter.js";
 import {
+  type LaunchPlan,
+  type Platform,
+  platforms,
+  type StackAdapter,
+} from "./adapter.js";
+import {
+  builtApk,
   builtApp,
   builtAppId,
   readBuildRecord,
@@ -20,6 +26,19 @@ import {
 import { detect } from "./detect.js";
 import { axeBackend } from "./device/axe.js";
 import { detectEnvironment, untilReadable } from "./device/backend.js";
+import {
+  adbDevices,
+  avdName,
+  emulatorPorts,
+  installApk,
+  listAvds,
+  pickAvd,
+  pickEmulatorPort,
+  serialOf,
+  startApp,
+  startEmulator,
+  untilBooted,
+} from "./emulator.js";
 import {
   derivedDataPath,
   diskMB,
@@ -82,11 +101,17 @@ const screenReadSeconds = 180;
 const emptyTreeSeconds = 5;
 // How long a reload may take to show a new bundle request in the dev server log.
 const bundleSeconds = 60;
+// How long an emulator may take to boot: a hang limit, not a speed target. A cold
+// boot on a 4-core CI runner took about 75 s (decision 0015).
+const emulatorBootSeconds = 600;
 
 export type LaunchOptions = {
   dir?: string;
-  // Simulator to clone for this worktree, by name or UDID. Default: the newest
-  // shut-down iPhone. Ignored once the worktree has its own simulator.
+  // Default: iOS when the project targets it, else Android.
+  platform?: Platform;
+  // iOS: the simulator to clone for this worktree, by name or UDID. Default:
+  // the newest shut-down iPhone. Android: the AVD to run. Default: the first
+  // one listed. Ignored once the worktree has its own device.
   device?: string;
   // How long the build may take.
   timeoutSeconds?: number;
@@ -165,6 +190,17 @@ async function untilReady(
   }
   return "timeout";
 }
+
+const errorMessageLines = (error: unknown) =>
+  String(error).split("\n").slice(0, 3);
+
+// This launch's folder for its build, server and app logs.
+const runDir = (root: string) =>
+  join(
+    stateDir(),
+    "runs",
+    `${new Date().toISOString().replace(/[:.]/g, "-")}-${basename(root)}`,
+  );
 
 const logTail = async (path: string): Promise<string[]> =>
   firstErrors(await readFile(path, "utf8").catch(() => ""));
@@ -281,12 +317,36 @@ export async function launch(
   if (detected.verdict !== "detected" || !detected.stack) {
     return unsupported("No supported mobile project found here.");
   }
-  if (!detected.platforms?.includes("ios")) {
-    return unsupported("The project does not target iOS.");
+  const adapter = await loadAdapter(detected.stack);
+  // Default: the first platform, iOS before Android, that the project targets
+  // and EMD launches it on.
+  const platform =
+    options.platform ??
+    platforms.find(
+      (p) => detected.platforms?.includes(p) && adapter.launches.includes(p),
+    ) ??
+    detected.platforms?.[0] ??
+    "ios";
+  const name = platform === "ios" ? "iOS" : "Android";
+  if (!detected.platforms?.includes(platform)) {
+    return unsupported(`The project does not target ${name}.`);
+  }
+  if (!adapter.launches.includes(platform)) {
+    return unsupported(
+      `EMD does not launch ${detected.stack} apps on ${name} yet.`,
+    );
+  }
+  if (detected.problem) return unsupported(detected.problem);
+  if (platform === "android") {
+    return launchAndroid(root, adapter, options, {
+      phase,
+      failed,
+      unsupported,
+      done: () => ({ seconds: seconds(), phases: endPhase() }),
+    });
   }
   // Without an ID, Expo's own build sets one (ios.bundleIdentifier) and the
   // ID is read again after it. EMD writes nothing to the app config.
-  if (detected.problem) return unsupported(detected.problem);
   let appId = detected.appIds?.ios;
   if (process.platform !== "darwin") {
     return unsupported("iOS simulators need macOS.");
@@ -360,7 +420,6 @@ export async function launch(
     );
   }
 
-  const adapter = await loadAdapter(detected.stack);
   let plan: LaunchPlan | string | undefined;
   try {
     plan = await adapter.launchPlan(await inspectProject(root), {
@@ -379,14 +438,14 @@ export async function launch(
   // Without a dev server the build only builds, and EMD installs the app.
   const { server, build } = plan;
 
-  const logDir = join(
-    stateDir(),
-    "runs",
-    `${new Date().toISOString().replace(/[:.]/g, "-")}-${basename(root)}`,
-  );
+  const logDir = runDir(root);
   const buildLog = join(logDir, "build.log");
   const metroLog = join(logDir, "metro.log");
-  const where = { device: { id: device.id, name: device.name }, logDir };
+  const where = {
+    platform: "ios" as const,
+    device: { id: device.id, name: device.name },
+    logDir,
+  };
   const sizes = async () => ({
     derivedData: await diskMB(derivedData),
     simulator: await diskMB(
@@ -712,5 +771,130 @@ export async function launch(
     diskMB: await sizes(),
     seconds: seconds(),
     phases: endPhase(),
+  };
+}
+
+type Steps = {
+  phase: (name: string, step: string) => void;
+  failed: (reason: string, rest?: Partial<LaunchResult>) => LaunchResult;
+  unsupported: (reason: string) => LaunchResult;
+  done: () => { seconds: number; phases: Record<string, number> };
+};
+
+// Builds the debug APK, installs it on this worktree's emulator and opens the
+// app. The emulator runs the base AVD read-only on the worktree's own port
+// (decision 0015) and keeps running for the next launch. Gradle's own build is
+// incremental, so every launch builds.
+async function launchAndroid(
+  root: string,
+  adapter: StackAdapter,
+  options: LaunchOptions,
+  { phase, failed, unsupported, done }: Steps,
+): Promise<LaunchResult> {
+  let plan: LaunchPlan | string | undefined;
+  let port: string;
+  try {
+    port = (
+      await reserve(root, "emulator", async (taken) =>
+        pickEmulatorPort(
+          new Set([...taken, ...emulatorPorts(await adbDevices())]),
+        ),
+      )
+    ).id;
+    plan = await adapter.launchPlan(await inspectProject(root), {
+      dir: root,
+      platform: "android",
+      deviceId: serialOf(port),
+      port: Number(port),
+    });
+  } catch (error) {
+    return failed("Could not set up this worktree's emulator and build.", {
+      errors: errorMessageLines(error),
+    });
+  }
+  if (typeof plan === "string") return unsupported(plan);
+  const output = plan?.output;
+  if (!plan || !output) {
+    return unsupported(`${adapter.id} gave no Android build output.`);
+  }
+
+  const logDir = runDir(root);
+  const serial = serialOf(port);
+  const where = {
+    platform: "android" as const,
+    device: { id: serial, name: serial },
+    logDir,
+  };
+  const stuck = (reason: string, error?: unknown) =>
+    failed(reason, {
+      ...where,
+      ...(error !== undefined && { errors: errorMessageLines(error) }),
+    });
+
+  try {
+    const state = (await adbDevices()).find((d) => d.serial === serial)?.state;
+    if (state !== "device") {
+      phase("boot", "booting the emulator");
+      if (state === undefined) {
+        const avd = pickAvd(await listAvds(), options.device);
+        if (!avd) {
+          return stuck(
+            options.device
+              ? `No Android virtual device (AVD) is named "${options.device}".`
+              : "No Android virtual device (AVD) exists. Create one in Android Studio's Device Manager.",
+          );
+        }
+        startEmulator(avd, port, join(logDir, "emulator.log"));
+        confirm(root, "emulator");
+      }
+      await untilBooted(serial, emulatorBootSeconds);
+    }
+    where.device.name = await avdName(serial);
+  } catch (error) {
+    return stuck("The emulator did not boot.", error);
+  }
+
+  phase("build", "building the app");
+  const failure = await runBuild(
+    plan.build,
+    root,
+    join(logDir, "build.log"),
+    {},
+    options,
+  );
+  if (failure) {
+    return failed(failure.reason, {
+      ...where,
+      ...(failure.errors && { errors: failure.errors }),
+      ...(failure.lastLines && { lastLines: failure.lastLines }),
+    });
+  }
+  let built: { apk: string; appId: string };
+  try {
+    built = builtApk(join(root, output));
+  } catch (error) {
+    return stuck("Built, but EMD could not find the APK.", error);
+  }
+  phase("install", "installing the app");
+  try {
+    await installApk(serial, built.apk);
+  } catch (error) {
+    return stuck("Built, but installing the APK failed.", error);
+  }
+  phase("open", "launching the app");
+  let appPid: number;
+  try {
+    appPid = await startApp(serial, built.appId);
+  } catch (error) {
+    return stuck(`Built, but launching ${built.appId} failed.`, error);
+  }
+  return {
+    verdict: "launched",
+    root,
+    ...where,
+    appId: built.appId,
+    appPid,
+    build: { action: "built", reason: "this stack builds on every launch" },
+    ...done(),
   };
 }

@@ -59,6 +59,7 @@ const nonEmpty = (value: unknown): string | undefined =>
 
 const adapter: StackAdapter = {
   id: "expo",
+  launches: ["ios"],
   async detect(dir, project) {
     const { config, error } = await readExpoConfig(dir);
     const declared = Array.isArray(config.platforms)

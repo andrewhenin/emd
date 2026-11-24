@@ -13,6 +13,7 @@ import {
   jobViewSchema,
   logs,
   logsResultSchema,
+  platforms,
   startJob,
   swipe,
   tap,
@@ -167,7 +168,7 @@ function buildServer(): McpServer {
     "launch",
     {
       description:
-        "Build the app, install it on an iOS simulator and launch it, leaving its dev server running when the app has one (Expo). Waits up to waitSeconds (default 25, or longer where setup allowed it): a relaunch or reload often ends in time and returns its result. A build takes minutes: then it returns the job, and you call job_status with the jobId until status is succeeded or failed.",
+        "Build the app, install it on an iOS simulator or Android emulator and launch it, leaving its dev server running when the app has one (Expo). Android: native Gradle apps only, and logs, check and input do not work there yet. Waits up to waitSeconds (default 25, or longer where setup allowed it): a relaunch or reload often ends in time and returns its result. A build takes minutes: then it returns the job, and you call job_status with the jobId until status is succeeded or failed.",
       inputSchema: z.object({
         dir: z
           .string()
@@ -175,11 +176,15 @@ function buildServer(): McpServer {
           .describe(
             "Project directory. Defaults to the server's working directory.",
           ),
+        platform: z
+          .enum(platforms)
+          .optional()
+          .describe("Default: ios when the project targets iOS, else android."),
         device: z
           .string()
           .optional()
           .describe(
-            "Simulator name or UDID. Default: a booted iPhone, else the newest iPhone.",
+            "iOS: the simulator to clone, by name or UDID. Default: the newest shut-down iPhone. Android: the AVD to run. Default: the first one.",
           ),
         timeoutSeconds: z
           .number()
