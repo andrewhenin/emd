@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.18.0](https://github.com/andrewhenin/emd/compare/emd-agents-v0.17.0...emd-agents-v0.18.0) (2026-11-25)
+
+
+### Features
+
+* a failed launch says what to do next, and when it failed the same way again ([#286](https://github.com/andrewhenin/emd/issues/286)) ([bbaf97d](https://github.com/andrewhenin/emd/commit/bbaf97d548d2a19243fbc9acb186a1dd9ecb0fc2))
+
 ## [0.17.0](https://github.com/andrewhenin/emd/compare/emd-agents-v0.16.2...emd-agents-v0.17.0) (2026-11-24)
 
 
