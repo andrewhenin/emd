@@ -57,8 +57,8 @@ const newest = (a: Device, b: Device): number => {
   return a.name.localeCompare(b.name);
 };
 
-// The iPhone Duo (iOS 27.1) has two displays. On it, EMD's taps reached the
-// app in 5 of 10 tries on CI (#179, #284).
+// The iPhone Duo (iOS 27.1) has two displays, and EMD's taps and screen reads
+// are not tested on it (#179).
 const twoDisplays = (d: Device) => /\.iPhone-Duo$/.test(d.type ?? "");
 
 // A named device wins; otherwise a booted iPhone; otherwise the newest iPhone.
