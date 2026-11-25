@@ -59,6 +59,7 @@ jobs:
           sw_vers -productVersion
           sysctl -n hw.model hw.ncpu
           axe --version
+          xcrun simctl list devicetypes | grep -i -E "duo|fold" || true
 
       # #284: on Xcode 27, taps and typing through AXe did not reach the app
       # while screen reads worked. AXe's README says Xcode 27 automation uses
@@ -82,6 +83,12 @@ jobs:
           EMD_STATE_DIR: ${{ runner.temp }}/emd-state
           ATTEMPTS: ${{ inputs.attempts }}
         run: node --experimental-strip-types experiments/input-probe/probe.ts "$RUNNER_TEMP/probe" "$ATTEMPTS"
+
+      # The device type of the simulator EMD cloned (#179).
+      - name: Cloned simulator
+        if: always()
+        shell: bash
+        run: xcrun simctl list devices --json | jq -r '.devices[][] | select(.name | startswith("emd-")) | "\(.name) \(.deviceTypeIdentifier)"'
 
       - name: Upload the records
         if: always()
