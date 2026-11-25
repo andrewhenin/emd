@@ -112,3 +112,20 @@ test("plainKeyboard turns off Predictive Text and Auto-Correction", async () => 
     process.env.PATH = path;
   }
 });
+
+// #179, #284: on iOS 27.1 the newest iPhone is the iPhone Duo, with two
+// displays. With no device named, a single-screen iPhone wins; named, the
+// Duo is cloned.
+test("with no device named, skips the iPhone Duo when another iPhone is there", () => {
+  const duo: Device = {
+    ...device("duo", "iPhone Duo", [27, 1], "Booted"),
+    type: "com.apple.CoreSimulator.SimDeviceType.iPhone-Duo",
+  };
+  const iphone: Device = {
+    ...device("one", "iPhone 18", [27, 0]),
+    type: "com.apple.CoreSimulator.SimDeviceType.iPhone-18",
+  };
+  expect(pickDevice([duo, iphone])?.id).toBe("one");
+  expect(pickDevice([duo, iphone], "iPhone Duo")?.id).toBe("duo");
+  expect(pickDevice([duo])?.id).toBe("duo");
+});

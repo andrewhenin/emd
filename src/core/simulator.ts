@@ -8,12 +8,20 @@ export type Device = {
   state: string;
   // iOS version from the runtime id, e.g. [26, 5].
   version: number[];
+  // simctl's device type, e.g. com.apple.CoreSimulator.SimDeviceType.iPhone-17.
+  type?: string;
 };
 
 type SimctlList = {
   devices: Record<
     string,
-    { udid: string; name: string; state: string; isAvailable?: boolean }[]
+    {
+      udid: string;
+      name: string;
+      state: string;
+      isAvailable?: boolean;
+      deviceTypeIdentifier?: string;
+    }[]
   >;
 };
 
@@ -31,7 +39,13 @@ export async function listDevices(): Promise<Device[]> {
     const version = match[1].split("-").map(Number);
     return list
       .filter((d) => d.isAvailable !== false)
-      .map((d) => ({ id: d.udid, name: d.name, state: d.state, version }));
+      .map((d) => ({
+        id: d.udid,
+        name: d.name,
+        state: d.state,
+        version,
+        ...(d.deviceTypeIdentifier && { type: d.deviceTypeIdentifier }),
+      }));
   });
 }
 
@@ -43,9 +57,13 @@ const newest = (a: Device, b: Device): number => {
   return a.name.localeCompare(b.name);
 };
 
+// The iPhone Duo (iOS 27.1) has two displays, and EMD's taps and screen reads
+// are not tested on it (#179).
+const twoDisplays = (d: Device) => /\.iPhone-Duo$/.test(d.type ?? "");
+
 // A named device wins; otherwise a booted iPhone; otherwise the newest iPhone.
 // With no device named, only runtimes that `sdk` (the selected Xcode's iOS
-// simulator SDK) can build for.
+// simulator SDK) can build for, and an iPhone Duo only when no other iPhone is.
 export function pickDevice(
   devices: Device[],
   wanted?: string,
@@ -61,7 +79,9 @@ export function pickDevice(
   const iphones = sorted.filter(
     (d) => d.name.startsWith("iPhone") && !(sdk && newerThan(d, sdk)),
   );
-  return iphones.find((d) => d.state === "Booted") ?? iphones[0];
+  const oneDisplay = iphones.filter((d) => !twoDisplays(d));
+  const pool = oneDisplay.length > 0 ? oneDisplay : iphones;
+  return pool.find((d) => d.state === "Booted") ?? pool[0];
 }
 
 // True when the device's iOS major.minor is newer than `sdk`'s. A patch
