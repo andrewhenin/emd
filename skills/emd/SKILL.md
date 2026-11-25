@@ -26,17 +26,26 @@ Run `npx -y emd-agents@latest setup --dry-run` and show the user its plan. Run i
 After you change code, call `launch` again before you `check` or `tap`. Expo on iOS: when nothing native changed, `launch` reloads the running app from the dev server in seconds (`build.action: "reloaded"`). Expo on Android and native apps: `launch` builds every time. For an Expo app, `launch` picks iOS; pass `platform: "android"` for Android.
 
 1. `launch` with `dir` set to the app folder. It waits up to 25 s (100 s in Claude Code): a reload or relaunch usually returns its result.
-2. If it returned a job still running, `job_status` with the `jobId`, until `succeeded` or `failed`. A first build takes minutes. A failed launch gives the reason and the first error lines: fix the cause and launch again.
+2. If it returned a job still running, `job_status` with the `jobId`, until `succeeded` or `failed`. A first build takes minutes. A failed launch gives the reason and the first error lines: see "When EMD fails".
 3. `tap` with the `jobId`, and a testID (`id`) or a visible `text`. Use a point only when the element has neither. `type` types into the field that has focus, so tap the field first. `swipe` scrolls. For `tap` and `swipe`, `ok` means the gesture was sent; the next `check` shows what the app did. For `type`, `ok` means the text shows on screen; it can take up to 40 s. A secure field shows bullets, so `ok` there has a `note`.
 4. `logs`, to read the tagged lines of this run.
 5. `check` with the expected log events and elements and a `name` for the moment, e.g. `after-save`. Put the taps, typing and swipes that lead to that moment in its `actions`, so one call acts and checks. A later check under that name must keep the first expectations unchanged; it can add more. It usually returns its verdict in the same call; if it returns a job, `job_status` until it ends:
    - `passed`: done.
    - `failed`: fix the cause, then check again.
    - `stopped`: the retry limit is reached. Stop and report what is missing. Only a person can reset the count.
-   - `error`: the check could not run. Read its reason.
+   - `error`: the check could not run: see "When EMD fails".
 6. Each check rewrites the run's evidence folder and returns its path (`evidenceDir`). Put that path, the screenshots and the matching log lines in your report or PR, and each name in `notPassed`. Call `evidence` only to rewrite the folder on its own.
+
+## When EMD fails
+
+A failed launch or a check `error` is not a verdict on your change.
+
+1. If the result has `fix` and `fix.safe` is true, do what `fix.do` says, then go on with your task.
+2. If `fix.safe` is false, the fix changes the user's machine or setup: ask the user first.
+3. With no `fix`: if the error lines point at your change (a compile error), fix it and launch again. Otherwise run `doctor` and tell the user what failed.
 
 ## Rules
 
 - Don't delete a log tag, loosen an expectation or skip a step to make a check pass. If you must, say so in the PR.
 - Report only checks that ran.
+- Never edit `~/.emd/` to get past a failure or a `stopped` check.

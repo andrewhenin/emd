@@ -5,7 +5,7 @@ import { recordTiming } from "../src/core/launch.ts";
 import {
   buildTiming,
   firstErrors,
-  knownFix,
+  knownCause,
   onlyOpenFailed,
   stripAnsi,
 } from "../src/core/log.ts";
@@ -108,14 +108,30 @@ test.each([
   expect(onlyOpenFailed(lines.join("\n"))).toBe(false);
 });
 
-// #127: the line from a real run, an Expo app before SDK 56 on Xcode 27.
-test("names the fix when an old Expo CLI looks for Simulator.app", () => {
-  const line =
-    "Can't determine id of Simulator app; the Simulator is most likely not installed";
-  expect(knownFix(`\u001b[31m${line}\u001b[39m\n`)).toContain(
-    "Select Xcode 26 with `xcode-select`, or upgrade the app to Expo SDK 56 or later.",
-  );
-  expect(knownFix("\u203a Build Succeeded\n")).toBeUndefined();
+// #127 and #285: the lines from real runs. A fix that changes the machine
+// asks the user first; launching again does not.
+test.each([
+  [
+    "Can't determine id of Simulator app; the Simulator is most likely not installed",
+    "this Expo SDK looks for Simulator.app",
+    "Select Xcode 26 with `xcode-select`",
+    false,
+  ],
+  [
+    "\u274c  error: Scanning for @ExpoModule classes didn't complete (see the warnings above), so the module classes of these packages are missing from the modules provider: expo-modules-core.",
+    "Expo's module scan timed out",
+    "Launch again",
+    true,
+  ],
+])("names the cause and its fix: %s", (line, reason, fix, safe) => {
+  const known = knownCause(`\u001b[31m${line}\u001b[39m\n`);
+  expect(known?.reason).toContain(reason);
+  expect(known?.fix.do).toContain(fix);
+  expect(known?.fix.safe).toBe(safe);
+});
+
+test("names no cause for a log it doesn't know", () => {
+  expect(knownCause("\u203a Build Succeeded\n")).toBeUndefined();
 });
 
 // #208: xcodebuild's -showBuildTimingSummary, as it ends a raw build log,

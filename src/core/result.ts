@@ -40,6 +40,12 @@ export const launchResultSchema = z.object({
   // The build log's last lines, when a build was stopped for time and no line
   // looked like an error. Progress, not errors.
   lastLines: z.array(z.string()).optional(),
+  // What to do next, when EMD knows the cause of a failure (#285). `safe`: the
+  // agent may do it without asking the user.
+  fix: z.object({ do: z.string(), safe: z.boolean() }).optional(),
+  // How many launches in a row in this folder failed this same way, this one
+  // included. Set from 2.
+  repeated: z.number().optional(),
   // The platform and device this launch used: a simulator UDID and name, or an
   // emulator serial and its AVD.
   platform: z.enum(platforms).optional(),

@@ -6,6 +6,7 @@ import { type CheckOptions, check } from "./check.js";
 import {
   type Job,
   type JobKind,
+  launchesIn,
   now,
   readJob,
   update,
@@ -119,13 +120,42 @@ export async function launchInline(
   return readJob(id)?.result as LaunchResult;
 }
 
-const execute = (
+// Two failed launches fail the same way when the reason and the first error
+// line match.
+const sameFailure = (a: LaunchResult, b: LaunchResult) =>
+  a.verdict === "failed" &&
+  b.verdict === "failed" &&
+  a.reason === b.reason &&
+  (a.errors ?? a.lastLines)?.[0] === (b.errors ?? b.lastLines)?.[0];
+
+// A launch that fails the same way as the launches just before it in its
+// folder says how many in a row, and its fix becomes: stop and tell the user.
+// OpenHands stops an agent after 3 identical errors (#285).
+function withRepeats(result: LaunchResult): LaunchResult {
+  if (result.verdict !== "failed") return result;
+  let repeated = 1;
+  for (const earlier of launchesIn(result.root)) {
+    if (!sameFailure(earlier, result)) break;
+    repeated++;
+  }
+  if (repeated < 2) return result;
+  return {
+    ...result,
+    repeated,
+    fix: {
+      do: "Don't launch again. Run `doctor`, then tell the user what failed and what you tried.",
+      safe: true,
+    },
+  };
+}
+
+const execute = async (
   job: Job,
   run: Handlers,
   report: Report,
 ): Promise<LaunchResult | CheckResult> =>
   job.kind === "launch"
-    ? run.launch(job.input as LaunchOptions, report)
+    ? withRepeats(await run.launch(job.input as LaunchOptions, report))
     : run.check(job.input as CheckOptions, report);
 
 // What the worker process runs.

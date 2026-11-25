@@ -311,3 +311,44 @@ test("an inline launch leaves the same record as a started job", async () => {
   ).toEqual(result);
   expect(launchesIn("/inline")).toEqual([result]);
 });
+
+// #285: a launch that fails as the one before it did says so, and its fix
+// tells the agent to stop. Another failure, or a launch, starts over.
+test("a launch that fails the same way again says how many times in a row", async () => {
+  const failure = (reason: string): LaunchResult => ({
+    verdict: "failed",
+    root: "/repeat",
+    reason,
+    errors: ["Error: simctl bootstatus timed out after 300s"],
+    fix: {
+      do: "Close other simulators and heavy apps, then launch again.",
+      safe: false,
+    },
+  });
+  // Launches are ordered by their finish time in ms; real ones take seconds.
+  const launchWith = async (result: LaunchResult) => {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    return launchInline(
+      { dir: "/repeat" },
+      handlers(
+        async () => result,
+        () => "",
+      ),
+    );
+  };
+  const boot = failure("The simulator did not boot.");
+  expect(await launchWith(boot)).toEqual(boot);
+  expect(await launchWith(boot)).toMatchObject({
+    repeated: 2,
+    fix: {
+      do: expect.stringMatching(/^Don't launch again\. Run `doctor`/),
+      safe: true,
+    },
+  });
+  expect((await launchWith(boot)).repeated).toBe(3);
+  expect(
+    await launchWith(failure("Could not plan the build.")),
+  ).not.toHaveProperty("repeated");
+  await launchWith({ verdict: "launched", root: "/repeat" });
+  expect(await launchWith(boot)).not.toHaveProperty("repeated");
+});
